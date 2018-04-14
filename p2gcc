@@ -1,0 +1,178 @@
+function getroot {
+  NAME=`echo "$1" | cut -d'.' -f1`
+}
+
+function getext {
+  EXTENSION=`echo "$1" | cut -d'.' -f2`
+}
+
+function errorcheck {
+  if [ $? -ne 0 ]; then
+    exit
+  fi
+}
+
+function runpropgcc {
+  if [ $verbose -eq 1 ]; then
+    echo $ccstr $NAME.c
+  fi
+  $ccstr $NAME.c
+  errorcheck
+}
+
+function runs2pasm {
+  if [ $verbose -eq 1 ]; then
+    echo $s2pasmstr -g -p$P2GCC_LIBDIR/prefix.spin2 $NAME
+  fi
+  $s2pasmstr -g -p$P2GCC_LIBDIR/prefix.spin2 $NAME
+  errorcheck
+}
+
+function runp2asm {
+  if [ $verbose -eq 1 ]; then
+    echo $asmstr -c -o $NAME.spin2
+  fi
+  $asmstr -c -o -hub $NAME.spin2
+  errorcheck
+  linkstr="$linkstr $NAME.o"
+}
+
+if [ $# -lt 1 ]
+then
+echo "usage: p2gcc [options] file [file...]"
+echo "  options are"
+echo "  -c      - Do not run the linker"
+echo "  -v      - Enable verbose mode"
+echo "  -d      - Enable debug mode"
+echo "  -r      - Run after linking"
+echo "  -t      - Run terminal emulator"
+echo "  -T      - Run terminal emulator in PST mode"
+echo "  -k      - Keep intermediate files"
+echo "  -s      - Run simulutor"
+echo "  -o file - set output file name"
+exit
+fi
+
+binfile="a.out"
+verbose=0
+runflag=0
+simflag=0
+keepflag=0
+linkflag=0
+ccstr="propeller-elf-gcc -mcog -Os -m32bit-doubles -S "
+s2pasmstr="s2pasm "
+asmstr="p2asm "
+linkstr="p2link $P2GCC_LIBDIR/prefix.o "
+loadstr="loadp2 "
+simstr="spinsim -b -t "
+while [ $# -gt 0 ]
+do
+  if [ $1 = "-r" ]; then
+    if [ $simflag -eq 1 ]; then
+      echo "Can't run simulator and hardware at the same time"
+      exit
+    fi
+    runflag=1
+  else if [ $1 = "-v" ]; then
+    verbose=1
+    loadstr="$loadstr -v "
+    linkstr="$linkstr -v "
+  else if [ $1 = "-d" ]; then
+    verbose=1
+    debugmode=1
+    s2pasmstr="$s2pasmstr -d "
+    asmstr="$asmstr -d "
+    linkstr="$linkstr -d "
+    loadstr="$loadstr -v "
+  else if [ $1 = "-t" ]; then
+    loadstr="$loadstr -t "
+  else if [ $1 = "-T" ]; then
+    loadstr="$loadstr -T "
+  else if [ $1 = "-k" ]; then
+    keepflag=1
+  else if [ $1 = "-s" ]; then
+    if [ $runflag -eq 1 ]; then
+      echo "Can't run simulator and hardware at the same time"
+      exit
+    fi
+    simflag=1
+  else if [ $1 = "-c" ]; then
+    linkflag=0
+  else if [ $1 = "-o" ]; then
+    shift
+    binfile=$1
+    linkstr="$linkstr -o $1 "
+  else
+    getroot $1
+    getext $1
+    if [ -z $binfile ]; then
+      binfile=$NAME
+    fi
+    if [ $EXTENSION = "c" ]; then
+      runpropgcc
+      runs2pasm
+      runp2asm
+      if [ $keepflag -ne 1 ]; then
+        rm $NAME.s
+        rm $NAME.spin2
+        rm $NAME.lst
+        rm $NAME.bin
+      fi
+      linkflag=1
+    else if [ $EXTENSION = "s" ]; then
+      runs2pasm
+      runp2asm
+      if [ $keepflag -ne 1 ]; then
+        rm $NAME.spin2
+        rm $NAME.lst
+        rm $NAME.bin
+      fi
+      linkflag=1
+    else if [ $EXTENSION = "spin2" ]; then
+      runp2asm
+      if [ $keepflag -ne 1 ]; then
+        rm $NAME.lst
+        rm $NAME.bin
+      fi
+      linkflag=1
+    else if [ $EXTENSION = "o" ]; then
+      linkstr="$linkstr $NAME.o"
+      linkflag=1
+    else
+      echo invalid extension in $1
+    exit
+    fi
+    fi
+    fi
+    fi
+    fi
+    fi
+    fi
+  fi
+  fi
+  fi
+  fi
+  fi
+  fi
+  shift
+done
+if [ $linkflag -eq 1 ]; then
+  if [ $verbose -eq 1 ]; then
+    echo $linkstr $P2GCC_LIBDIR/stdio.a $P2GCC_LIBDIR/stdlib.a $P2GCC_LIBDIR/string.a
+  fi
+  $linkstr $P2GCC_LIBDIR/stdio.a $P2GCC_LIBDIR/stdlib.a $P2GCC_LIBDIR/string.a
+  errorcheck
+fi
+if [ $simflag -eq 1 ]; then
+  if [ $verbose -eq 1 ]; then
+    echo $simstr $binfile
+  fi
+  $simstr $binfile
+fi
+
+if [ $runflag -eq 1 ]; then
+  if [ $verbose -eq 1 ]; then
+    echo $loadstr $binfile
+  fi
+  $loadstr $binfile
+fi
