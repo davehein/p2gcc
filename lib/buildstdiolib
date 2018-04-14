@@ -1,0 +1,15 @@
+./c2o printf
+./c2o sprintf
+./c2o scanf
+./c2o sscanf
+./c2o fprintf
+./c2o fileio
+./c2o fsrw
+./c2o sdspi
+./c2o puts
+./c2o gets
+./c2o getchar
+./s2o getch
+./c2o putchar
+./s2o putch
+cat printf.o sprintf.o scanf.o sscanf.o fprintf.o fileio.o fsrw.o sdspi.o puts.o gets.o getchar.o getch.o putchar.o putch.o >stdio.a

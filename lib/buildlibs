@@ -1,0 +1,11 @@
+chmod +x buildstdiolib
+chmod +x buildstdlib
+chmod +x buildstrlib
+chmod +x cleanup
+chmod +x s2o
+chmod +x c2o
+./buildstdiolib
+./buildstdlib
+./buildstrlib
+../bin/p2asm -o prefix.spin2
+./cleanup

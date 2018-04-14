@@ -1,0 +1,100 @@
+con
+	rx_pin = 63
+	tx_pin = 62
+	clock_freq = 80_000_000
+	baud_rate = 115_200
+	lr = $1f6
+	hub_ram_size = 104*1024
+
+dat
+	orgh	0
+
+'*******************************************************************************
+'  COG Code
+'*******************************************************************************
+	org
+
+start	mov	sp, ##hub_ram_size - 64
+	drvh    #tx_pin
+        hubset  #$ff
+	calld	lr, main_address
+	cogid	r1
+        mov     r2, #0
+        wrlong  r2, r2
+	cogstop	r1
+main_address
+	long	_main
+
+r0	long	0
+r1	long	0
+r2	long	0
+r3	long	0
+r4	long	0
+r5	long	0
+r6	long	0
+r7	long	0
+r8	long	0
+r9	long	0
+r10	long	0
+r11	long	0
+r12	long	0
+r13	long	0
+r14	long	0
+sp	long	0
+
+temp	long    0
+temp1	long	0
+temp2	long	0
+
+__MULSI	qmul	r0, r1
+	getqx	r0
+	getqy	r1
+	ret
+
+__DIVSI	mov	temp, #0
+	abs	r0, r0 wc
+ if_c	mov	temp, #1
+	abs	r1, r1 wc
+ if_c	xor	temp, #1
+	call	#__UDIVSI
+	cmp	temp, #0 wz
+ if_nz	neg	r0, r0
+	ret
+
+__UDIVSI qdiv	r0, r1
+	getqx	r0
+	getqy	r1
+	ret
+
+'__LONGFILL
+'        wrfast  #0, r0
+'        rep     #1, r2
+'        wflong  r1
+'        ret
+
+__LONGFILL
+        mov     __LONG1, r1
+        shr     __LONG1, #9
+        or      __LONG1, ##$ff800000
+        setd    __LONG2, r1
+        sub     r2, #1
+        setq    r2
+__LONG1 augd    #0
+__LONG2 wrlong  #0, r0
+        ret
+
+__MEMCPY
+        rdbyte  r3, r1
+        wrbyte  r3, r0
+        add     r0, #1
+        add     r1, #1
+        djnz    r2, #__MEMCPY
+        ret
+
+ 
+
+'*******************************************************************************
+'  Program HUB Code
+'*******************************************************************************
+	orgh	$400
+

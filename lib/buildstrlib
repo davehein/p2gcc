@@ -1,0 +1,9 @@
+./c2o memcpy
+./c2o memset
+./c2o strcat
+./c2o strcmp
+./c2o strcpy
+./c2o strncpy
+./c2o strlen
+./c2o strncmp
+cat memcpy.o memset.o strcat.o strcmp.o strcpy.o strncpy.o strlen.o strncmp.o >string.a

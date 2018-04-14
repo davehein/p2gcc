@@ -1,0 +1,13 @@
+./s2o exit
+./s2o abort
+./c2o atol
+./c2o atoi
+./c2o strtol
+./c2o rand
+./c2o toupper
+./c2o tolower
+./s2o sleep
+./c2o clock
+./c2o ctype
+./c2o malloc
+cat exit.o abort.o atol.o atoi.o strtol.o rand.o toupper.o tolower.o sleep.o clock.o ctype.o malloc.o >stdlib.a

@@ -1,0 +1,4 @@
+echo $1
+propeller-elf-gcc -Wall -mcog -O2 -S $1.c
+../bin/s2pasm -p prefix.spin2 -g -t $1
+../bin/p2asm -o -hub $1.spin2
