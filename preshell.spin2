@@ -1,0 +1,73 @@
+con
+	rx_pin = 63
+	tx_pin = 62
+	clock_freq = 60_000_000
+	baud_rate = 115_200
+	lr = $1f6
+	hub_ram_kb = 64
+
+dat
+	orgh	0
+
+'*******************************************************************************
+'  COG Code
+'*******************************************************************************
+	org
+
+start	mov	sp, ##hub_ram_kb*1024 - 64
+	drvh    #tx_pin
+	calld	lr, main_address
+	cogid	r1
+        mov     r2, #0
+        wrlong  r2, r2
+	cogstop	r1
+main_address
+	long	_main
+
+r0	long	0
+r1	long	0
+r2	long	0
+r3	long	0
+r4	long	0
+r5	long	0
+r6	long	0
+r7	long	0
+r8	long	0
+r9	long	0
+r10	long	0
+r11	long	0
+r12	long	0
+r13	long	0
+r14	long	0
+sp	long	0
+
+temp	long    0
+temp1	long	0
+temp2	long	0
+
+__MULSI	qmul	r0, r1
+	getqx	r0
+	getqy	r1
+	ret
+
+__DIVSI	mov	temp, #0
+	abs	r0, r0 wc
+ if_c	mov	temp, #1
+	abs	r1, r1 wc
+ if_c	xor	temp, #1
+	call	#__UDIVSI
+	cmp	temp, #0 wz
+ if_nz	neg	r0, r0
+	ret
+
+__UDIVSI qdiv	r0, r1
+	getqx	r0
+	getqy	r1
+	ret
+
+
+'*******************************************************************************
+'  Program HUB Code
+'*******************************************************************************
+	orgh	$400
+

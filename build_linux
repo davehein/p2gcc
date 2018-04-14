@@ -1,0 +1,34 @@
+chmod +x build_all
+chmod +x test_all
+chmod +x load_shell
+chmod +x lib/buildlibs
+chmod +x p2gcc
+rm -rf bin
+mkdir bin
+cd p2asm005
+chmod +x buildit
+./buildit
+cp p2asm ../bin
+cd ..
+cd p2link002
+gcc p2link.c -o p2link
+cp p2link ../bin
+cd ..
+cd loadp2_005
+chmod +x build_linux
+./build_linux
+cp loadp2 ../bin
+cd ..
+cd s2pasm003
+gcc s2pasm.c -o s2pasm
+cp s2pasm ../bin
+cd ..
+cd util002
+gcc p2dump.c -o p2dump
+cp p2dump ../bin
+gcc p2dumpobj.c -o p2dumpobj
+cp p2dumpobj ../bin
+chmod +x diffit
+cp diffit ../bin
+cd ..
+cp p2gcc bin

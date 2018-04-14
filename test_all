@@ -1,0 +1,13 @@
+p2gcc -r -t -v blink.c
+p2gcc -r -t -v bas.c
+p2gcc -r -t -v chess.c
+p2gcc -r -t -v dry.c
+p2gcc -r -t -v fibo.c
+p2gcc -r -t -v fft_bench.c
+p2gcc -r -t -v hello.c
+p2gcc -r -t -v malloctest.c
+p2gcc -r -t -v prime.c
+p2gcc -r -t -v xxtea.c
+p2gcc -r -t -v test7.c test8.c
+p2gcc -r -t -v fsrwtest.c
+p2gcc -r -t -v filetest.c
