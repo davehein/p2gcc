@@ -1,0 +1,25 @@
+                   dat
+00000              		orgh	0
+                   '
+                   ' Launch cogs 15..0 with blink program.
+                   ' Cogs that don't exist won't blink.
+                   '
+00000 000          		org
+                   
+00000 000 fce4040c .loop		coginit	cognum,#@blink	'last iteration relaunches cog 0
+00004 001 fb7c05fe 		djnf	cognum,#.loop
+                   
+00008 002 0000000f cognum		long	15
+                   '
+                   ' blink
+                   '
+0000c 000          		org
+                   
+0000c 000 fd600c01 blink		cogid	x		'which cog am I, 0..15?
+00010 001 f1040c20 		add	x,#32		'add 32 to get pin 32..47
+00014 002 fd600c5f 		drvnot	x		'output and flip that pin
+00018 003 f0640c10 		shl	x,#16		'shift up to make it big
+0001c 004 fd600c1f 		waitx	x		'wait that many clocks
+00020 005 fd9fffe8 		jmp	#blink		'do it again
+                   
+00024 006          x		res	1

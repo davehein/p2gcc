@@ -1,0 +1,20 @@
+con
+	lr = $1f6
+dat
+	org
+	reti0
+	reti1
+	reti2
+	reti3
+
+	orgh	$400
+
+sub1	jmp	lr
+
+loop	calld	lr,#sub1
+	calld	lr,#sub3
+	jmp	#loop
+
+	long	0[245]
+
+sub3	jmp	lr

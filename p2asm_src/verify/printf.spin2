@@ -1,0 +1,503 @@
+con
+  __clkfreq = 80000000
+  rx_pin = 63
+  tx_pin = 62
+  clock_freq = 80_000_000
+  baud_rate = 115_200
+
+dat
+	orgh	0
+	org
+
+	mov	sp, ##$8000
+	drvh    #tx_pin
+	waitx   ##clock_freq
+	waitx   ##clock_freq
+	waitx   ##clock_freq
+'	mov     strptr, a_hello
+'	call    #putstr
+	call	#@_main
+	cogid	r0
+	cogstop	r0
+
+r0	long	0
+r1	long	0
+r2	long	0
+r3	long	0
+r4	long	0
+r5	long	0
+r6	long	0
+r7	long	0
+r8	long	0
+r9	long	0
+r10	long	0
+r11	long	0
+r12	long	0
+r13	long	0
+r14	long	0
+lr	long	0
+sp	long	0
+
+putstr                  rdbyte  parm, strptr  wz
+        if_z            ret
+                        add     strptr, #1
+                        call    #putch
+                        jmp     #putstr
+strptr                  long    0
+
+'*******************************************************************************
+' Get one character from the input port.
+' Input none
+' Changes parm, temp, temp1, temp2
+' Output parm
+'*******************************************************************************
+getch                   mov     temp, bitcycles
+                        shr     temp, #1
+                        mov     temp1, #10
+getch0                  testp   #rx_pin wc
+        if_c            jmp     #getch0
+                        getct   temp2
+                        addct1  temp2, temp
+                        waitct1
+getch1                  mov     temp, inb
+                        and     temp, inbit
+                        ror     parm, #1
+                        or      parm, temp
+                        addct1  temp2, bitcycles
+                        waitct1
+                        djnz    temp1, #getch1
+                        ror     parm, #31 - 8
+                        and     parm, #255
+getch_ret               ret
+
+inbit                   long    1 << (rx_pin & 31)
+bitcycles               long    clock_freq / baud_rate
+
+'*******************************************************************************
+' Send one character to the output port.
+' Input parm
+' Changes parm, temp1, temp2
+' Output none             
+'*******************************************************************************
+putch                   or      parm, #$100
+                        shl     parm, #1
+                        mov     temp1, #10
+                        getct   temp2
+putch1                  shr     parm, #1               wc
+                        drvc    #tx_pin
+                        addct1  temp2, bitcycles
+                        waitct1
+                        djnz    temp1, #putch1
+putch_ret               ret
+
+parm                    long    0
+temp                    long    0
+temp1                   long    0
+temp2                   long    0
+
+__MULSI	qmul	r0, r1
+	getqx	r0
+	getqy	r1
+	ret
+
+__UDIVSI qdiv	r0, r1
+	getqx	r0
+	getqy	r1
+	ret
+
+	orgh	$800
+
+        alignl
+_putchar
+	mov	parm, r0
+	call	#putch
+	ret
+
+_puts	mov	strptr, r0
+	call	#putstr
+	ret
+
+_PUTCW
+ 'mov	parm, #"8"
+ 'call	#putch
+ 'mov	parm, r0
+ 'call	#putch
+	pop	lr
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	mov	r13, r1
+	mov	r14, r13
+	call	#@_putchar
+	jmp	#@_LPF2
+_LPF3
+ 'mov	parm, #"7"
+ 'call	#putch
+	mov	r0, #32
+	call	#@_putchar
+_LPF2
+ 'mov	parm, #"6"
+ 'call	#putch
+	sub	r14, #1
+	cmps	r14, #0 wcz
+	IF_A 	jmp	#@_LPF3
+	mov	r0, r13
+	fges	r0, #1
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	jmp	lr
+        alignl
+_printf
+	pop	lr
+	sub	sp, #4
+	wrlong	r8, sp
+	sub	sp, #4
+	wrlong	r9, sp
+	sub	sp, #4
+	wrlong	r10, sp
+	sub	sp, #4
+	wrlong	r11, sp
+	sub	sp, #4
+	wrlong	r12, sp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	sub	sp, #32
+	mov	r7, sp
+	add	r7, #64
+	mov	r11, sp
+	add	r11, #68
+	mov	r13, #0
+	mov	r8, ##@_LPFC3
+	rdlong	r12, r7
+ 'mov	parm, #"A"
+ 'call	#putch
+	jmp	#@_LPF38
+_LPF31
+ 'mov	parm, #"B"
+ 'call	#putch
+	mov	r7, r12
+	cmps	r0, #37 wcz
+	add	r7, #1
+	IF_NE mov	r12, r7
+	IF_NE mov	r1, #1
+	IF_NE	jmp	#@_LPF39
+	rdbyte	r7, r7
+	cmps	r7, #48 wcz
+	mov	r6, #28
+	IF_E  mov	r5,#48
+	IF_NE mov	r5,#32
+	add	r6, sp
+	add	r12, #2
+	mov	r14, #0
+	wrlong	r5, r6
+	jmp	#@_LPF9
+_LPF11
+ 'mov	parm, #"C"
+ 'call	#putch
+	mov	r0, r14
+	mov	r1, #10
+	sub	r7, #48
+	call	#__MULSI
+	mov	r14, r0
+	add	r14, r7
+	rdbyte	r7, r12
+	add	r12, #1
+_LPF9
+ 'mov	parm, #"D"
+ 'call	#putch
+	cmps	r7, #0 wcz
+	IF_E 	jmp	#@_LPF37
+	mov	r6, r7
+	cmps	r7, #"0" wcz
+ IF_LPFT  jmp	#@_LPF37
+	cmps	r7, #"9" wcz
+ IF_GT  jmp	#@_LPF37
+	jmp	#@_LPF11
+_LPF13
+ 'mov	parm, #"E"
+ 'call	#putch
+	rdbyte	r7, r12
+	add	r12, #1
+_LPF37
+ 'mov	parm, #"F"
+ 'call	#putch
+	cmps	r7, #76 wcz
+	mov	r5, #0
+	muxz	r5,#1
+	mov	r6, #0
+	cmps	r7, #108 wcz
+	muxz	r6,#1
+	mov	temp, r5
+	or	temp, r6 wz
+	IF_NE	jmp	#@_LPF13
+	cmps	r7, #0 wcz
+	IF_E 	jmp	#@_LPF14
+	cmps	r7, #115 wcz
+	IF_E 	jmp	#@_LPF18
+	cmp	r7, #115 wcz
+	IF_A 	jmp	#@_LPF19
+	cmps	r7, #99 wcz
+	IF_E 	jmp	#@_LPF16
+	cmps	r7, #100 wcz
+	IF_E 	jmp	#@_LPF17
+	cmps	r7, #37 wcz
+	IF_NE	jmp	#@_LPF38
+	jmp	#@_LPF40
+_LPF19
+ 'mov	parm, #"G"
+ 'call	#putch
+	cmps	r7, #117 wcz
+	IF_E 	jmp	#@_LPF17
+	cmps	r7, #120 wcz
+	IF_NE	jmp	#@_LPF38
+	jmp	#@_LPF35
+_LPF40
+ 'mov	parm, #"H"
+ 'call	#putch
+	mov	r0, #37
+	mov	r1, r14
+_LPF39
+ 'mov	parm, #"I"
+ 'call	#putch
+	call	#@_PUTCW
+	add	r13, r0
+	jmp	#@_LPF38
+_LPF16
+ 'mov	parm, #"J"
+ 'call	#putch
+	mov	r10, r11
+	mov	r1, r14
+	add	r10, #4
+	rdlong	r0, r11
+	mov	r11, r10
+	call	#@_PUTCW
+	add	r13, r0
+	jmp	#@_LPF38
+_LPF18
+ 'mov	parm, #"L"
+ 'call	#putch
+	mov	r6, r11
+	mov	r7, #24
+	add	r6, #4
+	add	r7, sp
+	rdlong	r10, r11
+	mov	r11, #0
+	wrlong	r6, r7
+	jmp	#@_LPF20
+_LPF21
+ 'mov	parm, #"M"
+ 'call	#putch
+	add	r10, #1
+	add	r11, #1
+	call	#@_putchar
+_LPF20
+ 'mov	parm, #"N"
+ 'call	#putch
+	mov	r9, r14
+	sub	r9, r11
+	rdbyte	r0, r10 wz
+	IF_NE	jmp	#@_LPF21
+	mov	r14, r9
+	jmp	#@_LPF22
+_LPF23
+ 'mov	parm, #"O"
+ 'call	#putch
+	mov	r0, #32
+	sub	r14, #1
+	call	#@_putchar
+_LPF22
+ 'mov	parm, #"P"
+ 'call	#putch
+	cmps	r14, #0 wcz
+	IF_A 	jmp	#@_LPF23
+	mov	r7, r9
+	fges	r7, #0
+	mov	r5, #24
+	add	r7, r11
+	add	r5, sp
+	add	r13, r7
+	rdlong	r11, r5
+	jmp	#@_LPF38
+_LPF17
+ 'mov	parm, #"Q"
+ 'call	#putch
+	cmps	r7, #120 wcz
+	IF_NE mov	r9, #10
+	IF_NE	jmp	#@_LPF24
+_LPF35
+ 'mov	parm, #"R"
+ 'call	#putch
+	mov	r9, #16
+_LPF24
+ 'mov	parm, #"S"
+ 'call	#putch
+	mov	r6, r11
+	mov	r5, #24
+	add	r6, #4
+	add	r5, sp
+	cmps	r7, #100 wcz
+	wrlong	r6, r5
+	rdlong	r11, r11
+	IF_NE	jmp	#@_LPF25
+	cmps	r11, #0 wcz
+	IF_AE	jmp	#@_LPF25
+	mov	r0, #45
+	mov	r1, #1
+	sub	r14, #1
+	neg	r11, r11
+	call	#@_PUTCW
+	add	r13, r0
+_LPF25
+ 'mov	parm, #"T"
+ 'call	#putch
+	mov	r10, sp
+_LPF26
+ 'mov	parm, #"U"
+ 'call	#putch
+	mov	r0, r11
+	mov	r1, r9
+	sub	r14, #1
+	call	#__UDIVSI
+	mov	r7, r1
+	mov	r0, r11
+	add	r7, r8
+	mov	r1, r9
+	call	#__UDIVSI
+	rdbyte	r7, r7
+	cmps	r0, #0 wcz
+	mov	r11, r0
+	wrbyte	r7, r10
+	add	r10, #1
+	IF_NE	jmp	#@_LPF26
+	mov	r11, r14
+	jmp	#@_LPF27
+_LPF28
+ 'mov	parm, #"V"
+ 'call	#putch
+	mov	r6, #28
+	add	r6, sp
+	sub	r11, #1
+	rdlong	r0, r6
+	call	#@_putchar
+_LPF27
+ 'mov	parm, #"W"
+ 'call	#putch
+	cmps	r11, #0 wcz
+	IF_A 	jmp	#@_LPF28
+	fges	r14, #0
+	mov	r7, r10
+	mov	r9, sp
+	jmp	#@_LPF29
+_LPF30
+ 'mov	parm, #"X"
+ 'call	#putch
+	mov	r11, r7
+	sub	r11, #1
+	rdbyte	r0, r11
+	call	#@_putchar
+	mov	r7, r11
+_LPF29
+ 'mov	parm, #"Y"
+ 'call	#putch
+	cmps	r7, r9 wcz
+	IF_NE	jmp	#@_LPF30
+	sub	r10, r7
+	mov	r7, #24
+	add	r10, r14
+	add	r7, sp
+	add	r13, r10
+	rdlong	r11, r7
+_LPF38
+ 'mov	parm, #"Z"
+ 'call	#putch
+	rdbyte	r0, r12 wz
+	IF_NE	jmp	#@_LPF31
+_LPF14
+ 'mov	parm, #"9"
+ 'call	#putch
+	mov	r0, r13
+	add	sp, #32
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	rdlong	r12, sp
+	add	sp, #4
+	rdlong	r11, sp
+	add	sp, #4
+	rdlong	r10, sp
+	add	sp, #4
+	rdlong	r9, sp
+	add	sp, #4
+	rdlong	r8, sp
+	add	sp, #4
+	jmp	lr
+
+_LPFC3	byte "0123456789ABCDEF", 0
+        alignl
+
+'----------------------------------------------------
+
+
+
+
+
+
+
+_LPFC5
+	byte "Hello World", 13, 0
+        alignl
+_LPFC7
+	byte "loop %d", 13, 10, 0
+        alignl
+_main
+	pop	lr
+	sub	sp, #4
+	wrlong	r12, sp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	sub	sp, #8
+	mov	r0, ##@_LPFC5
+	mov	r13, sp
+	mov	r14, #0
+	add	r13, #4
+	call	#@_puts
+	mov	r0, ##@_LPFC7
+	call	#@_puts
+	mov	r12, ##@_LPFC7
+_LPF42
+	wrlong	r12, sp
+	wrlong	r14, r13
+	add	r14, #1
+	call	#@_printf
+	cmps	r14, #10 wcz
+	IF_NE	jmp	#@_LPF42
+	mov	r0, #0
+	add	sp, #8
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	rdlong	r12, sp
+	add	sp, #4
+	jmp	lr
+        alignl

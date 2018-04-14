@@ -1,0 +1,105 @@
+                   '******************************
+                   '*  VGA 640 x 480 x 8bpp-lut  *
+                   '******************************
+                   
+                   CON
+                   
+                     intensity	= 80	'0..128
+                   
+                     fclk		= 80_000_000.0
+                     fpix		= 25_000_000.0
+                     fset		= (fpix / fclk * 2.0) * float($4000_0000)
+                   
+                     vsync		=	0	'vsync pin (all FPGA boards now)
+                   
+00000 000          DAT		org
+                   '
+                   '
+                   ' Setup
+                   '
+00000 000 fd65fe00 		hubset	#$FF			'set clock to 80MHz
+                   
+00004 001 ff000006 		rdfast	#0,##$1000-$400		'load .bmp palette into lut
+00008 002 fc7c0000 
+0000c 003 fcdc0900 		rep	@.end,#$100
+00010 004 fd606412 		rflong	y
+00014 005 f0646408 		shl	y,#8
+00018 006 fc306431 		wrlut	y,x
+0001c 007 f1046201 		add	x,#1
+00020 008          .end
+00020 008 ff800009 		rdfast	##640*480/64,##$1000	'set rdfast to wrap on bitmap
+00024 009 ff000008 
+00028 00a fc7d8000 
+                   
+0002c 00b ff940000 		setxfrq ##round(fset)		'set transfer frequency to 25MHz
+00030 00c fd64001d 
+                   
+                   		'the next 4 lines may be commented out to bypass level scaling
+                   
+00034 00d ffa80000 		setcy	##intensity << 24	'r	set colorspace for rgb
+00038 00e fd640038 
+0003c 00f ff802800 		setci	##intensity << 16	'g
+00040 010 fd640039 
+00044 011 ff800028 		setcq	##intensity << 08	'b
+00048 012 fd64003a 
+0004c 013 fd64403c 		setcmod	#%01_0_000_0		'enable colorspace conversion
+                   
+00050 014 fc045600 		wrpin	dacmode,#0		'enable dac modes in pins 0..3
+00054 015 fc045601 		wrpin	dacmode,#1
+00058 016 fc045602 		wrpin	dacmode,#2
+0005c 017 fc045603 		wrpin	dacmode,#3
+                   '
+                   '
+                   ' Field loop
+                   '
+00060 018 f6046221 field		mov	x,#33			'top blanks
+00064 019 fdb0002c 		call	#blank
+                   
+00068 01a f60463e0 		mov     x,#480			'set visible lines
+0006c 01b fdb00030 line		call	#hsync			'do horizontal sync
+00070 01c fcc46000 		xcont	m_rf,#0			'visible line
+00074 01d fb6c63fd 		djnz    x,#line           	'another line?
+                   
+00078 01e f604620a 		mov	x,#10			'bottom blanks
+0007c 01f fdb00014 		call	#blank
+                   
+00080 020 fd64005f 		drvnot	#vsync			'sync on
+                   
+00084 021 f6046202 		mov	x,#2			'sync blanks
+00088 022 fdb00008 		call	#blank
+                   
+0008c 023 fd64005f 		drvnot	#vsync			'sync off
+                   
+00090 024 fd9fffcc                 jmp     #field                  'loop
+                   '
+                   '
+                   ' Subroutines
+                   '
+00094 025 fdb00008 blank		call	#hsync			'blank lines
+00098 026 fcc45e00 		xcont	m_vi,#0
+0009c 027 0b6c63fd 	_ret_	djnz	x,#blank
+                   
+000a0 028 fcc45800 hsync		xcont	m_bs,#0			'horizontal sync
+000a4 029 fcc45a01 		xcont	m_sn,#1
+000a8 02a 0cc45c00 	_ret_	xcont	m_bv,#0
+                   '
+                   '
+                   ' Initialized data
+                   '
+000ac 02b 00140040 dacmode		long	%0000_0000_000_1010000000000_01_00000_0
+                   
+000b0 02c cf000010 m_bs		long	$CF000000+16		'before sync
+000b4 02d cf000060 m_sn		long	$CF000000+96		'sync
+000b8 02e cf000030 m_bv		long	$CF000000+48		'before visible
+000bc 02f cf000280 m_vi		long	$CF000000+640		'visible
+                   
+000c0 030 7f000280 m_rf		long	$7F000000+640		'visible rlong 8bpp lut
+                   
+000c4 031          x		res	1
+000c4 032          y		res	1
+                   '
+                   '
+                   ' Bitmap
+                   '
+00bca              		orgh	$1000 - $436	'justify pixels at $1000, pallete at $1000-$400
+00bca 000          		file	"bitmap2.bmp"	'640 x 480, 8pbb-lut

@@ -1,0 +1,68 @@
+                   DAT
+00000 100                        org     $100
+00000 100 fb842f00               ijz     $17, #$-$ff
+00004 101 fb842f80               ijz     $17, #$-$7f
+00008 102 fb842f41               ijz     $17, #$-$be
+0000c 103 fb842fc1               ijz     $17, #$-$3e
+00010 104 fb842f5f               ijz     $17, #$-$a0
+00014 105 fb842fdf               ijz     $17, #$-$20
+00018 106 fb842f61               ijz     $17, #$-$9e
+0001c 107 fb842fe1               ijz     $17, #$-$1e
+00020 108 fb842f7f               ijz     $17, #$-$80
+00024 109 fb842fff               ijz     $17, #$
+00028 10a fb842f03               ijz     $17, #$-$fc
+0002c 10b fb842f83               ijz     $17, #$-$7c
+00030 10c fb842f43               ijz     $17, #$-$bc
+00034 10d fb842fc3               ijz     $17, #$-$3c
+00038 10e fb842f5d               ijz     $17, #$-$a2
+0003c 10f fb842fdd               ijz     $17, #$-$22
+00040 110 fb842f63               ijz     $17, #$-$9c
+00044 111 fb842fe3               ijz     $17, #$-$1c
+00048 112 fb842f7d               ijz     $17, #$-$82
+0004c 113 fb842ffd               ijz     $17, #$-2
+00050 114 fb842f1d               ijz     $17, #$-$e2
+00054 115 ff001234               augs    #$1234 << 9
+00058 116 ff80001e               augd    #$1e << 9
+0005c 117 00000000               nop     
+00060 118 f603edf7               mov     $1f6, $1f7
+00064 119 faa3edf6               rdlut   $1f6, $1f6
+00068 11a f107ec01               add     $1f6, #1
+0006c 11b 00000000               nop     
+00070 11c 00000000               nop     
+00074 11d 00000000               nop     
+00078 11e fd800070               jmp     #\$70
+0007c 11f fe000074               calld   $1f6, #\$74
+00080 120 fcdc0201               rep     #1, #1
+00084 121 fcde0100               rep     #$100, #$100
+00088 122 fcdc0205               rep     #1, #5
+0008c 123 fcd53005               rep     $98, #5
+00090 124 fcdd3805               rep     #$9c, #5
+00094 125 00000000               nop     
+00098 126 00000000               nop     
+0009c 127 00000000               nop     
+000a0 128 fabbffff               rdlut   $1ff, $1ff wcz
+000a4 129 fabbfff5               rdlut   $1ff, $1f5 wcz
+000a8 12a fabbfff3               rdlut   $1ff, $1f3 wcz
+000ac 12b fabbfff1               rdlut   $1ff, $1f1 wcz
+000b0 12c fabbfdff               rdlut   $1fe, $1ff wcz
+000b4 12d fabbe9f5               rdlut   $1f4, $1f5 wcz
+000b8 12e fabbe5f3               rdlut   $1f2, $1f3 wcz
+000bc 12f fabbe1f1               rdlut   $1f0, $1f1 wcz
+000c0 130 ff000000               wrlong  $e0, ##$161
+000c4 131 fc65c161 
+000c8 132 ff000000               wrlong  $e0, ##$1e1
+000cc 133 fc65c1e1 
+000d0 134 fb85c15f               ijz     $e0, #$-$a0
+000d4 135 fb85c1df               ijz     $e0, #$-$20
+000d8 136 fabbffff               rdlut   $1ff, $1ff wcz
+000dc 137 fabbfff5               rdlut   $1ff, $1f5 wcz
+000e0 138 fabbfff3               rdlut   $1ff, $1f3 wcz
+000e4 139 fabbfff1               rdlut   $1ff, $1f1 wcz
+000e8 13a 00000000               nop     
+000ec 13b 0000000a  _ret_        ror     0, $a
+000f0 13c 0000000a  _ret_        ror     0, $a
+000f4 13d 00000050  _ret_        ror     0, $50
+000f8 13e 4c3ebc20  if_nz_and_c  wrlut   #$15e, #$20
+000fc 13f 4bbebc20               long    $4bbebc20
+00100 140 4e800000  if_nz_and_c  loc     $1f6, #\0
+00104 141 00000000               nop     

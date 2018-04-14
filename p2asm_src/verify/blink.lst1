@@ -1,0 +1,636 @@
+                   con
+                   	rx_pin = 63
+                   	tx_pin = 62
+                   	clock_freq = 80_000_000
+                   	baud_rate = 115_200
+                   	lr = $1f6
+                   	hub_ram_kb = 32
+                   
+                   dat
+00000              	orgh	0
+                   
+                   '*******************************************************************************
+                   '  COG Code
+                   '*******************************************************************************
+00000 000          	org
+                   
+00000 000 ff00003f start	mov	sp, ##hub_ram_kb*1024 - 64
+00004 001 f6042dc0 
+00008 002 fd647c59 	drvh    #tx_pin
+0000c 003 f607ec05 	mov	lr, #start1
+00010 004 fd800a70 	jmp	#_main
+00014 005 fd600e01 start1	cogid	r0
+00018 006 fd600e03 	cogstop	r0
+                   
+0001c 007 00000000 r0	long	0
+00020 008 00000000 r1	long	0
+00024 009 00000000 r2	long	0
+00028 00a 00000000 r3	long	0
+0002c 00b 00000000 r4	long	0
+00030 00c 00000000 r5	long	0
+00034 00d 00000000 r6	long	0
+00038 00e 00000000 r7	long	0
+0003c 00f 00000000 r8	long	0
+00040 010 00000000 r9	long	0
+00044 011 00000000 r10	long	0
+00048 012 00000000 r11	long	0
+0004c 013 00000000 r12	long	0
+00050 014 00000000 r13	long	0
+00054 015 00000000 r14	long	0
+00058 016 00000000 sp	long	0
+                   
+0005c 017 f600702c getch	mov     temp, bitcycles
+00060 018 f0447001 	shr     temp, #1
+00064 019 f604720a 	mov     temp1, #10
+00068 01a f6046e00 	mov	parm, #0
+0006c 01b ff400000 getch0	testb   inb, ##1 << (rx_pin & 31) wc
+00070 01c f417fe00 
+00074 01d cd9ffff4   if_c  jmp     #getch0
+00078 01e fd60741a 	getct   temp2
+0007c 01f fa607438 	addct1  temp2, temp
+00080 020 fd602224 	waitct1
+00084 021 f60071ff getch1	mov     temp, inb
+00088 022 f500702b 	and     temp, inbit
+0008c 023 f0046e01 	ror     parm, #1
+00090 024 f5406e38 	or      parm, temp
+00094 025 fa60742c 	addct1  temp2, bitcycles
+00098 026 fd602224 	waitct1
+0009c 027 fb6c73f9 	djnz    temp1, #getch1
+000a0 028 f0046e17 	ror     parm, #31 - 8
+000a4 029 f5046eff 	and     parm, #255
+000a8 02a fd64002d 	ret
+                   
+000ac 02b 80000000 inbit	long    1 << (rx_pin & 31)
+000b0 02c 000002b6 bitcycles long    clock_freq / baud_rate
+                   
+000b4 02d f5446f00 putch	or      parm, #$100
+000b8 02e f0646e01 	shl     parm, #1
+000bc 02f f604720a 	mov     temp1, #10
+000c0 030 fd60741a 	getct   temp2
+000c4 031 f0546e01 putch1	shr     parm, #1               wc
+000c8 032 fd647c5a 	drvc    #tx_pin
+000cc 033 fa60742c 	addct1  temp2, bitcycles
+000d0 034 fd602224 	waitct1
+000d4 035 fb6c73fb 	djnz    temp1, #putch1
+000d8 036 fd64002d 	ret
+                   
+000dc 037 00000000 parm	long    0
+000e0 038 00000000 temp	long    0
+000e4 039 00000000 temp1	long    0
+000e8 03a 00000000 temp2	long    0
+                   
+000ec 03b          putnl
+000ec 03b f6046e0d 	mov	parm, #13
+000f0 03c fdbfffc0 	call	#putch
+                   '	mov	parm, #10
+                   '	call	#putch
+000f4 03d fd64002d 	ret
+                   
+000f8 03e fd000e08 __MULSI	qmul	r0, r1
+000fc 03f fd600e18 	getqx	r0
+00100 040 fd601019 	getqy	r1
+00104 041 fd64002d 	ret
+                   
+00108 042 f6047000 __DIVSI	mov	temp, #0
+0010c 043 f6500e07 	abs	r0, r0 wc
+00110 044 c6047001  if_c	mov	temp, #1
+00114 045 f6501008 	abs	r1, r1 wc
+00118 046 c5647001  if_c	xor	temp, #1
+0011c 047 fdb0000c 	call	#__UDIVSI
+00120 048 f20c7000 	cmp	temp, #0 wz
+00124 049 56600e07  if_nz	neg	r0, r0
+00128 04a fd64002d 	ret
+                   
+0012c 04b fd100e08 __UDIVSI qdiv	r0, r1
+00130 04c fd600e18 	getqx	r0
+00134 04d fd601019 	getqy	r1
+00138 04e fd64002d 	ret
+                   
+                   '*******************************************************************************
+                   '  HUB Code
+                   '*******************************************************************************
+00400              	orgh	$400
+                   
+00400     04c4b400 __clkfreq long clock_freq
+                   
+00404     fd600e1a _clock	getct	r0
+00408     fd63ec2c 	jmp	lr
+                   
+0040c              ___muldi3
+0040c     fda0003e 	call	#__MULSI
+00410     fd63ec2c 	jmp	lr
+                   
+00414              ___divdi3
+00414     fda00042 	call	#__DIVSI
+00418     fd63ec2c 	jmp	lr
+                   
+0041c              _atol
+0041c              _atoi
+0041c     f6001c07 	mov	r7, r0
+00420     f6040e00 	mov	r0, #0
+00424     fd900014 	jmp	#_atoi2
+00428              _atoi1
+00428     f604100a 	mov	r1, #10
+0042c     f1041c01 	add	r7, #1
+00430     fda0003e 	call	#__MULSI
+00434     f1000e0d 	add	r0, r6
+00438     f1840e30 	sub	r0, #48
+0043c              _atoi2
+0043c     fac01a0e 	rdbyte	r6, r7
+00440     f600180d 	mov	r5, r6
+00444     f1841830 	sub	r5, #48
+00448     f21c1809 	cmp	r5, #9 wcz
+0044c     ed9fffd8  IF_BE	jmp	#_atoi1
+00450     fd63ec2c 	jmp	lr
+                   
+00454              ___ctype
+00454     01010101 	byte	1, 1, 1, 1, 1, 1, 1, 1, 1, -111, 17, 17, 17, 17, 1, 1, 1, 1, 1
+00467     01010101 	byte	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -112, 32, 32, 32, 32
+00479     20202020 	byte	32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 66, 66, 66, 66, 66
+00489     42424242 	byte	66, 66, 66, 66, 66, 32, 32, 32, 32, 32, 32, 32, 68, 68, 68, 68
+00499     04044444 	byte	68, 68, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4
+004ae     20202004 	byte	4, 32, 32, 32, 32, 32, 32, 72, 72, 72, 72, 72, 72, 8, 8, 8, 8, 8
+004c0     08080808 	byte	8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 32, 32, 32, 32, 1, 0
+                   
+004d5              _toupper
+004d5     f6001c07 	mov	r7, r0
+004d9     f1841c61 	sub	r7, #97
+004dd     f21c1c19 	cmp	r7, #25 wcz
+004e1     e1840e20  IF_BE	sub	r0, #32
+004e5     fd63ec2c 	jmp	lr
+                   
+004e9              _tolower
+004e9     f6001c07 	mov	r7, r0
+004ed     f1841c41 	sub	r7, #65
+004f1     f21c1c19 	cmp	r7, #25 wcz
+004f5     e1040e20  IF_BE	add	r0, #32
+004f9     fd63ec2c 	jmp	lr
+                   
+004fd     fd600e1a _rand	getct	r0
+00501     fd63ec2c 	jmp	lr
+                   
+00505     fd63ec2c _srand	jmp	lr
+                   
+00509     fd800005 _exit	jmp	#start1
+                   
+0050d     ff02625a _sleep	mov	r1, ##clock_freq
+00511     f6041000 
+00515     fda0003e 	call	#__MULSI
+00519     fd600e1f 	waitx	r0
+0051d     fd63ec2c 	jmp	lr
+                   
+00521              _memset
+00521     f1041201 	add	r2, #1
+00525     fd900008 	jmp	#_memset2
+00529              _memset1
+00529     fc401007 	wrbyte	r1, r0
+0052d     f1040e01 	add	r0, #1
+00531              _memset2
+00531     fb6c13fd 	djnz	r2,#_memset1
+00535     fd63ec2c 	jmp	lr
+                   
+00539     f20c1200 _memcpy	cmp	r2, #0 wz
+0053d     ad63ec2c  if_z	jmp	lr
+00541     fac07008 	rdbyte	temp, r1
+00545     fc407007 	wrbyte	temp, r0
+00549     f1041001 	add	r1, #1
+0054d     f1040e01 	add	r0, #1
+00551     f1841201 	sub	r2, #1
+00555     fd9fffe0 	jmp	#_memcpy
+                   
+00559              _strcmp
+00559     fac01a07 	rdbyte	r6, r0
+0055d     f25c1a00 	cmps	r6, #0 wcz
+00561     f1040e01 	add	r0, #1
+00565     fac01c08 	rdbyte	r7, r1
+00569     f1041001 	add	r1, #1
+0056d     5d900008  if_ne	jmp	#_strcmp1
+00571     f6600e0e 	neg	r0, r7
+00575     fd63ec2c 	jmp	lr
+00579              _strcmp1
+00579     f2581a0e 	cmps	r6, r7 wcz
+0057d     ad9fffd8  if_e 	jmp	#_strcmp
+00581     f6000e0d 	mov	r0, r6
+00585     f1800e0e 	sub	r0, r7
+00589     fd63ec2c 	jmp	lr
+                   
+0058d              _strncmp
+0058d     f1041201 	add	r2, #1
+00591     fd900024 	jmp	#_strncmp2
+00595              _strncmp1
+00595     fac01a07 	rdbyte	r6, r0
+00599     f1040e01 	add	r0, #1
+0059d     fac01c08 	rdbyte	r7, r1
+005a1     f2581a0e 	cmps	r6, r7 wcz
+005a5     f1041001 	add	r1, #1
+005a9     ad90000c  IF_E 	jmp	#_strncmp2
+005ad     f6000e0d 	mov	r0, r6
+005b1     f1800e0e 	sub	r0, r7
+005b5     fd63ec2c 	jmp	lr
+005b9              _strncmp2
+005b9     fb6c13f6 	djnz	r2,#_strncmp1
+005bd     f6040e00 	mov	r0, #0
+005c1     fd63ec2c 	jmp	lr
+                   
+005c5     fac01a08 _strcpy	rdbyte	r6, r1
+005c9     f24c1a00 	cmps	r6, #0 wz
+005cd     f1041001 	add	r1, #1
+005d1     fc401a07 	wrbyte	r6, r0
+005d5     f1040e01 	add	r0, #1
+005d9     5d9fffe8  if_nz	jmp	#_strcpy
+005dd     fd63ec2c 	jmp	lr
+                   
+005e1     f6001c07 _strlen	mov	r7, r0
+005e5     fd900004 	jmp	#_strle1
+005e9     f1040e01 _strle0	add	r0, #1
+005ed     fac01a07 _strle1	rdbyte	r6, r0
+005f1     f24c1a00 	cmps	r6, #0 wz
+005f5     5d9ffff0  if_nz	jmp	#_strle0
+005f9     f1800e0e 	sub	r0, r7
+005fd     fd63ec2c         jmp	lr
+                   
+00601              _getchar
+00601     fda00017 	call	#getch
+00605     f6000e37 	mov	r0, parm
+00609     fd63ec2c 	jmp	lr
+                   
+0060d     f6001c07 _gets	mov	r7, r0
+00611     fda00017 _gets2	call	#getch
+00615     f6001a37 	mov	r6, parm
+00619     f20c1a08 	cmp	r6, #8 wz
+0061d     5d900028  if_nz	jmp	#_gets0
+00621     f2180e0e 	cmp	r0, r7 wcz
+00625     ed9fffe8  if_be	jmp	#_gets2
+00629     f6046e08 	mov	parm, #8
+0062d     fda0002d 	call	#putch
+00631     f6046e20 	mov	parm, #" "
+00635     fda0002d 	call	#putch
+00639     f6046e08 	mov	parm, #8
+0063d     fda0002d 	call	#putch
+00641     f1840e01 	sub	r0, #1
+00645     fd9fffc8 	jmp	#_gets2
+00649     fda0002d _gets0	call	#putch
+0064d     f20c1a0d 	cmp	r6, #13 wz
+00651     520c1a0a  if_nz	cmp	r6, #10 wz
+00655     ad90000c  if_z	jmp	#_gets1
+00659     fc401a07 	wrbyte	r6, r0
+0065d     f1040e01 	add	r0, #1
+00661     fd9fffac 	jmp	#_gets2
+00665     f6041a00 _gets1	mov	r6, #0
+00669     fc401a07 	wrbyte	r6, r0
+0066d     f6000e0e 	mov	r0, r7
+00671     fd63ec2c 	jmp	lr
+                   
+00675              _putchar
+00675     f20c0e0a 	cmp	r0, #10 wz
+00679     ada0003b  if_z	call	#putnl
+0067d     56006e07  if_nz	mov	parm, r0
+00681     5da0002d  if_nz	call	#putch
+00685     fd63ec2c 	jmp	lr
+                   
+00689     fac86e07 _puts	rdbyte  parm, r0  wz
+0068d     ad90000c  if_z	jmp	#_puts1
+00691     f1040e01 	add     r0, #1
+00695     fda0002d 	call    #putch
+00699     fd9fffec 	jmp     #_puts
+0069d     fda0003b _puts1	call	#putnl
+006a1     fd63ec2c 	jmp	lr
+                   
+006a5              _PUTCW
+006a5     f1842c04 	sub	sp, #4
+006a9     fc602816 	wrlong	r13, sp
+006ad     f1842c04 	sub	sp, #4
+006b1     fc602a16 	wrlong	r14, sp
+006b5     f1842c04 	sub	sp, #4
+006b9     fc63ec16 	wrlong	lr, sp
+006bd     f6002808 	mov	r13, r1
+006c1     f6002a14 	mov	r14, r13
+006c5     fb27edeb 	calld	lr, #_putchar
+006c9     fd900008 	jmp	#_LPF2
+006cd              _LPF3
+006cd     f6040e20 	mov	r0, #32
+006d1     fb27ede8 	calld	lr, #_putchar
+006d5              _LPF2
+006d5     f1842a01 	sub	r14, #1
+006d9     f25c2a00 	cmps	r14, #0 wcz
+006dd     1d9fffec 	IF_A 	jmp	#_LPF3
+006e1     f6000e14 	mov	r0, r13
+006e5     f3440e01 	fges	r0, #1
+006e9     fb03ec16 	rdlong	lr, sp
+006ed     f1042c04 	add	sp, #4
+006f1     fb002a16 	rdlong	r14, sp
+006f5     f1042c04 	add	sp, #4
+006f9     fb002816 	rdlong	r13, sp
+006fd     f1042c04 	add	sp, #4
+00701     fd63ec2c 	jmp	lr
+00705                      alignl
+00708              _printf
+00708     f1842c04 	sub	sp, #4
+0070c     fc601e16 	wrlong	r8, sp
+00710     f1842c04 	sub	sp, #4
+00714     fc602016 	wrlong	r9, sp
+00718     f1842c04 	sub	sp, #4
+0071c     fc602216 	wrlong	r10, sp
+00720     f1842c04 	sub	sp, #4
+00724     fc602416 	wrlong	r11, sp
+00728     f1842c04 	sub	sp, #4
+0072c     fc602616 	wrlong	r12, sp
+00730     f1842c04 	sub	sp, #4
+00734     fc602816 	wrlong	r13, sp
+00738     f1842c04 	sub	sp, #4
+0073c     fc602a16 	wrlong	r14, sp
+00740     f1842c04 	sub	sp, #4
+00744     fc63ec16 	wrlong	lr, sp
+00748     f1842c20 	sub	sp, #32
+0074c     f6001c16 	mov	r7, sp
+00750     f1041c40 	add	r7, #64
+00754     f6002416 	mov	r11, sp
+00758     f1042444 	add	r11, #68
+0075c     f6042800 	mov	r13, #0
+00760     ff000005 	mov	r8, ##_LPFC3
+00764     f6041e5c 
+00768     fb00260e 	rdlong	r12, r7
+0076c     fd900298 	jmp	#_LPF38
+00770              _LPF31
+00770     f6001c13 	mov	r7, r12
+00774     f25c0e25 	cmps	r0, #37 wcz
+00778     f1041c01 	add	r7, #1
+0077c     5600260e 	IF_NE mov	r12, r7
+00780     56041001 	IF_NE mov	r1, #1
+00784     5d9000e4 	IF_NE	jmp	#_LPF39
+00788     fac01c0e 	rdbyte	r7, r7
+0078c     f25c1c30 	cmps	r7, #48 wcz
+00790     f6041a1c 	mov	r6, #28
+00794     a6041830 	IF_E  mov	r5,#48
+00798     56041820 	IF_NE mov	r5,#32
+0079c     f1001a16 	add	r6, sp
+007a0     f1042602 	add	r12, #2
+007a4     f6042a00 	mov	r14, #0
+007a8     fc60180d 	wrlong	r5, r6
+007ac     fd900020 	jmp	#_LPF9
+007b0              _LPF11
+007b0     f6000e15 	mov	r0, r14
+007b4     f604100a 	mov	r1, #10
+007b8     f1841c30 	sub	r7, #48
+007bc     fda0003e 	call	#__MULSI
+007c0     f6002a07 	mov	r14, r0
+007c4     f1002a0e 	add	r14, r7
+007c8     fac01c13 	rdbyte	r7, r12
+007cc     f1042601 	add	r12, #1
+007d0              _LPF9
+007d0     f25c1c00 	cmps	r7, #0 wcz
+007d4     ad900020 	IF_E 	jmp	#_LPF37
+007d8     f6001a0e 	mov	r6, r7
+007dc     f25c1c30 	cmps	r7, #"0" wcz
+007e0     cd900014  IF_B   jmp	#_LPF37
+007e4     f25c1c39 	cmps	r7, #"9" wcz
+007e8     1d90000c  IF_A   jmp	#_LPF37
+007ec     fd9fffc0 	jmp	#_LPF11
+007f0              _LPF13
+007f0     fac01c13 	rdbyte	r7, r12
+007f4     f1042601 	add	r12, #1
+007f8              _LPF37
+007f8     f25c1c4c 	cmps	r7, #76 wcz
+007fc     f6041800 	mov	r5, #0
+00800     f5c41801 	muxz	r5,#1
+00804     f6041a00 	mov	r6, #0
+00808     f25c1c6c 	cmps	r7, #108 wcz
+0080c     f5c41a01 	muxz	r6,#1
+00810     f600700c 	mov	temp, r5
+00814     f548700d 	or	temp, r6 wz
+00818     5d9fffd4 	IF_NE	jmp	#_LPF13
+0081c     f25c1c00 	cmps	r7, #0 wcz
+00820     ad9001ec 	IF_E 	jmp	#_LPF14
+00824     f25c1c73 	cmps	r7, #115 wcz
+00828     ad90006c 	IF_E 	jmp	#_LPF18
+0082c     f21c1c73 	cmp	r7, #115 wcz
+00830     1d90001c 	IF_A 	jmp	#_LPF19
+00834     f25c1c63 	cmps	r7, #99 wcz
+00838     ad90003c 	IF_E 	jmp	#_LPF16
+0083c     f25c1c64 	cmps	r7, #100 wcz
+00840     ad9000cc 	IF_E 	jmp	#_LPF17
+00844     f25c1c25 	cmps	r7, #37 wcz
+00848     5d9001bc 	IF_NE	jmp	#_LPF38
+0084c     fd900014 	jmp	#_LPF40
+00850              _LPF19
+00850     f25c1c75 	cmps	r7, #117 wcz
+00854     ad9000b8 	IF_E 	jmp	#_LPF17
+00858     f25c1c78 	cmps	r7, #120 wcz
+0085c     5d9001a8 	IF_NE	jmp	#_LPF38
+00860     fd9000b8 	jmp	#_LPF35
+00864              _LPF40
+00864     f6040e25 	mov	r0, #37
+00868     f6001015 	mov	r1, r14
+0086c              _LPF39
+0086c     fe1ffe35 	calld	lr, #_PUTCW
+00870     f1002807 	add	r13, r0
+00874     fd900190 	jmp	#_LPF38
+00878              _LPF16
+00878     f6002212 	mov	r10, r11
+0087c     f6001015 	mov	r1, r14
+00880     f1042204 	add	r10, #4
+00884     fb000e12 	rdlong	r0, r11
+00888     f6002411 	mov	r11, r10
+0088c     fe1ffe15 	calld	lr, #_PUTCW
+00890     f1002807 	add	r13, r0
+00894     fd900170 	jmp	#_LPF38
+00898              _LPF18
+00898     f6001a12 	mov	r6, r11
+0089c     f6041c18 	mov	r7, #24
+008a0     f1041a04 	add	r6, #4
+008a4     f1001c16 	add	r7, sp
+008a8     fb002212 	rdlong	r10, r11
+008ac     f6042400 	mov	r11, #0
+008b0     fc601a0e 	wrlong	r6, r7
+008b4     fd90000c 	jmp	#_LPF20
+008b8              _LPF21
+008b8     f1042201 	add	r10, #1
+008bc     f1042401 	add	r11, #1
+008c0     fe1ffdb1 	calld	lr, #_putchar
+008c4              _LPF20
+008c4     f6002015 	mov	r9, r14
+008c8     f1802012 	sub	r9, r11
+008cc     fac80e11 	rdbyte	r0, r10 wz
+008d0     5d9fffe4 	IF_NE	jmp	#_LPF21
+008d4     f6002a10 	mov	r14, r9
+008d8     fd90000c 	jmp	#_LPF22
+008dc              _LPF23
+008dc     f6040e20 	mov	r0, #32
+008e0     f1842a01 	sub	r14, #1
+008e4     fe1ffd8d 	calld	lr, #_putchar
+008e8              _LPF22
+008e8     f25c2a00 	cmps	r14, #0 wcz
+008ec     1d9fffec 	IF_A 	jmp	#_LPF23
+008f0     f6001c10 	mov	r7, r9
+008f4     f3441c00 	fges	r7, #0
+008f8     f6041818 	mov	r5, #24
+008fc     f1001c12 	add	r7, r11
+00900     f1001816 	add	r5, sp
+00904     f100280e 	add	r13, r7
+00908     fb00240c 	rdlong	r11, r5
+0090c     fd9000f8 	jmp	#_LPF38
+00910              _LPF17
+00910     f25c1c78 	cmps	r7, #120 wcz
+00914     5604200a 	IF_NE mov	r9, #10
+00918     5d900004 	IF_NE	jmp	#_LPF24
+0091c              _LPF35
+0091c     f6042010 	mov	r9, #16
+00920              _LPF24
+00920     f6001a12 	mov	r6, r11
+00924     f6041818 	mov	r5, #24
+00928     f1041a04 	add	r6, #4
+0092c     f1001816 	add	r5, sp
+00930     f25c1c64 	cmps	r7, #100 wcz
+00934     fc601a0c 	wrlong	r6, r5
+00938     fb002412 	rdlong	r11, r11
+0093c     5d900020 	IF_NE	jmp	#_LPF25
+00940     f25c2400 	cmps	r11, #0 wcz
+00944     3d900018 	IF_AE	jmp	#_LPF25
+00948     f6040e2d 	mov	r0, #45
+0094c     f6041001 	mov	r1, #1
+00950     f1842a01 	sub	r14, #1
+00954     f6602412 	neg	r11, r11
+00958     fe1ffd49 	calld	lr, #_PUTCW
+0095c     f1002807 	add	r13, r0
+00960              _LPF25
+00960     f6002216 	mov	r10, sp
+00964              _LPF26
+00964     f6000e12 	mov	r0, r11
+00968     f6001010 	mov	r1, r9
+0096c     f1842a01 	sub	r14, #1
+00970     fda0004b 	call	#__UDIVSI
+00974     f6001c08 	mov	r7, r1
+00978     f6000e12 	mov	r0, r11
+0097c     f1001c0f 	add	r7, r8
+00980     f6001010 	mov	r1, r9
+00984     fda0004b 	call	#__UDIVSI
+00988     fac01c0e 	rdbyte	r7, r7
+0098c     f25c0e00 	cmps	r0, #0 wcz
+00990     f6002407 	mov	r11, r0
+00994     fc401c11 	wrbyte	r7, r10
+00998     f1042201 	add	r10, #1
+0099c     5d9fffc4 	IF_NE	jmp	#_LPF26
+009a0     f6002415 	mov	r11, r14
+009a4     fd900014 	jmp	#_LPF27
+009a8              _LPF28
+009a8     f6041a1c 	mov	r6, #28
+009ac     f1001a16 	add	r6, sp
+009b0     f1842401 	sub	r11, #1
+009b4     fb000e0d 	rdlong	r0, r6
+009b8     fe1ffcb9 	calld	lr, #_putchar
+009bc              _LPF27
+009bc     f25c2400 	cmps	r11, #0 wcz
+009c0     1d9fffe4 	IF_A 	jmp	#_LPF28
+009c4     f3442a00 	fges	r14, #0
+009c8     f6001c11 	mov	r7, r10
+009cc     f6002016 	mov	r9, sp
+009d0     fd900014 	jmp	#_LPF29
+009d4              _LPF30
+009d4     f600240e 	mov	r11, r7
+009d8     f1842401 	sub	r11, #1
+009dc     fac00e12 	rdbyte	r0, r11
+009e0     fe1ffc91 	calld	lr, #_putchar
+009e4     f6001c12 	mov	r7, r11
+009e8              _LPF29
+009e8     f2581c10 	cmps	r7, r9 wcz
+009ec     5d9fffe4 	IF_NE	jmp	#_LPF30
+009f0     f180220e 	sub	r10, r7
+009f4     f6041c18 	mov	r7, #24
+009f8     f1002215 	add	r10, r14
+009fc     f1001c16 	add	r7, sp
+00a00     f1002811 	add	r13, r10
+00a04     fb00240e 	rdlong	r11, r7
+00a08              _LPF38
+00a08     fac80e13 	rdbyte	r0, r12 wz
+00a0c     5d9ffd60 	IF_NE	jmp	#_LPF31
+00a10              _LPF14
+00a10     f6000e14 	mov	r0, r13
+00a14     f1042c20 	add	sp, #32
+00a18     fb03ec16 	rdlong	lr, sp
+00a1c     f1042c04 	add	sp, #4
+00a20     fb002a16 	rdlong	r14, sp
+00a24     f1042c04 	add	sp, #4
+00a28     fb002816 	rdlong	r13, sp
+00a2c     f1042c04 	add	sp, #4
+00a30     fb002616 	rdlong	r12, sp
+00a34     f1042c04 	add	sp, #4
+00a38     fb002416 	rdlong	r11, sp
+00a3c     f1042c04 	add	sp, #4
+00a40     fb002216 	rdlong	r10, sp
+00a44     f1042c04 	add	sp, #4
+00a48     fb002016 	rdlong	r9, sp
+00a4c     f1042c04 	add	sp, #4
+00a50     fb001e16 	rdlong	r8, sp
+00a54     f1042c04 	add	sp, #4
+00a58     fd63ec2c 	jmp	lr
+                   
+00a5c     33323130 _LPFC3	byte "0123456789ABCDEF", 0
+00a6d                      alignl
+                   
+                   '*******************************************************************************
+                   '  Program Code
+                   '*******************************************************************************
+                   
+00a70              	alignl
+00a70              _main
+00a70     f6001dfb 	mov	r7, DIRB
+00a74     f5441c3f 	or	r7, #63
+00a78     f603f60e 	mov	DIRB, r7
+00a7c     ff000005 	rdlong	r3, ##_LC0
+00a80     fb041548 
+00a84     f6041c00 	mov	r7, #0
+00a88     f6041201 	mov	r2, #1
+00a8c              _L7
+00a8c     f25c1c05 	cmps	r7, #5 wcz
+00a90     ed900060 	IF_BE	jmp	#_L3
+00a94     f6041a05 	mov	r6, #5
+00a98     f6041806 	mov	r5, #6
+                   	'' loop_start register r5 level #1
+00a9c              _L4
+00a9c     f6001609 	mov	r4, r2
+00aa0     f6001dfd 	mov	r7, OUTB
+00aa4     f060160d 	shl	r4, r6
+00aa8     f5401c0b 	or	r7, r4
+00aac     f603fa0e 	mov	OUTB, r7
+00ab0     f6041032 	mov	r1, #50
+00ab4     fd601c1a 	getct	r7
+00ab8     fb000e0a 	rdlong	r0, r3
+00abc     fda0004b 	call	#__UDIVSI
+00ac0     f1001c07 	add	r7, r0
+00ac4     fa641c00 	addct1	r7,#0
+00ac8     fd602224 	waitct1
+00acc     f6001dfd 	mov	r7, OUTB
+00ad0     f5201c0b 	andn	r7, r4
+00ad4     f603fa0e 	mov	OUTB, r7
+00ad8     fd601c1a 	getct	r7
+00adc     f1001c07 	add	r7, r0
+00ae0     fa641c00 	addct1	r7,#0
+00ae4     fd602224 	waitct1
+00ae8     f1841a01 	sub	r6, #1
+00aec     fb6c19eb 	djnz	r5,#_L4
+00af0     f6041c00 	mov	r7, #0
+00af4              _L3
+00af4     f6001809 	mov	r5, r2
+00af8     f6001bfd 	mov	r6, OUTB
+00afc     f060180e 	shl	r5, r7
+00b00     f5401a0c 	or	r6, r5
+00b04     f603fa0d 	mov	OUTB, r6
+00b08     f6041032 	mov	r1, #50
+00b0c     fd601a1a 	getct	r6
+00b10     fb000e0a 	rdlong	r0, r3
+00b14     fda0004b 	call	#__UDIVSI
+00b18     f1001a07 	add	r6, r0
+00b1c     fa641a00 	addct1	r6,#0
+00b20     fd602224 	waitct1
+00b24     f6001bfd 	mov	r6, OUTB
+00b28     f5201a0c 	andn	r6, r5
+00b2c     f603fa0d 	mov	OUTB, r6
+00b30     fd601a1a 	getct	r6
+00b34     f1001a07 	add	r6, r0
+00b38     fa641a00 	addct1	r6,#0
+00b3c     fd602224 	waitct1
+00b40     f1041c01 	add	r7, #1
+00b44     fd9fff44 	jmp	#_L7
+00b48              	alignl
+00b48              _LC0
+00b48     00000400 	long	__clkfreq

@@ -1,0 +1,143 @@
+                   dat
+                   
+                   ' Set up cog 0 debug isr
+                   
+00000 000          	org
+                   
+00000 000 fd65fe00 	hubset	#$FF		'set clock to 80MHz
+                   
+00004 001 fd641e28 	setq	#$0F		'install cog 0 debug isr at $FFFC0..$FFFFF
+00008 002 ff0007ff 	wrlong	buff,##$FFFC0	'(reg $000..$00F swap space is at $FFF80..$FFFBF)
+0000c 003 fc640fc0 
+                   
+00010 004 ff900000 	hubset	##$20000001	'enable debug interrupt for cog 0
+00014 005 fd640200 
+                   
+00018 006 fcec0040 	coginit	#0,#@start	'restart cog 0 with target program
+                   
+0001c 007          buff
+                   
+                   ' Cog 0 debug isr - gets moved to $FFFC0..$FFFFF
+                   '
+                   '	On a debug interrupt, rom code at $1F8 copies regs $000..$00F to $FFF80..$FFFBF.
+                   '	Regs $000..$00F then get loaded with the debug isr from $FFFC0..$FFFFF.
+                   '	A jump to $000 executes, running the debug isr code in regs $000..$00F.
+                   '
+                   '	At the end of the debug isr, place a jump to rom code at $1FD.
+                   '	Regs $000..$00F get restored from $FFF80..$FFFBF and then 'reti0' executes.
+                   
+0001c 000          	org			'begin 16-instruction-max debug isr
+                   
+0001c 000 fd64005f isr0	drvnot	#0		'pulse pin 0
+00020 001 fd64005f 	drvnot	#0
+                   				'(pick one line below to uncomment)
+                   '	brk	##bp<<12 + $400	'enable breakpoint on address (stops after)
+                   '	brk	##15<<12 + $200	'enable breakpoint on event 15 (0..15 allowed)
+                   '	brk	#$100		'enable breakpoint on cogbrk from other cog(s)
+                   '	brk	#$E0		'enable breakpoint on int3/int2/int1
+                   '	brk	#$80		'enable breakpoint on int3
+                   '	brk	#$40		'enable breakpoint on int2
+                   '	brk	#$20		'enable breakpoint on int1
+                   '	brk	#$10		'enable breakpoint on 'brk' (stops after)
+                   '	brk	#$0F		'enable single-stepping in int3/int2/int1/main
+                   '	brk	#$08		'enable single-stepping in int3 isr
+                   '	brk	#$04		'enable single-stepping in int2 isr
+                   '	brk	#$02		'enable single-stepping in int1 isr
+00024 002 fd640236 	brk	#$01		'enable single-stepping in main program
+                   
+00028 003 f8cff4ff 	setbyte	dira,#$FF,#1	'write pc[7:0] to p15..p8
+0002c 004 f8cbf9ff 	setbyte	outa,inb,#1
+                   
+00030 005 fd700035 	getbrk	$0	wc	'write next skip bit to p7
+00034 006 fd640e5a 	drvc	#7
+                   
+00038 007 fd6c021f 	waitx	#$1	wz	'add jitter to avoid patterns ('waitx wc/wz' uses {#}d & rnd)
+                   
+0003c 008 fd9007d0 	jmp	#$1FD		'jump to cog rom: 'setq #$F' + 'rdlong $000,$FFF80' + 'reti0'
+                   
+                   
+                   ' Cog 0 main program - demonstrates debug interrupts
+                   ' Connect a logic analyzer to p15..p0
+                   
+00040 000          	org
+                   
+00040 000 f607e830 start	mov	ijmp1,#int1	'set interrupt vectors
+00044 001 f607e428 	mov	ijmp2,#int2
+00048 002 f607e020 	mov	ijmp3,#int3
+                   
+0004c 003 fd60761a 	getct	t1		'set initial ct1 event
+00050 004 fa607638 	addct1	t1,time1
+                   
+00054 005 fd60781a 	getct	t2		'set initial ct2 event
+00058 006 fa687839 	addct2	t2,time2
+                   
+0005c 007 fd607a1a 	getct	t3		'set initial ct3 event
+00060 008 fa707a3a 	addct3	t3,time3
+                   
+00064 009 fd640225 	setint1	#1		'ct1 interrupt on int1
+00068 00a fd640426 	setint2	#2		'ct2 interrupt on int2
+0006c 00b fd640627 	setint3	#3		'ct3 interrupt on int3
+                   
+00080 010          	orgf	$10		'bump up to $010 for clean pc viewing on p15..p8
+                   
+                   
+00080 010 fd64085f loop	drvnot	#4		'$10	main program, pulse pin 4
+00084 011 fd64085f bp	drvnot	#4		'$11	breakpoint address (if enabled in debug isr)
+00088 012 fd640036 	brk	#0		'$12	brk (if enabled in debug isr)
+0008c 013 fdb00004 	call	#.tog		'$13	call a subroutine (proves breakpoint triggers)
+00090 014 fd9fffec 	jmp	#loop		'$14	loop
+                   
+00094 015 f6047c03 .tog	mov	x,#3		'$15	subroutine
+00098 016 fd640a5f .lp	drvnot	#5		'$16	toggle a pin
+0009c 017 fb6c7dfe 	djnz	x,#.lp		'$17	..x times
+                   
+000a0 018 fd646a32 	skipf	#%0110101	'$18	do a skip/skipf sequence
+                   
+000a4 019 fd640a5f 	drvnot	#5		'$19	nop	skip/1	skipf/1
+000a8 01a fd640a5f 	drvnot	#5		'$1A	exec	skip/0	skipf/0
+000ac 01b fd640a5f 	drvnot	#5		'$1B	nop	skip/1
+000b0 01c fd640a5f 	drvnot	#5		'$1C	exec	skip/0	skipf/0
+000b4 01d fd640a5f 	drvnot	#5		'$1D	nop	skip/1
+000b8 01e fd640a5f 	drvnot	#5		'$1E	nop	skip/1
+000bc 01f 0d640a5f _ret_	drvnot	#5		'$1F	exec	skip/0	skipf/0
+                   
+                   
+000c0 020 fa707a3a int3	addct3	t3,time3	'$20	int3 isr
+000c4 021 fd64065f 	drvnot	#3		'$21	pulse pin 3
+000c8 022 fd64065f 	drvnot	#3		'$22
+000cc 023 fdb00004 	call	#.a		'$23	call a subroutine (proves breakpoint triggers)
+000d0 024 fb3bfff1 	reti3			'$24
+000d4 025 fa300000 .a	scas	0,0		'$25	do a protected instruction (proves triggers)
+000d8 026 f2000000 	cmp	0,0		'$26
+000dc 027 fd64002d 	ret			'$27
+                   
+                   
+000e0 028 fa687839 int2	addct2	t2,time2	'$28	int2 isr
+000e4 029 fd64045f 	drvnot	#2		'$29	pulse pin 2
+000e8 02a fd64045f 	drvnot	#2		'$2A
+000ec 02b fdb00004 	call	#.a		'$2B	call a subroutine (proves breakpoint triggers)
+000f0 02c fb3bfff3 	reti2			'$2C
+000f4 02d fa300000 .a	scas	0,0		'$2D	do a protected instruction (proves triggers)
+000f8 02e f2000000 	cmp	0,0		'$2E
+000fc 02f fd64002d 	ret			'$2F
+                   
+                   
+00100 030 fa607638 int1	addct1	t1,time1	'$30	int1 isr
+00104 031 fd64025f 	drvnot	#1		'$31	pulse pin 1
+00108 032 fd64025f 	drvnot	#1		'$32
+0010c 033 fdb00004 	call	#.a		'$33	call a subroutine (proves breakpoint triggers)
+00110 034 fb3bfff5 	reti1			'$34
+00114 035 fa300000 .a	scas	0,0		'$35	do a protected instruction (proves triggers)
+00118 036 f2000000 	cmp	0,0		'$36
+0011c 037 fd64002d 	ret			'$37
+                   
+                   
+00120 038 00000bb8 time1	long	3000
+00124 039 00000bb9 time2	long	3001
+00128 03a 00000bba time3	long	3002
+                   
+0012c 03b          t1	res	1
+0012c 03c          t2	res	1
+0012c 03d          t3	res	1
+                   
+0012c 03e          x	res	1

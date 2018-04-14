@@ -1,0 +1,43 @@
+                   dat
+                   
+                   ' make a sin/cos table in LUT and then output it to dac 1
+                   ' switches between 1x and 2x frequency
+                   
+00000 000          		org
+                   
+00000 000 fd65fe00 		hubset	#$FF			'set clock to 80MHz
+                   
+00004 001 fc042401 		wrpin	dacmode,#1		'enable dac mode in pin 1
+                   
+00008 002 f60433ff 		mov	z,#$1FF			'make 512-sample sin/cos table in lut
+0000c 003 f6002e19 sincos		mov	x,z			'get angle into top 9 bits of x
+00010 004 f0642e17 		shl	x,#32-9
+00014 005 fd48fe17 		qrotate	#$7F,x			'get sin/cos of (ro,theta)
+00018 006 fd602e18 		getqx	x			'get cos
+0001c 007 f5642e80 		xor	x,#$80			'make positive 8-bit value
+00020 008 fd603019 		getqy	y			'get sin
+00024 009 f5643080 		xor	y,#$80			'make positive 8-bit value
+00028 00a f8c82e18 		setbyte	x,y,#1			'get sin into byte1, cos in byte0
+0002c 00b fc302e19 		wrlut	x,z			'write sin:cos into lut bottom bytes
+00030 00c fb7c33f6 		djnf	z,#sincos		'make 512 samples
+                   
+00034 00d fd602628 loop		setq	f1
+00038 00e fcc42a00 		xcont	m1,#0			'Goertzel mode, output sin/cos on dacs 1/0
+                   
+0003c 00f fd602828 		setq	f2
+00040 010 fcc42c00 		xcont	m2,#0			'Goertzel mode, output sin/cos on dacs 1/0
+                   
+00044 011 fd9fffec 		jmp	#loop
+                   
+                   
+00048 012 00140040 dacmode		long	%0000_0000_000_1010000000000_01_00000_0
+                   
+0004c 013 00400000 f1		long	$0040_0000
+00050 014 00200000 f2		long	$0020_0000
+                   
+00054 015 0c000008 m1		long	$0C00_0008
+00058 016 0c000004 m2		long	$0C00_0004
+                   
+0005c 017          x		res	1
+0005c 018          y		res	1
+0005c 019          z		res	1

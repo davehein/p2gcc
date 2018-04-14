@@ -1,0 +1,2120 @@
+'############################################################################
+'# PFTH - This program implements a Forth interpreter for the P2.
+'#
+'# Copyright (c) 2012-2015 Dave Hein
+'# MIT Licensed
+'############################################################################
+CON
+  rx_pin = 63
+  tx_pin = 62
+  clock_freq = 80_000_000
+  baud_rate = 115_200
+
+  Q = 0   ' Object Offset
+
+  FLAG_IMMEDIATE = 1
+  FLAG_CORE = $10 | $80
+  FLAG_LIT  = $12 | $80
+  FLAG_VAR  = $20 | $80
+  FLAG_DEF  = $00 | $80
+  FLAG_JMP  = $0A | $80
+  FLAG_SEMI = FLAG_CORE | FLAG_IMMEDIATE
+
+DAT
+                        orgh    0
+                        
+'*******************************************************************************
+' pfth cog code
+'*******************************************************************************
+                        org     0                
+forth
+parm                    mov     parm, parval
+parm1                   rdlong  pc, parm
+parm2                   add     parm, #4
+parm3                   rdlong  stackptr, parm
+parm4                   add     parm, #4
+temp                    rdlong  stackptr0, parm
+temp1                   add     parm, #4
+temp2                   rdlong  returnptr, parm
+temp3                   add     parm, #4
+temp4                   rdlong  returnptr0, parm
+                        drvh    #tx_pin
+                        jmp     #innerloop              ' Begin execution
+
+'*******************************************************************************
+' Execute the words contained in the body of a word
+' Changes parm, temp1
+'*******************************************************************************
+execlistfunc            add     parm, #4                ' Get body from XT
+innerloopcall           wrlong  pc, returnptr           ' Push PC to return stack
+                        add     returnptr, #4
+                        mov     pc, parm                ' Set new value for PC
+                        
+'*******************************************************************************
+' Get an execution token from the location pointed to by the program counter
+' Increment the program counter, fetch the code pointer and jump to it
+' Changes parm, temp1, pc
+'*******************************************************************************
+innerloop               rdword  parm, pc                wz
+ if_z                   jmp     #exitfunc
+                        add     pc, #2
+                        rdword  temp1, parm
+                        calld   ina, temp1
+                        
+pc                      long    @xboot_1+Q             ' Program Counter
+
+'*******************************************************************************
+' Stop executing the current word, and return to the calling word
+' No Changes              
+'*******************************************************************************
+exitfunc                sub     returnptr, #4
+                        rdlong  pc, returnptr
+                        jmp     #innerloop
+
+'*******************************************************************************
+' Abort or quit execution, and return to the interpreter
+' No Changes
+'*******************************************************************************
+abortfunc               mov     stackptr, stackptr0
+quitfunc                mov     returnptr, returnptr0
+                        add     returnptr, #4           ' Use second entry return stack
+                        rdlong  pc, returnptr      
+                        jmp     #innerloop
+
+'*******************************************************************************
+' Push the value contained in the word's body onto the stack
+' No changes
+'*******************************************************************************
+confunc                 add     parm, #4
+                        rdlong  parm1, parm
+                        jmp     #push_jmp
+                        
+'*******************************************************************************
+' Push the address of the word's body onto the stack
+' Execute the words pointed to by the does pointer, if non-zero
+' No changes
+'*******************************************************************************
+varfunc                 mov     parm1, parm
+                        add     parm1, #4
+                        call    #push1
+                        
+'*******************************************************************************
+' Execute the words pointed to by the does pointer, if non-zero
+' No changes
+'*******************************************************************************
+deferfunc               add     parm, #2                ' DOES> pointer
+                        rdword  parm, parm              wz
+        if_z            jmp     #innerloop              ' Done with varfunc
+                        jmp     #innerloopcall          ' Execute DOES> code
+
+'*******************************************************************************
+' Execute the word on the stack
+' Changes parm, temp1
+'*******************************************************************************
+executefunc             sub     stackptr, #4
+                        rdlong  parm, stackptr
+                        rdlong  temp1, parm
+                        calld   ina, temp1                   ' Execute code
+
+'*******************************************************************************
+' Execute the PASM instruction on the TOS using the next value on the stack as
+' the destination register data.  Return the result on the stack.
+' Changes parm1, parm2
+'*******************************************************************************
+cogx1func               call    #pop2
+                        mov     cogx1instr, parm2
+                        setd    cogx1instr, #parm1
+                        nop
+cogx1instr              nop
+                        jmp     #push_jmp
+
+'*******************************************************************************
+' Duplicate the top of stack
+' Changes parm1
+'*******************************************************************************
+dupfunc                 call    #pop1
+                        call    #push1
+                        jmp     #push_jmp
+
+'*******************************************************************************
+' Swap the top two items on the stack
+' Changes parm1, parm2
+'*******************************************************************************
+swapfunc                call    #pop2
+                        wrlong  parm2, stackptr
+                        add     stackptr, #4
+                        jmp     #push_jmp
+                                                
+'*******************************************************************************
+' Get the next word from the input buffer using the delimiter from the stack
+' Changes parm, parm1, parm2, temp1, temp2
+'*******************************************************************************
+wordfunc                sub     stackptr, #4
+                        rdlong  parm, stackptr
+                        call    #word_del
+                        mov     temp1, #1
+                        shl     temp1, #15
+                        sub     temp1, parm2
+                        sub     temp1, #1
+                        wrlong  temp1, stackptr
+                        add     stackptr, #4
+                        wrbyte  parm2, temp1
+                        cmps    parm2, #0               wcz
+        if_c_or_z       jmp     #innerloop
+wordfunc1               add     temp1, #1
+                        rdbyte  temp2, parm1
+                        add     parm1, #1
+                        wrbyte  temp2, temp1
+                        djnz    parm2, @wordfunc1
+                        jmp     #innerloop
+
+'*******************************************************************************
+' Find the word specfied on the stack in the dictionary
+' Changes parm1, parm2, temp4
+'*******************************************************************************
+findfunc                call    #pop1
+                        mov     temp4, parm1
+                        add     parm1, #1
+                        rdbyte  parm2, temp4
+                        call    #findword
+                        mov     parm1, parm             wz
+        if_z            jmp     #findfunc1
+                        call    #link2xt
+                        call    #push1
+                        add     parm, #2                ' Point to flag byte
+                        rdbyte  parm1, parm
+                        and     parm1, #1               ' Check immediate bit
+                        shl     parm1, #1
+                        sub     parm1, #1               ' Return 1 if set, -1 if not
+                        call    #push1
+                        jmp     #innerloop
+findfunc1               mov     parm1, temp4
+                        call    #push1
+                        mov     parm1, #0
+                        call    #push1
+                        jmp     #innerloop
+
+'*******************************************************************************
+' Send the character from the stack to the output port
+' Changes parm
+'*******************************************************************************
+emitfunc                call    #pop1
+                        mov     parm, parm1
+                        call    #putch
+                        jmp     #innerloop
+
+'*******************************************************************************
+' Get a character from the input port and put it on the stack
+' Changes parm, parm1
+'*******************************************************************************
+getcharfunc             call    #getch
+                        mov     parm1, parm
+                        jmp     #push_jmp
+
+'*******************************************************************************
+' Get a character from the files stored in memory and put it on the stack
+' Changes parm1
+'*******************************************************************************
+getfcharfunc            rdbyte  parm1, infileptr
+                        add     infileptr, #1
+                        jmp     #push_jmp
+
+'*******************************************************************************
+' Get an address and value from the stack, and store the value at the address
+' No changes              
+'*******************************************************************************
+storefunc               call    #pop2
+                        wrlong  parm1, parm2
+                        jmp     #innerloop
+
+'*******************************************************************************
+' Fetch a value from the address specified on the stack, and put it on the stack
+' Changes parm1              
+'*******************************************************************************
+fetchfunc               call    #pop1
+                        rdlong  parm1, parm1
+                        jmp     #push_jmp
+
+'*******************************************************************************
+' Get an address and word from the stack, and store the word at the address
+' No changes              
+'*******************************************************************************
+wstorefunc              call    #pop2
+                        wrword  parm1, parm2
+                        jmp     #innerloop
+
+'*******************************************************************************
+' Fetch a word from the address specified on the stack, and put it on the stack
+' Changes parm1              
+'*******************************************************************************
+wfetchfunc              call    #pop1
+                        rdword  parm1, parm1
+                        jmp     #push_jmp
+              
+'*******************************************************************************
+' Get an address and byte from the stack, and store the byte at the address
+' No changes              
+'*******************************************************************************
+cstorefunc              call    #pop2
+                        wrbyte  parm1, parm2
+                        jmp     #innerloop
+
+'*******************************************************************************
+' Fetch a byte from the address specified on the stack, and put it on the stack
+' Changes parm1              
+'*******************************************************************************
+cfetchfunc              call    #pop1
+                        rdbyte  parm1, parm1
+                        jmp     #push_jmp
+              
+'*******************************************************************************
+' Add two values from the stack, and write the result back to the stack
+' Changes parm1, parm2              
+'*******************************************************************************
+plusfunc                call    #pop2
+                        add     parm1, parm2
+                        jmp     #push_jmp
+              
+'*******************************************************************************
+' Subtract two values from the stack, and write the result back to the stack
+' Changes parm1, parm2              
+'*******************************************************************************
+minusfunc               call    #pop2
+                        sub     parm1, parm2
+                        jmp     #push_jmp
+              
+'*******************************************************************************
+' Multiply two values from the stack, and write the result back to the stack
+' Changes parm1, parm2              
+'*******************************************************************************
+multfunc                call    #pop2
+                        call    #multiply
+                        jmp     #push_jmp
+              
+'*******************************************************************************
+' Divide two values from the stack, and write the result back to the stack
+' Changes parm1, parm2              
+'*******************************************************************************
+dividefunc              call    #pop2
+                        call    #divide
+                        mov     parm1, parm2
+                        test    parm3, #1               wc
+        if_c            neg     parm1, parm1
+                        jmp     #push_jmp
+              
+'*******************************************************************************
+' Compute the modulus from two values from the stack, and write the result back
+' to the stack
+' Changes parm1, parm2              
+'*******************************************************************************
+modfunc                 call    #pop2
+                        call    #divide
+                        test    parm3, #2               wc
+        if_c            neg     parm1, parm1
+                        jmp     #push_jmp
+              
+'*******************************************************************************
+' Compare two values from the stack to determine if the second one is less than
+' the first one, and write the result back to the stack
+' Changes parm1, parm2              
+'*******************************************************************************
+lessfunc                call    #pop2
+                        cmps    parm1, parm2            wc
+        if_c            neg     parm1, #1
+        if_nc           mov     parm1, #0
+                        jmp     #push_jmp
+              
+'*******************************************************************************
+' Compare two values from the stack to determine if they are equal, and write
+' the result back to the stack
+' Changes parm1, parm2              
+'*******************************************************************************
+equalfunc               call    #pop2
+                        cmp     parm1, parm2            wz
+        if_z            neg     parm1, #1
+        if_nz           mov     parm1, #0
+                        jmp     #push_jmp
+              
+'*******************************************************************************
+' Compare two values from the stack to determine if the second one is greater
+' than the first one, and write the result back to the stack
+' Changes parm1, parm2              
+'*******************************************************************************
+greaterfunc             call    #pop2
+                        cmps    parm1, parm2            wcz
+        if_nz_and_nc    neg     parm1, #1
+        if_z_or_c       mov     parm1, #0
+                        jmp     #push_jmp
+
+'*******************************************************************************
+' Compute the logical AND of two values from the stack, and write the result
+' back to the stack
+' Changes parm1, parm2              
+'*******************************************************************************
+andfunc                 call    #pop2
+                        and     parm1, parm2
+                        jmp     #push_jmp
+              
+'*******************************************************************************
+' Compute the logical OR of two values from the stack, and write the result
+' back to the stack
+' Changes parm1, parm2              
+'*******************************************************************************
+orfunc                  call    #pop2
+                        or      parm1, parm2
+                        jmp     #push_jmp
+              
+'*******************************************************************************
+' Compute the logical XOR of two values from the stack, and write the result
+' back to the stack
+' Changes parm1, parm2              
+'*******************************************************************************
+xorfunc                 call    #pop2
+                        xor     parm1, parm2
+                        jmp     #push_jmp
+              
+'*******************************************************************************
+' Right-shift the second value on the stack by the number of bits specified by
+' the first value on the stack, and write the result to the stack
+' Changes parm1, parm2              
+'*******************************************************************************
+rshiftfunc              call    #pop2
+                        shr     parm1, parm2
+                        jmp     #push_jmp
+              
+'*******************************************************************************
+' Left-shift the second value on the stack by the number of bits specified by
+' the first value on the stack, and write the result to the stack
+' Changes parm1, parm2              
+'*******************************************************************************
+lshiftfunc              call    #pop2
+                        shl     parm1, parm2
+                        jmp     #push_jmp
+
+'*******************************************************************************
+' Push the stack depth to the stack
+' Changes parm1              
+'*******************************************************************************
+depthfunc               mov     parm1, stackptr
+                        sub     parm1, stackptr0
+                        sar     parm1, #2
+                        jmp     #push_jmp
+
+'*******************************************************************************
+' Drop the top value from the stack
+' No changes
+'*******************************************************************************
+dropfunc                sub     stackptr, #4
+                        jmp     #innerloop
+
+'*******************************************************************************
+' Use the value on top of the stack as an index to another value in the stack,
+' and write its value to the stack
+' No changes
+'*******************************************************************************
+pickfunc                call    #pop1
+                        call    #indexstack
+                        jmp     #push_jmp
+
+'*******************************************************************************
+' Use the value on top of the stack as and index to remove another value from
+' the stack, and place it at the top of the stack.
+' Changes temp1, temp2, temp3, temp4
+'*******************************************************************************
+rollfunc                call    #pop1
+                        cmp     parm1, #0               wcz
+        if_c_or_z       jmp     #innerloop
+                        mov     temp3, parm1
+                        call    #indexstack
+                        mov     temp2, temp1
+rollfunc1               add     temp2, #4
+                        rdlong  temp4, temp2
+                        wrlong  temp4, temp1
+                        add     temp1, #4
+                        djnz    temp3, #rollfunc1
+                        wrlong  parm1, temp1
+                        jmp     #innerloop
+
+'*******************************************************************************
+' Pop the value from the top of the stack, and push it onto the return stack.
+' No changes
+'*******************************************************************************
+torfunc                 call    #pop1
+                        wrlong  parm1, returnptr
+                        add     returnptr, #4
+                        jmp     #innerloop
+
+'*******************************************************************************
+' Pop the value from the top of the return stack and push it to the stack.
+' Changes parm1
+'*******************************************************************************
+fromrfunc               sub     returnptr, #4
+                        rdlong  parm1, returnptr
+                        jmp     #push_jmp
+
+'*******************************************************************************
+' Push the value on the stack pointed to by the PC and increment the PC
+' Changes parm1
+'*******************************************************************************
+_litfunc                rdword  parm1, pc
+                        add     pc, #2
+                        jmp     #push_jmp
+
+'*******************************************************************************
+' Convert the string described by the address and length on the top of the
+' stack to a hex number, and push it to the stack
+' Changes parm1
+'*******************************************************************************
+_gethexfunc             call    #pop2
+                        call    #gethex
+                        mov     parm1, parm
+                        jmp     #push_jmp
+
+'*******************************************************************************
+' Create a variable, and add it to the dictionary
+' Changes parm3
+'*******************************************************************************
+createfunc              mov     parm3, #varfunc
+                        mov     parm4, #FLAG_VAR
+                        call    #create
+                        jmp     #innerloop
+
+'*******************************************************************************
+' Create an executable word, and add it to the dictionary.  Set the compile
+' state to -1
+' Changes parm3, temp1
+'*******************************************************************************
+colonfunc               mov     parm3, #execlistfunc
+                        mov     parm4, #FLAG_DEF
+                        call    #create
+        if_z            jmp     #innerloop
+                        neg     temp1, #1
+                        wrlong  temp1, a_state
+                        jmp     #innerloop
+
+'*******************************************************************************
+' Compile a zero into memory indicating the end of an executable word, and set
+' the compile flag to zero
+' Changes temp1, temp2
+'*******************************************************************************
+semicolonfunc           mov     temp1, #0
+                        wrlong  temp1, a_state
+                        rdlong  temp2, a_dp
+                        wrword  temp1, temp2
+                        add     temp2, #2
+                        wrlong  temp2, a_dp
+                        jmp     #innerloop
+
+'*******************************************************************************
+' Fetch a value from the specified cog address, and put it on the stack
+' the compile flag to zero
+' Changes parm1
+'*******************************************************************************
+cogfetchfunc            call    #pop1
+                        sets    cogfetch1, parm1
+                        nop
+cogfetch1               mov     parm1, 0-0
+                        jmp     #push_jmp
+
+'*******************************************************************************
+' Get a cog address and value from the stack, and store the value at the address
+' the compile flag to zero
+' Changes parm1, parm2
+'*******************************************************************************
+cogstorefunc            call    #pop2
+                        setd    cogstore1, parm2
+                        nop
+cogstore1               mov     0-0, parm1
+                        jmp     #innerloop
+
+
+'*******************************************************************************
+' Print out an 8-digit hex number to the output port.
+' Changes parm
+'*******************************************************************************
+dotxfunc                mov     parm, #"$"
+                        call    #putch
+                        call    #pop1
+                        call    #printhex
+                        mov     parm, #" "
+                        call    #putch
+                        jmp     #innerloop
+
+'*******************************************************************************
+' If top of stack is zero, jump to address contained in location at current PC.
+' Otherwise, increment the PC
+' Changes parm1
+'*******************************************************************************
+_jzfunc                 call    #pop1
+        if_z            rdword  pc, pc
+        if_nz           add     pc, #2
+                        jmp     #innerloop
+
+'*******************************************************************************
+' Copy bytes from the source to the destination
+' Changes parm1
+'*******************************************************************************
+cmovefunc               sub     stackptr, #4
+                        rdlong  parm3, stackptr
+                        call    #pop2
+                        cmps    parm3, #0               wcz
+        if_c_or_z       jmp     #innerloop
+cmovefunc1              rdbyte  temp1, parm1
+                        add     parm1, #1
+                        wrbyte  temp1, parm2
+                        add     parm2, #1
+                        djnz    parm3, #cmovefunc1
+                        jmp     #innerloop
+
+'*******************************************************************************
+' Perform the increment and compare for the loop word
+' Changes parm1, parm2, parm3
+'*******************************************************************************
+_loopfunc               call    #pop1                   ' Get increment
+                        sub     returnptr, #8
+                        rdlong  parm3, returnptr        ' Get upper limit
+                        add     returnptr, #4
+                        rdlong  parm2, returnptr        ' Get index
+                        add     parm1, parm2            ' index + increment
+                        wrlong  parm1, returnptr        ' Push index back
+                        add     returnptr, #4
+                        cmps    parm1, parm3            wc
+        if_nc           neg     parm1, #1
+        if_c            mov     parm1, #0
+                        jmp     #push_jmp
+                        
+'*******************************************************************************
+' The following code implements the basic functions used by the kernel words
+'*******************************************************************************
+
+'*******************************************************************************
+' Create a word entry in the dictionary
+' Changes parm, parm1, parm2, temp1, temp2              
+'*******************************************************************************
+create                  mov     parm, #" "
+                        call    #word_del
+        if_z            ret
+                        rdlong  temp1, a_dp             ' Align DP
+                        add     temp1, #3
+                        and     temp1, minus4
+                        rdlong  temp2, a_last
+                        wrword  temp2, temp1            ' Write the link pointer
+                        wrlong  temp1, a_last           ' Update LAST
+                        add     temp1, #2
+                        
+                        wrbyte  parm4, temp1            ' Write the flag
+                        add     temp1, #1
+                        wrbyte  parm2, temp1            ' Write the length
+                        add     temp1, #1
+                        cmps    parm2, #0               wcz
+        if_c_or_z       jmp     #create_done
+create1                 rdbyte  temp2, parm1            ' Copy the name
+                        add     parm1, #1
+                        wrbyte  temp2, temp1
+                        add     temp1, #1               wz
+                        djnz    parm2, #create1
+
+create_done             mov     temp2, #0               ' Pad with 0's to align
+create2                 test    temp1, #3               wz
+        if_z            jmp     #create_aligned
+                        wrbyte  temp2, temp1
+                        add     temp1, #1
+                        jmp     #create2
+
+create_aligned          wrword  parm3, temp1            ' Write the code pointer
+                        add     temp1, #2
+                        wrword  temp2, temp1            ' Write the DOES> pointer             
+                        add     temp1, #2               wz ' Clear zero flag
+                                  
+                        wrlong  temp1, a_dp
+create_ret              ret
+
+
+
+'*******************************************************************************
+' Get one character from the input port.
+' Input none
+' Changes parm, temp, temp1, temp2
+' Output parm
+'*******************************************************************************
+getch                   mov     temp, bitcycles
+                        shr     temp, #1
+                        mov     temp1, #10
+                        mov     parm, #0
+getch0                  testp   #rx_pin wc
+        if_c            jmp     #getch0
+                        getct   temp2
+                        addct1  temp2, temp
+                        waitct1
+getch1                  mov     temp, inb
+                        and     temp, inbit
+                        ror     parm, #1
+                        or      parm, temp
+                        addct1  temp2, bitcycles
+                        waitct1
+                        djnz    temp1, #getch1
+                        ror     parm, #31 - 8
+                        and     parm, #255
+getch_ret               ret
+
+inbit                   long    1 << (rx_pin & 31)
+bitcycles               long    clock_freq / baud_rate
+
+'*******************************************************************************
+' Send one character to the output port.
+' Input parm
+' Changes parm, temp1, temp2
+' Output none             
+'*******************************************************************************
+putch                   rdlong  temp1, a_verbose       wz
+        if_z            ret
+                        or      parm, #$100
+                        shl     parm, #1
+                        mov     temp1, #10
+                        getct   temp2
+putch1                  shr     parm, #1               wc
+                        drvc    #tx_pin
+                        addct1  temp2, bitcycles
+                        waitct1
+                        djnz    temp1, #putch1
+putch_ret               ret
+
+'*******************************************************************************
+' Skip the specified character in the input buffer
+' Input parm
+' Changes temp, temp1
+' Output none
+'*******************************************************************************
+skipchar                cmps    temp1, temp2            wc
+        if_nc           ret
+                        rdlong  temp, a_tib
+                        add     temp, temp1
+                        rdbyte  temp, temp
+                        cmp     temp, parm              wz
+        if_nz           ret
+                        add     temp1, #1
+                        jmp     #skipchar
+skipchar_ret            ret
+
+'*******************************************************************************
+' Find the next occurance of the specified character in the input buffer
+' Input parm
+' Changes temp, temp1
+' Output none
+'*******************************************************************************
+findchar                cmps    temp1, temp2            wc
+        if_nc           ret
+                        rdlong  temp, a_tib
+                        add     temp, temp1
+                        rdbyte  temp, temp
+                        cmp     temp, parm              wz
+        if_z            ret
+                        add     temp1, #1
+                        jmp     #findchar
+findchar_ret            ret
+
+'*******************************************************************************
+' Find the next word in the input buffer delimited by the specified character
+' Input parm
+' Changes parm1, parm2, temp1, temp2
+' Output none
+'*******************************************************************************
+word_del
+                        rdlong  temp1, a_inputidx
+                        rdlong  temp2, a_inputlen
+                        call    #skipchar
+                        mov     parm1, temp1
+                        call    #findchar
+                        mov     parm2, temp1
+                        sub     parm2, parm1            wz
+                        rdlong  temp, a_tib
+                        add     parm1, temp
+                        cmps    temp1, temp2            wc
+        if_c            add     temp1, #1
+                        wrlong  temp1, a_inputidx
+word_del_ret            ret
+
+'*******************************************************************************
+' Find the specified word in the dictionary
+' Input parm1, parm2
+' Changes parm, parm3, parm4
+' Output parm
+'*******************************************************************************
+findword                rdlong  parm, a_last            wz
+        if_z            ret
+findword1               mov     parm3, parm
+                        add     parm3, #3
+                        rdbyte  parm4, parm3
+                        add     parm3, #1
+                        call    #compare
+        if_z            ret
+                        rdword  parm, parm              wz
+        if_nz           jmp     #findword1
+findword_ret            ret
+
+'*******************************************************************************
+' Do a case insensitive comparison of two character strings
+' Input parm1, parm2, parm3, parm4
+' Changes parm3, parm4, temp, temp1, temp2
+' Outut Z
+'*******************************************************************************
+compare                 cmps    parm2, #1               wcz
+        if_c            ret
+                        cmp     parm2, parm4            wz
+        if_nz           ret
+                        mov     temp, parm1
+compare1                rdbyte  temp1, temp
+                        call    #toupper
+                        mov     temp2, temp1
+                        rdbyte  temp1, parm3
+                        call    #toupper
+                        cmp     temp1, temp2            wz
+        if_nz           ret
+                        add     temp, #1
+                        add     parm3, #1
+                        djnz    parm4, #compare1
+compare_ret             ret
+
+'*******************************************************************************
+' Convert a character to uppercase
+' Input temp1
+' Changes temp1
+' Ouput temp1
+'*******************************************************************************
+toupper                 cmp     temp1, #"a"             wc
+        if_c            ret
+                        cmp     temp1, #"z"             wcz
+        if_nc_and_nz    ret
+                        sub     temp1, #"a" - "A"
+toupper_ret             ret              
+
+
+'*******************************************************************************
+' Print an 8-digit hex value to the output port
+' Input parm1
+' Changes parm, parm1, parm2
+' Output none
+'*******************************************************************************
+printhex                mov     parm2, #8
+printhex1               rol     parm1, #4
+                        mov     parm, #15
+                        and     parm, parm1
+                        add     parm, a_hexstr
+                        rdbyte  parm, parm
+                        call    #putch
+                        djnz    parm2, #printhex1
+printhex_ret            ret
+
+
+'*******************************************************************************
+' Convert a string to a hex number
+' Input parm1, parm2
+' Changes parm, temp, temp1, temp2
+' Output parm
+'*******************************************************************************
+gethex                  mov     parm, #0
+                        cmps    parm2, #0               wcz
+        if_c_or_z       ret
+                        mov     temp1, parm1
+                        mov     temp2, parm2
+gethex1                 rdbyte  temp, temp1
+                        add     temp1, #1
+                        sub     temp, #"0"
+                        cmps    temp, #10               wc
+        if_nc           sub     temp, #"a"-"0"-10
+                        shl     parm, #4
+                        add     parm, temp
+                        djnz    temp2, #gethex1
+gethex_ret              ret
+
+'*******************************************************************************
+' Push a value onto the data stack
+' Input parm1
+' No changes
+' Output none
+'*******************************************************************************
+push1                   wrlong  parm1, stackptr
+                        add     stackptr, #4
+push1_ret               ret
+
+'*******************************************************************************
+' Push a value onto the data stack and jump to the innerloop
+' Input parm1
+' No changes
+' Output none
+'*******************************************************************************
+push_jmp                wrlong  parm1, stackptr
+                        add     stackptr, #4
+                        jmp     #innerloop
+
+'*******************************************************************************
+' Pop two values off of the data stack
+' Input none
+' Changes parm1, parm2
+' Output parm1, parm2
+'*******************************************************************************
+pop2                    sub     stackptr, #4
+                        rdlong  parm2, stackptr
+
+'*******************************************************************************
+' Pop one value off of the data stack
+' Input none
+' Changes parm1
+' Ouput parm1
+'*******************************************************************************
+pop1                    sub     stackptr, #4
+                        rdlong  parm1, stackptr         wz
+pop1_ret
+pop2_ret                ret
+
+'*******************************************************************************
+' Read a value on the stack based on an index number
+' Changes parm1, temp1
+'*******************************************************************************
+indexstack              neg     temp1, parm1
+                        shl     temp1, #2
+                        sub     temp1, #4
+                        add     temp1, stackptr
+                        rdlong  parm1, temp1
+indexstack_ret          ret
+
+'*******************************************************************************
+' Compute the XT from the address of the link
+' Input:   parm1
+' Output:  parm1
+' Changes: temp1
+'*******************************************************************************
+link2xt                 mov     temp1, parm1
+                        add     temp1, #3
+                        rdbyte  parm1, temp1            ' Get name length
+                        add     parm1, temp1
+                        add     parm1, #4
+                        and     parm1, minus4           ' Align
+link2xt_ret             ret
+
+'*******************************************************************************
+' Multiply two 32-bit numbers
+' Changes parm2, temp1, temp2
+'*******************************************************************************
+multiply                mov     temp1, #0
+                        mov     temp2, #32
+                        shr     parm1, #1               wc
+mmul    if_c            add     temp1, parm2            wc
+                        rcr     temp1, #1               wc
+                        rcr     parm1, #1               wc
+                        djnz    temp2, #mmul
+multiply_ret            ret
+
+'*******************************************************************************
+' Divide two 32-bit numbers producing a quotient and a remainder
+' Changes parm1, parm2, parm3, temp1, temp2
+'*******************************************************************************
+divide                  mov     temp2, #32
+                        mov     temp1, #0
+                        abs     parm1, parm1            wc
+                        muxc    parm3, #%11
+                        abs     parm2, parm2            wcz
+        if_c            xor     parm3, #%01
+'        if_nz           jmp     #mdiv
+'                        mov     parm1, #0
+'                        jmp     divide_ret
+mdiv                    shr     parm2, #1               wcz
+                        rcr     temp1, #1
+        if_nz           djnz    temp2, #mdiv
+mdiv2                   cmpsub  parm1, temp1            wc
+                        rcl     parm2, #1
+                        shr     temp1, #1
+                        djnz    temp2, #mdiv2
+divide_ret              ret
+
+'*******************************************************************************
+' These are working registers.  The parm registers are generally used to pass
+' parameters from one routine to another, and the temp registers are used as
+' temporary storage within a routine.
+'*******************************************************************************
+
+'*******************************************************************************
+' Addresses of variables in the dictionary, and the hex table
+'*******************************************************************************
+a_hexstr                long      @hexstr+Q
+a_last                  long      @last+Q
+a_state                 long      @state+Q
+a_dp                    long      @dp+Q
+a_tib                   long      @tib+Q
+a_verbose               long      @verbose+Q
+a_inputidx              long      @greaterin+Q
+a_inputlen              long      @poundtib+Q
+
+'*******************************************************************************
+' The data and return stack pointers, and their base addresses
+'*******************************************************************************
+stackptr                long      0
+stackptr0               long      0
+returnptr               long      0
+returnptr0              long      0
+
+'*******************************************************************************
+' The input file pointer used during initialization
+'*******************************************************************************
+infileptr               long      @infile+Q
+
+'*******************************************************************************
+' Constants
+'*******************************************************************************
+minus4                  long      -4
+parval                  long      @pfthconfig+Q
+
+                        fit       $1f0
+
+                        orgh      $800
+'*******************************************************************************
+' Pfth configuration structure
+'*******************************************************************************
+pfthconfig              long      @xboot_1+Q            ' Initial word to execute
+                        long      @stack+Q+16           ' Starting stack pointer
+                        long      @stack+Q+16           ' Empty stack pointer value
+                        long      @retstk+Q             ' Starting return pointer
+                        long      @retstk+Q             ' Empty return pointer value
+stack                   long      0[100]                ' Data stack
+retstk                  long      0[100]                ' Return stack
+
+'*******************************************************************************
+' Input buffer and hex table
+'*******************************************************************************
+hexstr                  byte      "0123456789abcdef"
+inputbuf                byte      0[200]
+
+'*******************************************************************************
+' This is the beginning of the dictionary.  The kernel words are specified below
+'*******************************************************************************
+exit_L        word      0
+              byte      FLAG_CORE, 4, "exit"
+              alignl
+exit_X        word      exitfunc, 0
+
+quit_L        word      @exit_L+Q
+              byte      FLAG_CORE, 4, "quit"
+              alignl
+quit_X        word      quitfunc, 0
+
+abort_L       word      @quit_L+Q
+              byte      FLAG_CORE, 5, "abort", 0, 0, 0
+              alignl
+abort_X       word      abortfunc, 0
+
+execute_L     word      @abort_L+Q
+              byte      FLAG_CORE, 7, "execute", 0
+              alignl
+execute_X     word      executefunc, 0
+
+word_L        word      @execute_L+Q
+              byte      FLAG_CORE, 4, "word"
+              alignl
+word_X        word      wordfunc, 0
+
+find_L        word      @word_L+Q
+              byte      FLAG_CORE, 4, "find"
+              alignl
+find_X        word      findfunc, 0
+
+getchar_L     word      @find_L+Q
+              byte      FLAG_CORE, 7, "getchar", 0
+              alignl
+getchar_X     word      getcharfunc, 0
+
+getfchar_L    word      @getchar_L+Q
+              byte      FLAG_CORE, 8, "getfchar"
+              alignl
+getfchar_X    word      getfcharfunc, 0
+
+key_L         word      @getfchar_L+Q
+              byte      FLAG_CORE, 3, "key", 0
+              alignl
+key_X         word      deferfunc, @key_B+Q
+key_B         word      @getchar_X+Q, 0
+'key_B         word      @getfchar_X+Q, 0
+
+create_L      word      @key_L+Q
+              byte      FLAG_CORE, 6, "create", 0, 0
+              alignl
+create_X      word      createfunc, 0
+
+_lit_L        word      @create_L+Q
+              byte      FLAG_LIT, 4, "_lit"
+              alignl
+_lit_X        word      _litfunc, 0
+
+_gethex_L     word      @_lit_L+Q
+              byte      FLAG_CORE, 7, "_gethex", 0
+              alignl
+_gethex_X     word      _gethexfunc, 0
+
+emit_L        word      @_gethex_L+Q
+              byte      FLAG_CORE, 4, "emit"
+              alignl
+emit_X        word      emitfunc, 0
+
+store_L       word      @emit_L+Q
+              byte      FLAG_CORE, 1, "!", 0, 0, 0
+              alignl
+store_X       word      storefunc, 0
+
+fetch_L       word      @store_L+Q
+              byte      FLAG_CORE, 1, "@", 0, 0, 0
+              alignl
+fetch_X       word      fetchfunc, 0
+
+wstore_L      word      @fetch_L+Q
+              byte      FLAG_CORE, 2, "w!", 0, 0
+              alignl
+wstore_X      word      wstorefunc, 0
+
+wfetch_L      word      @wstore_L+Q
+              byte      FLAG_CORE, 2, "w@", 0, 0
+              alignl
+wfetch_X      word      wfetchfunc, 0
+
+cstore_L      word      @wfetch_L+Q
+              byte      FLAG_CORE, 2, "c!", 0, 0
+              alignl
+cstore_X      word      cstorefunc, 0
+
+cfetch_L      word      @cstore_L+Q
+              byte      FLAG_CORE, 2, "c@", 0, 0
+              alignl
+cfetch_X      word      cfetchfunc, 0
+
+plus_L        word      @cfetch_L+Q
+              byte      FLAG_CORE, 1, "+", 0, 0, 0
+              alignl
+plus_X        word      plusfunc, 0
+
+minus_L       word      @plus_L+Q
+              byte      FLAG_CORE, 1, "-", 0, 0, 0
+              alignl
+minus_X       word      minusfunc, 0
+
+multiply_L    word      @minus_L+Q
+              byte      FLAG_CORE, 1, "*", 0, 0, 0
+              alignl
+multiply_X    word      multfunc, 0
+
+divide_L      word      @multiply_L+Q
+              byte      FLAG_CORE, 1, "/", 0, 0, 0
+              alignl
+divide_X      word      dividefunc, 0
+
+mod_L         word      @divide_L+Q
+              byte      FLAG_CORE, 3, "mod", 0
+              alignl
+mod_X         word      modfunc, 0
+
+and_L         word      @mod_L+Q
+              byte      FLAG_CORE, 3, "and", 0
+              alignl
+and_X         word      andfunc, 0
+
+or_L          word      @and_L+Q
+              byte      FLAG_CORE, 2, "or", 0, 0
+              alignl
+or_X          word      orfunc, 0
+
+xor_L         word      @or_L+Q
+              byte      FLAG_CORE, 3, "xor", 0
+              alignl
+xor_X         word      xorfunc, 0
+
+less_L        word      @xor_L+Q
+              byte      FLAG_CORE, 1, "<", 0, 0, 0
+              alignl
+less_X        word      lessfunc, 0
+
+equal_L       word      @less_L+Q
+              byte      FLAG_CORE, 1, "=", 0, 0, 0
+              alignl
+equal_X       word      equalfunc, 0
+
+greater_L     word      @equal_L+Q
+              byte      FLAG_CORE, 1, ">", 0, 0, 0
+              alignl
+greater_X     word      greaterfunc, 0
+
+rshift_L      word      @greater_L+Q
+              byte      FLAG_CORE, 6, "rshift", 0, 0
+              alignl
+rshift_X      word      rshiftfunc, 0
+
+lshift_L      word      @rshift_L+Q
+              byte      FLAG_CORE, 6, "lshift", 0, 0
+              alignl
+lshift_X      word      lshiftfunc, 0
+
+depth_L       word      @lshift_L+Q
+              byte      FLAG_CORE, 5, "depth", 0, 0, 0
+              alignl
+depth_X       word      depthfunc, 0
+
+tib_L         word      @depth_L+Q
+              byte      FLAG_VAR, 3, "tib", 0
+              alignl
+tib_X         word      varfunc, @tib+Q+4
+tib           long      @inputbuf+Q
+              word      @fetch_X+Q, 0
+              alignl
+
+poundtib_L    word      @tib_L+Q
+              byte      FLAG_VAR, 4, "#tib"
+              alignl
+poundtib_X    word      varfunc, 0
+poundtib      long      0
+
+greaterin_L   word      @poundtib_L+Q
+              byte      FLAG_VAR, 3, ">in", 0
+              alignl
+greaterin_X   word      varfunc, 0
+greaterin     long      0
+
+dp_L          word      @greaterin_L+Q
+              byte      FLAG_VAR, 2, "dp", 0, 0
+              alignl
+dp_X          word      varfunc, 0
+dp            long      @_here+Q
+
+last_L        word      @dp_L+Q
+              byte      FLAG_VAR, 4, "last"
+              alignl
+last_X        word      varfunc, 0
+last          long      @_last+Q
+
+state_L       word      @last_L+Q
+              byte      FLAG_VAR, 5, "state", 0, 0, 0
+              alignl
+state_X       word      varfunc, 0
+state         long      0
+
+base_L        word      @state_L+Q
+              byte      FLAG_VAR, 4, "base"
+              alignl
+base_X        word      varfunc, 0
+base          long      16
+
+verbose_L     word      @base_L+Q
+              byte      FLAG_VAR, 7, "verbose", 0
+              alignl
+verbose_X     word      varfunc, 0
+verbose       long      1
+
+forth_L       word      @verbose_L+Q
+              byte      FLAG_VAR, 5, "forth", 0, 0, 0
+              alignl
+forth_X       word      varfunc, 0
+              long      @forth+Q
+
+drop_L        word      @forth_L+Q
+              byte      FLAG_CORE, 4, "drop"
+              alignl
+drop_X        word      dropfunc, 0
+
+dup_L         word      @drop_L+Q
+              byte      FLAG_CORE, 3, "dup", 0
+              alignl
+dup_X         word      dupfunc, 0
+
+swap_L        word      @dup_L+Q
+              byte      FLAG_CORE, 4, "swap"
+              alignl
+swap_X        word      swapfunc, 0
+
+pick_L        word      @swap_L+Q
+              byte      FLAG_CORE, 4, "pick"
+              alignl
+pick_X        word      pickfunc, 0
+
+roll_L        word      @pick_L+Q
+              byte      FLAG_CORE, 4, "roll"
+              alignl
+roll_X        word      rollfunc, 0
+
+tor_L         word      @roll_L+Q
+              byte      FLAG_CORE, 2, ">r", 0, 0
+              alignl
+tor_X         word      torfunc, 0
+
+fromr_L       word      @tor_L+Q
+              byte      FLAG_CORE, 2, "r>", 0, 0
+              alignl
+fromr_X       word      fromrfunc, 0
+
+colon_L       word      @fromr_L+Q
+              byte      FLAG_CORE, 1, ":", 0, 0, 0
+              alignl
+colon_X       word      colonfunc, 0
+
+semicolon_L   word      @colon_L+Q
+              byte      FLAG_SEMI, 1, ";", 0, 0, 0
+              alignl
+semicolon_X   word      semicolonfunc, 0 
+
+cogfetch_L    word      @semicolon_L+Q
+              byte      FLAG_CORE, 4, "cog@"
+              alignl
+cogfetch_X    word      cogfetchfunc, 0
+
+cogstore_L    word      @cogfetch_L+Q
+              byte      FLAG_CORE, 4, "cog!"
+              alignl
+cogstore_X    word      cogstorefunc, 0
+
+cogx1_L       word      @cogstore_L+Q
+              byte      FLAG_CORE, 5, "cogx1", 0, 0, 0
+              alignl
+cogx1_X       word      cogx1func, 0
+
+_jz_L         word      @cogx1_L+Q
+              byte      FLAG_JMP, 3, "_jz", 0
+              alignl
+_jz_X         word      _jzfunc, 0
+
+cmove_L       word      @_jz_L+Q
+              byte      FLAG_CORE, 5, "cmove", 0, 0, 0
+              alignl
+cmove_X       word      cmovefunc, 0
+
+dotx_L        word      @cmove_L+Q
+              byte      FLAG_CORE, 2, ".x", 0, 0
+              alignl
+dotx_X        word      dotxfunc, 0
+
+'*******************************************************************************
+' SPI/SD Variables
+'*******************************************************************************
+spi_vars_L    word      @dotx_L+Q
+              byte      FLAG_VAR, 8, "spi_vars"
+              alignl
+spi_vars_X    word      varfunc, 0
+spi_vars      long      0       ' SPI_engine_cog
+              long      0       ' SPI_command
+              long      0       ' SPI_block_index
+              long      0       ' SPI_buffer_address
+              long      0       ' SD_rootdir
+              long      0       ' SD_filesystem
+              long      0       ' SD_clustershift
+              long      0       ' SD_dataregion
+              long      0       ' SD_fat1
+              long      0       ' SD_sectorsperfat
+              long      0       ' SD_currdir
+
+argc_L        word      @spi_vars_L+Q
+              byte      FLAG_VAR, 4, "argc"
+              alignl
+argc_X        word      confunc, 0
+argc_B        long      0
+
+argv_L        word      @argc_L+Q
+              byte      FLAG_VAR, 4, "argv"
+              alignl
+argv_X        word      confunc, 0
+argv_B        long      0
+
+hostcwd_L     word      @argv_L+Q
+              byte      FLAG_VAR, 7, "hostcwd", 0
+              alignl
+hostcwd_X     word      confunc, 0
+hostcwd_B     long      0
+
+'*******************************************************************************
+' A small number of compiled words follow below.  These are used by the boot
+' interpreter.
+'*******************************************************************************
+              ' : here dp @ ;
+here_L        word      @hostcwd_L+Q
+              byte      FLAG_DEF, 4, "here"
+              alignl
+here_X        word      execlistfunc, 0
+              word      @dp_X+Q, @fetch_X+Q, 0, 0
+              alignl
+              
+              ' : allot dp @ + dp ! ;
+allot_L       word      @here_L+Q
+              byte      FLAG_DEF, 5, "allot", 0, 0, 0
+              alignl
+allot_X       word      execlistfunc, 0
+              word      @dp_X+Q, @fetch_X+Q, @plus_X+Q, @dp_X+Q, @store_X+Q, 0
+              alignl
+
+              ' : , here ! 4 allot ;
+comma_L       word      @allot_L+Q
+              byte      FLAG_DEF, 1, ",", 0, 0, 0
+              alignl
+comma_X       word      execlistfunc, 0
+              word      @here_X+Q, @store_X+Q, @_lit_X+Q, 4, @allot_X+Q, 0
+              alignl
+
+              ' : _jmp r> @ >r ;
+_jmp_L        word      @comma_L+Q
+              byte      FLAG_JMP, 4, "_jmp"
+              alignl
+_jmp_X        word      execlistfunc, 0
+              word      @fromr_X+Q, @wfetch_X+Q, @tor_X+Q, 0
+              alignl
+
+              ' : count 0 pick 1 + 1 roll c@ ;
+count_L       word      @_jmp_L+Q
+              byte      FLAG_DEF, 5, "count", 0, 0, 0
+              alignl
+count_X       word      execlistfunc, 0
+              word      @_lit_X+Q, 0, @pick_X+Q, @_lit_X+Q, 1, @plus_X+Q, @_lit_X+Q, 1, @roll_X+Q, @cfetch_X+Q, 0, 0
+              alignl
+
+              ' : accept ( addr size -- num ) \ Accept a string from the input source
+accept_L      word      @count_L+Q
+              byte      FLAG_DEF, 6, "accept", 0, 0
+              alignl
+accept_X      word      execlistfunc, 0
+              ' >r dup
+              word      @tor_X+Q, @dup_X+Q
+              ' r> dup 1 < _jz _accept4
+accept_1      word      @fromr_X+Q, @dup_X+Q, @_lit_X+Q, 1, @less_X+Q, @_jz_X+Q, @accept_4+Q
+              ' drop swap - exit
+              word      @drop_X+Q, @swap_X+Q, @minus_X+Q, @exit_X+Q
+              ' >r key
+accept_4      word      @tor_X+Q, @key_X+Q
+              ' dup 0d = over 0a = or
+              word      @dup_X+Q, @_lit_X+Q, $0d, @equal_X+Q, @_lit_X+Q, 1, @pick_X+Q, @_lit_X+Q, $0a, @equal_X+Q, @or_X+Q
+              ' _jz _accept2
+              word      @_jz_X+Q, @accept_2+Q
+              ' cr drop swap -
+              word      @_lit_X+Q, 13, @emit_X+Q, @_lit_X+Q, 10, @emit_X+Q, @drop_X+Q, @swap_X+Q, @minus_X+Q
+              ' r> drop exit
+              word      @fromr_X+Q, @drop_X+Q, @exit_X+Q
+              ' dup 8 = _jz _accept3
+accept_2      word      @dup_X+Q, @_lit_X+Q, 8, @equal_X+Q, @_jz_X+Q, @accept_3+Q
+              ' drop over over - _jz _accept1
+              word      @drop_X+Q, @_lit_X+Q, 1, @pick_X+Q, @_lit_X+Q, 1, @pick_X+Q, @minus_X+Q, @_jz_X+Q, @accept_1+Q
+              ' 1 - r> 1 + >r
+              word      @_lit_X+Q, 1, @minus_X+Q, @fromr_X+Q, @_lit_X+Q, 1, @plus_X+Q, @tor_X+Q
+              ' 8 emit bl emit 8 emit _jmp _accept1
+              word      @_lit_X+Q, 8, @emit_X+Q, @_lit_X+Q, 32, @emit_X+Q, @_lit_X+Q, 8, @emit_X+Q, @_jmp_X+Q, @accept_1+Q
+              ' dup emit over c! 1 +
+accept_3      word      @dup_X+Q, @emit_X+Q, @_lit_X+Q, 1, @pick_X+Q, @cstore_X+Q, @_lit_X+Q, 1, @plus_X+Q
+              ' r> 1 - >r _jmp _accept1
+              word      @fromr_X+Q, @_lit_X+Q, 1, @minus_X+Q, @tor_X+Q, @_jmp_X+Q, @accept_1+Q, 0
+              alignl
+              
+              ' : refill tib 200 accept #tib ! 0 >in ! ;
+refill_L      word      @accept_L+Q
+              byte      FLAG_DEF, 6, "refill", 0, 0
+              alignl
+refill_X      word      execlistfunc, 0
+              word      @tib_X+Q, @_lit_X+Q, 200, @accept_X+Q, @poundtib_X+Q, @store_X+Q, @_lit_X+Q, 0, @greaterin_X+Q, @store_X+Q, 0, 0
+              alignl
+
+              ' : compile, here w! 2 allot ;
+compcomma_L   word      @refill_L+Q
+              byte      FLAG_DEF, 8, "compile,"
+              alignl
+compcomma_X   word      execlistfunc, 0
+              word      @here_X+Q, @wstore_X+Q, @_lit_X+Q, 2, @allot_X+Q, 0
+              alignl
+              
+'*******************************************************************************
+' The boot interpreter follows below.
+'*******************************************************************************
+              ' : xboot ( This word runs a simple interpreter )
+xboot_L       word      @compcomma_L+Q
+              byte      FLAG_DEF, 5, "xboot", 0, 0, 0
+              alignl
+xboot_X       word      execlistfunc, 0
+
+'xboot_1       ' 42 dup emit .x _jmp _xboot_1
+'              word      @_lit_x, $42, @dup_x, @emit_x, @dotx_x, @_jmp_x, @xboot_1
+'xboot_1       ' key dup emit .x _jmp _xboot_1
+'              word      @key_x, @dup_x, @emit_x, @dotx_x, @_jmp_x, @xboot_1
+'               word      @key_x, @emit_x, @_jmp_x, @xboot_1
+xboot_1       word      @_lit_x, 1, @dotx_x
+
+              ' 20 word 0 pick c@ _jz _xboot2 ( Get word, refill if empty )
+{xboot_1}       word      @_lit_X+Q, $20, @word_X+Q, @_lit_X+Q, 0, @pick_X+Q, @cfetch_X+Q, @_jz_X+Q, @xboot_2+Q
+              
+              ' find 0 pick _jz _xboot3 ( Find word, get number if not found )
+              word      @find_X+Q, @_lit_X+Q, 0, @pick_X+Q, @_jz_X+Q, @xboot_3+Q
+
+              'word      @_lit_x, 2, @dotx_x
+              
+              ' state @ = _jz _xboot4 ( Go execute if not compile mode or immediate )
+              word      @state_X+Q, @fetch_X+Q, @equal_X+Q, @_jz_X+Q, @xboot_4+Q
+
+              'word      @_lit_x, 3, @dotx_x
+              
+              ' compile, _jmp _xboot1 ( Otherwise, compile and loop again )
+              word       @compcomma_X+Q, @_jmp_X+Q, @xboot_1+Q
+              
+              ' execute _jmp _xboot1 ( Execute and loop again )
+xboot_4       'word      @_lit_x, 4, @dotx_x, @dup_x, @dotx_x
+{xboot_4}       word      @execute_X+Q, @_jmp_X+Q, @xboot_1+Q
+
+              ' drop count _gethex ( Get number )
+xboot_3       word      @drop_X+Q, @count_X+Q, @_gethex_X+Q
+
+              ' state @ _jz _xboot1 ( Loop again if not compile mode )
+              word      @state_X+Q, @fetch_X+Q, @_jz_X+Q, @xboot_1+Q
+              
+              ' ['] _lit , , _jmp _xboot1 ( Otherwise, compile number and loop again )
+              word       @_lit_X+Q, @_lit_X+Q, @compcomma_X+Q, @compcomma_X+Q, @_jmp_X+Q, @xboot_1+Q
+
+              ' drop refill _jmp _xboot1 ( Refill and loop again )
+xboot_2       word      @drop_X+Q, @refill_X+Q, @_lit_X+Q, 13, @emit_X+Q, @_jmp_X+Q, @xboot_1+Q, 0, 0
+              alignl
+
+switch_L      word      @xboot_L+Q
+              byte      FLAG_DEF, 6, "switch", 0, 0
+              alignl
+switch_X      word      execlistfunc, 0
+              word      @_lit_X+Q, @getchar_X+Q, @_lit_X+Q, @key_B+Q, @store_X+Q, 0
+              alignl
+
+              alignl
+_last
+
+_loop_L       word      @switch_L+Q
+              byte      FLAG_CORE, 5, "_loop", 0, 0, 0
+              alignl
+_loop_X       word      _loopfunc, 0
+
+              alignl
+_here
+
+'*******************************************************************************
+' The Forth source files follow below.  They will be compiled into the
+' dictionary, which will over-write the source data.  Some padding space is
+' included to ensure that we don't over-write the source data before it is
+' compiled.
+'*******************************************************************************
+              long      0[100]
+
+infile        'file      "init.fth"
+    byte    ": link>flags 2 + ;", 13
+    byte    ": immediate 81 last @ link>flags c! ;", 13
+    byte    ": \ 100 word drop ; immediate", 13
+    byte    13
+    byte    "\ The above lines implement the words to allow for ", 34, "\", 34, " comments", 13
+    byte    "\ All numbers are in hex at this point.", 13
+    byte    13
+    byte    "\ DEFINE CELL SIZE", 13
+    byte    ": cellsize 4 ;", 13
+    byte    ": cellmask 3 ;", 13
+    byte    ": compsize 2 ;", 13
+    byte    ": compmask 1 ;", 13
+    byte    13
+    byte    "\ BASIC STACK WORDS", 13
+    byte    ": rot 2 roll ;", 13
+    byte    ": over 1 pick ;", 13
+    byte    ": 2dup over over ;", 13
+    byte    ": 2drop drop drop ;", 13
+    byte    ": 2swap 3 roll 3 roll ;", 13
+    byte    ": 2over 3 pick 3 pick ;", 13
+    byte    13
+    byte    "\ WORD HEADER ACCESSORS", 13
+    byte    ": >does 2 + ;", 13
+    byte    ": >body 4 + ;", 13
+    byte    ": name>xt dup c@ + 4 + 0 4 - and ;", 13
+    byte    ": link>name 3 + ;", 13
+    byte    ": link>xt link>name name>xt ;", 13
+    byte    ": link>does link>xt 2 + ;", 13
+    byte    ": link>body link>xt 4 + ;", 13
+    byte    13
+    byte    "\ DEFINE BASIC WORD BUILDERS", 13
+    byte    ": source tib #tib @ ;", 13
+    byte    "\ : compile, , ;", 13
+    byte    ": ' 20 word find 0 = 0 = and ;", 13
+    byte    ": _does r> dup >r 2 + last @ link>does w! ;", 13
+    byte    ": _setjmp 0a last @ link>flags c! ;", 13
+    byte    ": literal 0 compile, compile, ; immediate ", 13
+    byte    "  last @ link>body dup @ swap 2 + w! \ Patch in address of _lit", 13
+    byte    ": postpone ' compile, ; immediate", 13
+    byte    ": ['] ' postpone literal ; immediate", 13
+    byte    ": [compile] ' postpone literal ['] compile, compile, ; immediate", 13
+    byte    ": does> [compile] _does [compile] exit ; immediate", 13
+    byte    13
+    byte    "\ CONDITIONAL EXECUTION AND LOOPING", 13
+    byte    ": if ['] _jz compile, here 2 allot ; immediate", 13
+    byte    ": else ['] _jmp compile, here 2 + swap w! here 2 allot ; immediate", 13
+    byte    ": then here swap w! ; immediate", 13
+    byte    ": begin here ; immediate", 13
+    byte    ": until ['] _jz compile, compile, ; immediate", 13
+    byte    ": again ['] _jmp compile, compile, ; immediate", 13
+    byte    ": while ['] _jz compile, here 2 allot ; immediate", 13
+    byte    ": repeat ['] _jmp compile, here 2 + swap w! compile, ; immediate", 13
+    byte    ": do  ['] _lit compile, here 2 allot ['] drop compile,", 13
+    byte    "      ['] swap compile, ['] >r compile, ['] >r compile, here ; immediate", 13
+    byte    ": ?do ['] 2dup compile, ['] > compile, ['] _jz compile, here 2 allot", 13
+    byte    "      ['] swap compile, ['] >r compile, ['] >r compile, here ; immediate", 13
+    byte    "\ : _loop r> swap r> + r> dup >r swap dup >r > 0 = swap >r ;", 13
+    byte    ": loop    ['] _lit compile, 1 compile, ['] _loop compile, ['] _jz compile, compile, ['] r> compile,", 13
+    byte    "          ['] r> compile, here swap w! ['] 2drop compile,    ; immediate", 13
+    byte    ": +loop    ['] _loop compile, ['] _jz compile,    compile, ['] r> compile,", 13
+    byte    "           ['] r> compile, here swap w! ['] 2drop compile,    ; immediate", 13
+    byte    ": leave r> r> drop r> dup >r >r >r ;", 13
+    byte    ": i r> r> dup >r swap >r ;", 13
+    byte    ": j r> r> r> r> dup >r swap >r swap >r swap >r ;", 13
+    byte    13
+    byte    "\ DEFINE >FLAGS AND >LINK", 13
+    byte    ": >flags begin 1 - dup c@ 80 and until ;", 13
+    byte    ": >link >flags 2 - ;", 13
+    byte    13
+    byte    "\ DEFINE DEFER AND IS", 13
+    byte    "\ Change code pointer from varfunc to deferfunc", 13
+    byte    ": defer create last @ link>xt dup w@ 3 + swap w! ;", 13
+    byte    ": is state @", 13
+    byte    "  if [compile] >body ' >does postpone literal [compile] w!", 13
+    byte    "  else >body ' >does w!", 13
+    byte    "  then ; immediate", 13
+    byte    13
+    byte    "\ REDEFINE REFILL AS A DEFERRED WORD", 13
+    byte    "' refill", 13
+    byte    "defer refill", 13
+    byte    "is refill", 13
+    byte    13
+    byte    "\ DEFINE ", 34, "(", 34, " COMMENT WORD NOW THAT WE CAN LOOP", 13
+    byte    ": ( begin", 13
+    byte    "      #tib @ >in @", 13
+    byte    "      ?do tib i + c@ 29 = if i 1 + >in ! r> r> drop drop exit then loop", 13
+    byte    "      refill 0 =", 13
+    byte    "    until ; immediate", 13
+    byte    13
+    byte    "( PAD AND PRINT SUPPORT )", 13
+    byte    "create pad 100 allot", 13
+    byte    "create printptr 4 allot", 13
+    byte    ": _d2a dup 0a < if 30 else 57 then + ;", 13
+    byte    ": _a2d dup 30 <", 13
+    byte    "  if", 13
+    byte    "    drop 0 1 -", 13
+    byte    "  else", 13
+    byte    "    dup 39 >", 13
+    byte    "    if", 13
+    byte    "      dup 41 <", 13
+    byte    "      if", 13
+    byte    "         drop 0 1 -", 13
+    byte    "      else", 13
+    byte    "        dup 5a >", 13
+    byte    "        if", 13
+    byte    "          dup 61 <", 13
+    byte    "          if", 13
+    byte    "            drop 0 1 -", 13
+    byte    "          else", 13
+    byte    "            dup 7a >", 13
+    byte    "            if", 13
+    byte    "              drop 0 1 -", 13
+    byte    "            else", 13
+    byte    "              57 -", 13
+    byte    "            then", 13
+    byte    "          then", 13
+    byte    "        else", 13
+    byte    "          37 -", 13
+    byte    "        then", 13
+    byte    "      then", 13
+    byte    "    else", 13
+    byte    "      30 -", 13
+    byte    "    then", 13
+    byte    "  then", 13
+    byte    "  dup base @ < 0 =", 13
+    byte    "  if", 13
+    byte    "    drop 0 1 -", 13
+    byte    "  then", 13
+    byte    ";", 13
+    byte    ": c!-- dup >r c! r> 1 - ;", 13
+    byte    ": cprint printptr @ c! printptr @ 1 - printptr ! ;", 13
+    byte    13
+    byte    "( DOUBLE WORDS )", 13
+    byte    ": s>d 0 pick 0 < ;", 13
+    byte    ": m* * s>d ;", 13
+    byte    ": um* * 0 ;", 13
+    byte    ": d+ drop 1 roll drop + s>d ;", 13
+    byte    ": d- drop 1 roll drop - s>d ;", 13
+    byte    ": d* drop 1 roll drop * s>d ;", 13
+    byte    ": d/ drop 1 roll drop / s>d ;", 13
+    byte    ": dmod drop 1 roll drop mod s>d ;", 13
+    byte    ": _u/ over over swap 1 rshift swap / dup + dup >r over * rot swap - swap < 1 + r> + ;", 13
+    byte    ": u/ over 0 < if _u/ else / then ;", 13
+    byte    ": ud/ drop 1 roll drop u/ 0 ;", 13
+    byte    ": _umod swap dup 1 rshift 2 pick mod dup + swap 1 and + swap mod ;", 13
+    byte    ": umod over 0 < if _umod else mod then ;", 13
+    byte    ": udmod drop 1 roll drop umod 0 ;", 13
+    byte    13
+    byte    "( CORE WORDS )", 13
+    byte    ": +! dup @ rot + swap ! ;", 13
+    byte    ": /mod over over >r >r mod r> r> / ;", 13
+    byte    ": [ state 0 ! ;", 13
+    byte    ": ] state 1 ! ;", 13
+    byte    ": r@ r> r> dup >r swap >r ;", 13
+    byte    ": sm/rem >r 2dup r@ s>d d/ drop r> swap >r s>d dmod drop r> ;", 13
+    byte    ": um/mod >r 2dup r@ s>d ud/ drop r> swap >r s>d udmod drop r> ;", 13
+    byte    ": fm/mod over over xor 1 31 lshift and if sm/rem else sm/rem then ; ( TODO )", 13
+    byte    ": */mod >r m* r> sm/rem ;", 13
+    byte    ": */ */mod swap drop ;", 13
+    byte    ": <# pad ff + printptr ! ;", 13
+    byte    ": hold cprint ;", 13
+    byte    ": # drop dup base @ umod _d2a cprint base @ u/ 0 ;", 13
+    byte    ": #s begin # over over or 0 = until ;", 13
+    byte    ": #> drop drop printptr @ 1 + dup pad 100 + swap - ;", 13
+    byte    ": sign 0 < if 2d hold then ;", 13
+    byte    ": abs dup 0 < if 0 swap - then ;", 13
+    byte    ": type 0 ?do dup c@ emit 1 + loop drop ;", 13
+    byte    ": ._ dup abs 0 <# #s rot sign #> type ;", 13
+    byte    ": . ._ 20 emit ;", 13
+    byte    13
+    byte    ": >number dup 0 ?do >r dup c@ _a2d dup 0 < if drop r> leave else swap >r >r", 13
+    byte    "  base @ 0 d* r> 0 d+ r> 1 + r> 1 - then loop ;", 13
+    byte    ": 0= 0 = ;", 13
+    byte    ": 0< 0 < ;", 13
+    byte    ": 1+ 1 + ;", 13
+    byte    ": 1- 1 - ;", 13
+    byte    ": 2! swap over ! cellsize + ! ;", 13
+    byte    ": 2* dup + ;", 13
+    byte    ": 2/ dup 80000000 and swap 1 rshift or ;", 13
+    byte    ": 2@ dup cellsize + @ swap @ ;", 13
+    byte    ": ?dup dup if dup then ;", 13
+    byte    ": aligned cellmask + 0 cellsize - and ;", 13
+    byte    ": align here aligned here - allot ;", 13
+    byte    ": bl 20 ;", 13
+    byte    ": c, here c! 1 allot ;", 13
+    byte    ": cell+ cellsize + ;", 13
+    byte    ": cells cellsize * ;", 13
+    byte    ": char+ 1 + ;", 13
+    byte    ": chars ;", 13
+    byte    "\ : count dup char+ swap c@ ;", 13
+    byte    ": char 20 word count 0= if drop 0 else c@ then ;", 13
+    byte    ": [char] char postpone literal ; immediate", 13
+    byte    "\ : constant create here ! cellsize allot does> @ ;", 13
+    byte    ": constant create , last @ link>xt dup w@ 3 - swap w! ;", 13
+    byte    "\ : cr 0a emit 0d emit ;", 13
+    byte    ": cr 0d emit ;", 13
+    byte    ": decimal 0a base ! ;", 13
+    byte    ": environment? drop drop 0 ;", 13
+    byte    ": fill swap >r swap r> 0 ?do 2dup c! 1 + loop 2drop ;", 13
+    byte    ": hex 10 base ! ;", 13
+    byte    ": invert 0 1 - xor ;", 13
+    byte    ": max 2dup < if swap then drop ;", 13
+    byte    ": min 2dup > if swap then drop ;", 13
+    byte    "\ : cmove >r swap r> 0 ?do 2dup c@ swap c! 1+ swap 1+ swap loop 2drop ;", 13
+    byte    ": cmove> >r swap r> dup >r 1- dup >r + swap r> + swap r> ?do 2dup c@ swap c!", 13
+    byte    "  1- swap 1- swap loop 2drop ;", 13
+    byte    ": move r> 2dup > if r> cmove else r> cmove> then ;", 13
+    byte    ": negate 0 swap - ;", 13
+    byte    ": recurse last @ , ; immediate", 13
+    byte    ": _lit", 34, " r> dup 1 + swap dup c@ dup rot + compsize + 0 compsize - and >r ;", 13
+    byte    "  84 last @ link>flags c! ( Set STRING flag )", 13
+    byte    ": _compile", 34, " [char] ", 34, " word count dup >r dup >r c, here r> cmove r> allot", 13
+    byte    "  compsize here - compmask and allot ; immediate", 13
+    byte    "create s", 34, "buf 50 allot", 13
+    byte    ": s", 34, " state @ if ['] _lit", 34, " compile, postpone _compile", 34, " else ", 13
+    byte    "     [char] ", 34, " word count >r s", 34, "buf r@ cmove s", 34, "buf r> then ; immediate", 13
+    byte    ": .", 34, " postpone s", 34, " ['] type compile, ; immediate", 13
+    byte    ": _abort", 34, " if type abort else drop drop then ;", 13
+    byte    "\ : abort", 34, " postpone s", 34, " ['] _abort", 34, " compile, ; immediate", 13
+    byte    ": abort", 34, " postpone s", 34, " ['] _abort", 34, " compile, ;", 13
+    byte    ": space 20 emit ;", 13
+    byte    ": spaces 0 ?do space loop ;", 13
+    byte    ": u._ 0 <# #s #> type ;", 13
+    byte    ": u. u._ 20 emit ;", 13
+    byte    ": u< over over xor 1 31 lshift and if swap then < ;", 13
+    byte    ": unloop r> r> r> drop drop >r ;", 13
+    byte    ": variable create cellsize allot ;", 13
+    byte    13
+    byte    "( CORE EXT )", 13
+    byte    ": 0<> 0= invert ;", 13
+    byte    ": 0> 0 > ;", 13
+    byte    ": 2>r r> rot >r swap >r >r ;", 13
+    byte    ": 2r> r> r> r> rot >r swap ;", 13
+    byte    ": 2r@ r> r> r> 2dup >r >r swap rot >r ;", 13
+    byte    ": <> = 0= ;", 13
+    byte    ": erase 0 ?do dup 0 swap ! 1 + loop drop ;", 13
+    byte    "variable span", 13
+    byte    ": expect accept span ! ;", 13
+    byte    ": false 0 ;", 13
+    byte    ": marker create last @ , does> @ dup dp ! @ last ! ;", 13
+    byte    ": nip swap drop ;", 13
+    byte    ": parse word count ;", 13
+    byte    ": true 0 1 - ;", 13
+    byte    ": tuck swap over ;", 13
+    byte    ": to ' >body state @ if postpone literal [compile] ! else ! then ; immediate", 13
+    byte    "\ : value create here ! cellsize allot does> @ ;", 13
+    byte    ": value create , last @ link>xt dup w@ 3 - swap w! ;", 13
+    byte    ": within over - >r - r> u< ;", 13
+    byte    ": .r_ >r dup abs 0 <# #s rot sign #> dup r> swap - spaces type ;", 13
+    byte    ": .r .r_ 20 emit ;", 13
+    byte    ": u.r_ >r 0 <# #s #> dup r> swap - spaces type ;", 13
+    byte    ": u.r .r_ 20 emit ;", 13
+    byte    ": u> over over xor 80000000 and if swap then > ;", 13
+    byte    ": unused 8000 here - ;", 13
+    byte    ": case 0 ; immediate", 13
+    byte    ": of ['] over compile, ['] = compile,", 13
+    byte    "     ['] _jz compile, here 4 allot ['] drop compile, ; immediate", 13
+    byte    ": endof ['] _jmp compile, here 2 + swap w! here 2 allot ; immediate", 13
+    byte    ": endcase ['] drop compile, begin ?dup while here swap w! repeat ; immediate", 13
+    byte    ": c", 34, " ['] _lit", 34, " compile, postpone _compile", 34, " ['] drop compile, ['] 1- compile, ; immediate", 13
+    byte    ": .( [char] ) word count type ; immediate", 13
+    byte    ": :noname align here ['] words @ , [ ;", 13
+    byte    13
+    byte    "( DOUBLE )", 13
+    byte    ": d= rot = rot rot = and ;", 13
+    byte    ": d0= or 0 = ;", 13
+    byte    ": 2constant create swap , , does> dup @ swap cellsize + @ ;", 13
+    byte    13
+    byte    "( STRING )", 13
+    byte    ": blank 0 ?do dup bl swap c! 1+ loop drop ;", 13
+    byte    ": -trailing dup 0 ?do 2dup + 1- c@ bl = if 1- else leave then loop ;", 13
+    byte    ": /string dup >r - swap r> + swap ;", 13
+    byte    13
+    byte    "( TOOLS )", 13
+    byte    ": ? @ . ;", 13
+    byte    ": .s 3c emit depth ._ 3e emit 20 emit depth 0 ?do depth i - 1 - pick . loop ;", 13
+    byte    ": dump 0 ?do i 0f and 0 = if cr dup . then dup c@ 3 .r 1 + loop drop cr ;", 13
+    byte    ": forget 20 word find if >link dup dp ! w@ last ! else abort", 34, " ?", 34, " then ;", 13
+    byte    ": .name dup link>name count type space ;", 13
+    byte    ": ?newline dup >r link>name c@ dup rot + 1 + dup 4e > if cr else swap then drop r> ;", 13
+    byte    ": words 0 last @ begin dup while ?newline .name w@ repeat 2drop ;", 13
+    byte    13
+    byte    "( UTILITY )", 13
+    byte    ": at-xy 2 emit swap emit emit ;", 13
+    byte    ": page 0 emit ;", 13
+    byte    13
+    byte    "( VERSION STRING )", 13
+    byte    ": pfthversion s", 34, " P2 pfth 1.03", 34, " ;", 13
+    byte    13
+    byte    "create evalmode 0 ,", 13
+    byte    "0 value source-id", 13
+    byte    "create srcstk0 30 allot", 13
+    byte    "srcstk0 value srcstk", 13
+    byte    13
+    byte    ": resetstack depth 0 <", 13
+    byte    "  if", 13
+    byte    "    begin depth while 0 repeat", 13
+    byte    "  else", 13
+    byte    "    begin depth while drop repeat", 13
+    byte    "  then", 13
+    byte    ";", 13
+    byte    13
+    byte    ": getnumber 2dup >r >r swap dup c@ [char] - =", 13
+    byte    "  if", 13
+    byte    "    swap", 13
+    byte    "    dup 1 <", 13
+    byte    "    if", 13
+    byte    "      2drop 2drop r> r> 1", 13
+    byte    "    else", 13
+    byte    "      swap 1 + swap 1 - ", 13
+    byte    "      >number dup", 13
+    byte    "      if", 13
+    byte    "        2drop 2drop r> r> 1", 13
+    byte    "      else", 13
+    byte    "        2drop drop negate 0 r> r> 2drop", 13
+    byte    "      then", 13
+    byte    "    then", 13
+    byte    "  else", 13
+    byte    "    swap", 13
+    byte    "    >number dup", 13
+    byte    "    if", 13
+    byte    "      2drop 2drop r> r> 1", 13
+    byte    "    else", 13
+    byte    "      2drop drop 0 r> r> 2drop", 13
+    byte    "    then", 13
+    byte    "  then", 13
+    byte    ";", 13
+    byte    13
+    byte    ": compilenumber", 13
+    byte    "  dup ['] _lit compile, compile,", 13
+    byte    "  dup ffff 10 lshift and", 13
+    byte    "  if", 13
+    byte    "    10 rshift", 13
+    byte    "    ['] _lit compile, compile,", 13
+    byte    "    ['] _lit compile, 10 compile,", 13
+    byte    "    ['] lshift compile,", 13
+    byte    "    ['] or compile,", 13
+    byte    "  else", 13
+    byte    "    drop", 13
+    byte    "  then", 13
+    byte    ";", 13
+    byte    13
+    byte    ": _interpret", 13
+    byte    "  begin", 13
+    byte    "    20 word dup c@", 13
+    byte    "  while", 13
+    byte    "    find dup", 13
+    byte    "    if", 13
+    byte    "      state @ =", 13
+    byte    "      if", 13
+    byte    "        compile,", 13
+    byte    "      else", 13
+    byte    "        execute", 13
+    byte    "      then", 13
+    byte    "    else", 13
+    byte    "      dup rot count getnumber", 13
+    byte    "      if", 13
+    byte    "        type .", 34, " ?", 34, " cr", 13
+    byte    "      else", 13
+    byte    "        state @", 13
+    byte    "        if", 13
+    byte    "          compilenumber", 13
+    byte    "        then", 13
+    byte    "      then", 13
+    byte    "    then", 13
+    byte    "  repeat", 13
+    byte    "  drop", 13
+    byte    ";", 13
+    byte    13
+    byte    ": .savesrc .", 34, " _savesrc ", 34, " srcstk0 . srcstk . cr ;", 13
+    byte    ": .loadsrc .", 34, " _loadsrc ", 34, " srcstk0 . srcstk . cr ;", 13
+    byte    13
+    byte    ": _savesrc ( .savesrc ) tib srcstk ! #tib @ srcstk 4 + ! >in @ srcstk 8 + ! source-id srcstk 0c + ! srcstk 10 + to srcstk ;", 13
+    byte    ": _loadsrc srcstk 10 - to srcstk ( .loadsrc ) srcstk @ to tib srcstk 4 + @ #tib ! srcstk 8 + @ >in ! srcstk 0c + @ to source-id ;", 13
+    byte    ": evaluate _savesrc 0 1 - to source-id #tib ! to tib 0 >in ! _interpret _loadsrc ;", 13
+    byte    13
+    byte    "( INTERPRETER )", 13
+    byte    ": interpret", 13
+    byte    "begin", 13
+    byte    "  _interpret", 13
+    byte    "  depth 0 <", 13
+    byte    "  if", 13
+    byte    "    .", 34, " Stack Underflow", 34, " cr", 13
+    byte    "    resetstack", 13
+    byte    "  else", 13
+    byte    "    source-id 0 1 - =", 13
+    byte    "    if", 13
+    byte    "      _loadsrc", 13
+    byte    "      \ 0 to source-id", 13
+    byte    "    else", 13
+    byte    "      source-id 0=", 13
+    byte    "      if .", 34, "  ok", 34, " cr then", 13
+    byte    "      refill", 13
+    byte    "    then", 13
+    byte    "  then", 13
+    byte    "again", 13
+    byte    ";", 13
+    byte    13
+    byte    "decimal", 13
+    byte    "interpret", 13
+    byte    13
+
+              'file      "comus.fth"
+    byte    "( Useful non-standard words )", 13
+    byte    ": @+ dup cell+ swap @ ;", 13
+    byte    ": !+ over ! cell+ ;", 13
+    byte    ": c@+ dup char+ swap c@ ;", 13
+    byte    ": c!+ over c! char+ ;", 13
+    byte    ": between 1+ within ;", 13
+    byte    ": bounds over + swap ;", 13
+    byte    ": buffer: create allot ;", 13
+    byte    ": cell 4 ;", 13
+    byte    ": cell- cell - ;", 13
+    byte    ": not 0= ;", 13
+    byte    ": parse-word bl word count ;", 13
+    byte    ": perform @ execute ;", 13
+    byte    ": >= < 0= ;", 13
+    byte    ": <= > 0= ;", 13
+    byte    ": -rot rot rot ;", 13
+    byte    ": 2- 2 - ;", 13
+    byte    ": 2+ 2 + ;", 13
+    byte    ": 3dup dup 2over rot ;", 13
+    byte    ": 4dup 2over 2over ;", 13
+    byte    ": noop ;", 13
+    byte    ": off false swap ! ;", 13
+    byte    ": on true swap ! ;", 13
+    byte    ": for  ['] >r compile, ['] _lit compile, 0 compile, ['] >r compile, here ;", 13
+    byte    "       immediate", 13
+    byte    ": next ['] _lit compile, 1 compile, ['] _loop compile, ['] _jz compile,", 13
+    byte    "       compile, ['] r> compile, ['] r> compile, ['] 2drop compile, ; immediate", 13
+    byte    ": zstrlen dup begin dup c@ while 1+ repeat swap - ;", 13
+    byte    ": zcount dup zstrlen ;", 13
+
+              'file      "see.fth"
+    byte    ": cond.name ( link )", 13
+    byte    "  dup link>flags c@ dup 2 and ( link flag literal )", 13
+    byte    "  if", 13
+    byte    "    8 and", 13
+    byte    "    if", 13
+    byte    "      .name", 13
+    byte    "    then", 13
+    byte    "  else", 13
+    byte    "    4 and", 13
+    byte    "    if", 13
+    byte    "      [char] s emit [char] ", 34, " emit bl emit", 13
+    byte    "    else", 13
+    byte    "      .name", 13
+    byte    "    then", 13
+    byte    "  then", 13
+    byte    ";", 13
+    byte    13
+    byte    ": seefunc ( xt )", 13
+    byte    "  >body   ( listptr )", 13
+    byte    "  begin", 13
+    byte    "    dup w@ ( listptr xt )", 13
+    byte    "  while", 13
+    byte    "    dup w@ ( listptr xt )", 13
+    byte    "    >link .name link>flags c@ dup 2 and ( listptr flags literal )", 13
+    byte    "    if", 13
+    byte    "      8 and ( listptr flags jump )", 13
+    byte    "      if", 13
+    byte    "        2 + dup dup w@ swap - 2 - 2 / .", 13
+    byte    "      else", 13
+    byte    "        2 + dup w@ .", 13
+    byte    "      then", 13
+    byte    "    else", 13
+    byte    "      4 and ( listptr string )", 13
+    byte    "      if", 13
+    byte    "        2 + dup count type [char] ", 34, " emit space", 13
+    byte    "        dup c@ + 0 2 - and", 13
+    byte    "      then", 13
+    byte    "    then", 13
+    byte    "    compsize + ( listptr+=compsize)", 13
+    byte    "  repeat", 13
+    byte    "  drop", 13
+    byte    ";", 13
+    byte    13
+    byte    ": see", 13
+    byte    "  ' dup ( xt xt )", 13
+    byte    "  if", 13
+    byte    "    dup >flags c@ dup 16 and ( xt flags kernel )", 13
+    byte    "    if", 13
+    byte    "      drop", 13
+    byte    "      drop", 13
+    byte    "      .", 34, " Kernel Word", 34, 13
+    byte    "    else", 13
+    byte    "        32 and", 13
+    byte    "        if", 13
+    byte    "          drop", 13
+    byte    "          .", 34, " Variable", 34, 13
+    byte    "        else", 13
+    byte    "          seefunc", 13
+    byte    "        then", 13
+    byte    "    then", 13
+    byte    "  else", 13
+    byte    "    drop", 13
+    byte    "    .", 34, "  ?", 34, 13
+    byte    "  then", 13
+    byte    ";", 13
+
+              'file      "p2words.fth"
+    byte    "( PROP WORDS)", 13
+    byte    "hex", 13
+    byte    13
+    byte    "( REGISTER ACCESS )", 13
+    byte    ": cnt@ 0 fd60001a cogx1 ;", 13
+    byte    ": ina@ 1fa cog@ ;", 13
+    byte    ": outa@ 1fc cog@ ;", 13
+    byte    ": outa! 1fc cog! ;", 13
+    byte    ": dira@ 1fe cog@ ;", 13
+    byte    ": dira! 1fe cog! ;", 13
+    byte    ": clkfreq@ 0 @ ;", 13
+    byte    13
+    byte    "( BIT SETTING AND CLEARING )", 13
+    byte    ": dirasetbit dira@ or dira! ;", 13
+    byte    ": diraclrbit invert dira@ and dira! ;", 13
+    byte    ": outasetbit outa@ or outa! ;", 13
+    byte    ": outaclrbit invert outa@ and outa! ;", 13
+    byte    13
+    byte    "( HUBOPS )", 13
+    byte    ": cogid   ( ... cogid )   0 fd700001 cogx1 ;", 13
+    byte    "\ : locknew ( ... locknum ) 0 0cfc0004 cogx1 ;", 13
+    byte    "\ : lockret ( locknum ... ) 0cfc0005 cogx1 drop ;", 13
+    byte    ": cogstop ( cognum ... )  fd600003 cogx1 drop ;", 13
+    byte    "\ : coginit ( codeptr dataptr cognum ... cognum )", 13
+    byte    "  \ >r 0e lshift or 2 lshift r> or 0ffc0002 cogx1 ;", 13
+    byte    "\ : cognew  ( codeptr dataptr ... cognum ) 8 coginit ;", 13
+    byte    ": waitcnt ( count ... count ) fa800000 cogx1 ;", 13
+    byte    "\ : reboot 80 0cfc0000 cogx1 ;", 13
+    byte    13
+    byte    "decimal", 13
+    byte    13
+    byte    "( ANS UTILITY )", 13
+    byte    ": ms ( msec ... ) cnt@ swap clkfreq@ 1000 / * + waitcnt drop ;", 13
+    byte    13
+    byte    "( ANS TOOLS EXT )", 13
+    byte    ": bye cogid cogstop ;", 13
+    byte    13
+    byte    "( ENABLE SERIAL OUTPUT )", 13
+    byte    "1 30 lshift dup outa! dira!", 13
+    byte    13
+
+              'file      "sd.fth"
+              'file      "sdutils.fth"
+              'file      "linux.fth"
+              'file      "cd.fth"
+              'file      "ted.fth"
+              'file      "bufser.fth"
+              'file      "i2c.fth"
+              'file      "fds.fth"
+              'file      "time.fth"
+              'file      "toggle.fth"
+              'file      "primes.fth"
+    byte    "\ primes.4th", 13
+    byte    "\", 13
+    byte    "\ Example code for kForth", 13
+    byte    "\ Copyright (c) 1998 Creative Consulting for Research and Education", 13
+    byte    "\", 13
+    byte    13
+    byte    "\ Test for a prime number. Return the largest divisor (< n ) ", 13
+    byte    "\ and a flag indicating whether the number is prime or not.", 13
+    byte    13
+    byte    ": ?prime ( n -- m flag | is n a prime number? )", 13
+    byte    "\ if flag is false (0), m is the largest divisor of n", 13
+    byte    "    abs", 13
+    byte    "    dup 3 >                \ is n > 3 ?", 13
+    byte    "    if", 13
+    byte    "    abs", 13
+    byte    "      dup 2 /mod", 13
+    byte    "      swap 0= ", 13
+    byte    "      if                \ is n divisible by 2 ?", 13
+    byte    "        nip false", 13
+    byte    "      else", 13
+    byte    "        1-                \ check for divisibility starting          ", 13
+    byte    "        begin                \ with n/2 - 1 and counting down", 13
+    byte    "          2dup mod", 13
+    byte    "          over 1 >", 13
+    byte    "          and", 13
+    byte    "        while", 13
+    byte    "          1-", 13
+    byte    "        repeat", 13
+    byte    "        nip", 13
+    byte    "        dup 1 <=", 13
+    byte    "      then ", 13
+    byte    "    else", 13
+    byte    "      dup 1 > IF drop 1 true ELSE false THEN ", 13
+    byte    "    then", 13
+    byte    ";", 13
+    byte    13
+    byte    ": test_prime ( n -- | test for prime number and display result )", 13
+    byte    "    ?prime", 13
+    byte    "    if", 13
+    byte    "      .", 34, " is a prime number", 34, " drop", 13
+    byte    "    else", 13
+    byte    "      .", 34, " is NOT prime. Its largest divisor is ", 34, " .", 13
+    byte    "    then", 13
+    byte    "    cr", 13
+    byte    ";", 13
+    byte    13
+    byte    ": list_primes ( n -- | list all the prime numbers from 2 to n )", 13
+    byte    "    abs", 13
+    byte    "    dup 0>", 13
+    byte    "    if ", 13
+    byte    "      1+ 2 do", 13
+    byte    "        i ?prime ", 13
+    byte    "        if ", 13
+    byte    "          i . cr ", 13
+    byte    "        then ", 13
+    byte    "        drop", 13
+    byte    "      loop", 13
+    byte    "    else", 13
+    byte    "      drop", 13
+    byte    "    then", 13
+    byte    ";", 13
+    byte    13
+
+              'file      "chess.fth"
+
+'*******************************************************************************
+' Enable serial output, print version string and switch to serial input
+'*******************************************************************************
+              byte      13
+              byte      " 1 verbose !"
+              byte      " pfthversion type cr"
+              byte      " switch", 13

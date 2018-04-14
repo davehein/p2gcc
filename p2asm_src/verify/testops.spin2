@@ -1,0 +1,293 @@
+dat
+		org
+temp1		long	0
+temp2		long	0
+		fge	temp1, temp2
+		fge	temp1, temp2	wc
+		fge	temp1, temp2	wz
+		fge	temp1, temp2	wcz
+		fle	temp1, temp2
+		fle	temp1, temp2	wc
+		fle	temp1, temp2	wz
+		fle	temp1, temp2	wcz
+		fges	temp1, temp2
+		fges	temp1, temp2	wc
+		fges	temp1, temp2	wz
+		fges	temp1, temp2	wcz
+		fles	temp1, temp2
+		fles	temp1, temp2	wc
+		fles	temp1, temp2	wz
+		fles	temp1, temp2	wcz
+		bitl	temp1, temp2
+		bitl	temp1, temp2	wcz
+		bith	temp1, temp2
+		bith	temp1, temp2	wcz
+		bitc	temp1, temp2
+		bitc	temp1, temp2	wcz
+		bitnc	temp1, temp2
+		bitnc	temp1, temp2	wcz
+		bitz	temp1, temp2
+		bitz	temp1, temp2	wcz
+		bitrnd	temp1, temp2
+		bitrnd	temp1, temp2	wcz
+		bitnot	temp1, temp2
+		bitnot	temp1, temp2	wcz
+		bitnz	temp1, temp2
+		bitnz	temp1, temp2	wcz
+		testb	temp1, temp2	wc
+		testb	temp1, temp2	wz
+		testb	temp1, temp2	andc
+		testb	temp1, temp2	andz
+		testb	temp1, temp2	orc
+		testb	temp1, temp2	orz
+		testb	temp1, temp2	xorc
+		testb	temp1, temp2	xorz
+		testbn	temp1, temp2	wc
+		testbn	temp1, temp2	wz
+		testbn	temp1, temp2	andc
+		testbn	temp1, temp2	andz
+		testbn	temp1, temp2	orc
+		testbn	temp1, temp2	orz
+		testbn	temp1, temp2	xorc
+		testbn	temp1, temp2	xorz
+		decod	temp1, temp2
+		bmask	temp1, temp2
+		zerox	temp1, temp2
+		signx	temp1, temp2
+		muxnits	temp1, temp2
+		muxnibs	temp1, temp2
+		muxq	temp1, temp2
+		movbyts	temp1, temp2
+		pollint
+		pollint	wc
+		pollint	wz
+		pollct1
+		pollct1	wc
+		pollct1	wz
+		pollct2
+		pollct2	wc
+		pollct2	wz
+		pollct3
+		pollct3	wc
+		pollct3	wz
+		pollse1
+		pollse1	wc
+		pollse1	wz
+		pollse2
+		pollse2	wc
+		pollse2	wz
+		pollse3
+		pollse3	wc
+		pollse3	wz
+		pollse4
+		pollse4	wc
+		pollse4	wz
+		pollpat
+		pollpat	wc
+		pollpat	wz
+		pollfbw
+		pollfbw	wc
+		pollfbw	wz
+		pollxmt
+		pollxmt	wc
+		pollxmt	wz
+		pollxfi
+		pollxfi	wc
+		pollxfi	wz
+		pollxro
+		pollxro	wc
+		pollxro	wz
+		pollxrl
+		pollxrl	wc
+		pollxrl	wz
+		pollatn
+		pollatn	wc
+		pollatn	wz
+		pollqmt
+		pollqmt	wc
+		pollqmt	wz
+
+		waitint
+		waitint	wc
+		waitint	wz
+		waitct1
+		waitct1	wc
+		waitct1	wz
+		waitct2
+		waitct2	wc
+		waitct2	wz
+		waitct3
+		waitct3	wc
+		waitct3	wz
+		waitse1
+		waitse1	wc
+		waitse1	wz
+		waitse2
+		waitse2	wc
+		waitse2	wz
+		waitse3
+		waitse3	wc
+		waitse3	wz
+		waitse4
+		waitse4	wc
+		waitse4	wz
+		waitpat
+		waitpat	wc
+		waitpat	wz
+		waitfbw
+		waitfbw	wc
+		waitfbw	wz
+		waitxmt
+		waitxmt	wc
+		waitxmt	wz
+		waitxfi
+		waitxfi	wc
+		waitxfi	wz
+		waitxro
+		waitxro	wc
+		waitxro	wz
+		waitxrl
+		waitxrl	wc
+		waitxrl	wz
+		waitatn
+		waitatn	wc
+		waitatn	wz
+
+		testp	temp1	wc
+		testp	temp1	wz
+		testp	temp1	andc
+		testp	temp1	andz
+		testp	temp1	orc
+		testp	temp1	orz
+		testp	temp1	xorc
+		testp	temp1	xorz
+		testpn	temp1	wc
+		testpn	temp1	wz
+		testpn	temp1	andc
+		testpn	temp1	andz
+		testpn	temp1	orc
+		testpn	temp1	orz
+		testpn	temp1	xorc
+		testpn	temp1	xorz
+
+		dirl	temp1
+		dirl	temp1	wcz
+		dirh	temp1
+		dirh	temp1	wcz
+		dirc	temp1
+		dirc	temp1	wcz
+		dirnc	temp1
+		dirnc	temp1	wcz
+		dirz	temp1
+		dirz	temp1	wcz
+		dirnz	temp1
+		dirnz	temp1	wcz
+		dirrnd	temp1
+		dirrnd	temp1	wcz
+		dirnot	temp1
+		dirnot	temp1	wcz
+
+		outl	temp1
+		outl	temp1	wcz
+		outh	temp1
+		outh	temp1	wcz
+		outc	temp1
+		outc	temp1	wcz
+		outnc	temp1
+		outnc	temp1	wcz
+		outz	temp1
+		outz	temp1	wcz
+		outnz	temp1
+		outnz	temp1	wcz
+		outrnd	temp1
+		outrnd	temp1	wcz
+		outnot	temp1
+		outnot	temp1	wcz
+
+		fltl	temp1
+		fltl	temp1	wcz
+		flth	temp1
+		flth	temp1	wcz
+		fltc	temp1
+		fltc	temp1	wcz
+		fltnc	temp1
+		fltnc	temp1	wcz
+		fltz	temp1
+		fltz	temp1	wcz
+		fltnz	temp1
+		fltnz	temp1	wcz
+		fltrnd	temp1
+		fltrnd	temp1	wcz
+		fltnot	temp1
+		fltnot	temp1	wcz
+
+		drvl	temp1
+		drvl	temp1	wcz
+		drvh	temp1
+		drvh	temp1	wcz
+		drvc	temp1
+		drvc	temp1	wcz
+		drvnc	temp1
+		drvnc	temp1	wcz
+		drvz	temp1
+		drvz	temp1	wcz
+		drvnz	temp1
+		drvnz	temp1	wcz
+		drvrnd	temp1
+		drvrnd	temp1	wcz
+		drvnot	temp1
+		drvnot	temp1	wcz
+
+		splitb	temp1
+		mergeb	temp1
+		splitw	temp1
+		mergew	temp1
+		seussf	temp1
+		seussr	temp1
+		rgbsqz	temp1
+		rgbexp	temp1
+		xoro32	temp1
+		rev	temp1
+		rczr	temp1
+		rczr	temp1	wc
+		rczr	temp1	wz
+		rczr	temp1	wcz
+		wrc	temp1
+		wrnc	temp1
+		wrz	temp1
+		wrnz	temp1
+		rfvar	temp1
+		rfvar	temp1	wc
+		rfvar	temp1	wz
+		rfvar	temp1	wcz
+		rfvars	temp1
+		rfvars	temp1	wc
+		rfvars	temp1	wz
+		rfvars	temp1	wcz
+		modcz	0, 0
+		modcz	0, 0	wc
+		modcz	0, 0	wz
+		modcz	0, 0	wcz
+		modcz	_clr, 0
+		modcz	_clr, 0	wc
+		modcz	_clr, 0	wz
+		modcz	_clr, 0	wcz
+		modcz	_nc_and_nz, _set	wc
+		modcz	_nz_and_nc, _le	wz
+		modcz	_gt, _z_or_c wcz
+		modcz	_nc_and_z, _c_or_z
+		modcz	_z_and_nc, _nz_or_c	wc
+		modcz	_nc, _e	wz
+		modcz	_ge, _z	wcz
+		modcz	_c_and_nz, _z_eq_c
+		modcz	_nz_and_c, _c_eq_z	wc
+		modcz	_nz, _c_and_z	wz
+		modcz	_ne, _z_and_c	wcz
+		modcz	_c_ne_z, _nc_or_nz
+		modcz	_z_ne_c, _nz_or_nc	wc
+		modcz	_nc_or_nz, _nc_or_nz	wz
+
+
+
+
+

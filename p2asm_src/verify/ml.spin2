@@ -1,0 +1,33 @@
+CON
+	rx_pin	=	63
+
+	waita	=	40+20-6
+	waitb	=	40-6
+
+DAT		org
+
+begin		hubset	#$FF			'switch to 80MHz
+		wrfast	#0,#0			'ready to write entire memory
+		setse1	#%010_000000 | 63	'select negative edge on p63
+
+loop		pollse1				'clear edge detector
+		waitse1				'wait for start bit
+		waitx	#waita			'wait for middle of 1st data bit
+
+		rep	@r,#8			'get 8 bits
+		testp	#rx_pin		wc	'sample rx
+		rcr	x,#1			'rotate bit into byte
+		waitx	#waitb			'wait for middle of nth data bit
+r
+		shr	x,#32-8			'justify received byte
+		wfbyte	x			'write to hub
+
+		djnz	bytes,#loop		'loop until all bytes received
+
+                rdfast  #0,#0                   'wait for last byte to be written
+
+		coginit	#0,#0			'launch cog 0 from $00000
+
+bytes		long	$10_0000 - $40		'this value is set by the sender
+
+x		res	1

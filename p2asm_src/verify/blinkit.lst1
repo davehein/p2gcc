@@ -1,0 +1,96 @@
+                   con
+                   	clock_freq = 80_000_000
+                   
+                   dat
+00000              	orgh	0
+                   
+                   '*******************************************************************************
+                   '  COG Code
+                   '*******************************************************************************
+00000 000          	org
+00000 000          start
+00000 000 fd900040 	jmp	#_main
+                   
+00004 001 00000000 r0	long	0
+00008 002 00000000 r1	long	0
+0000c 003 00000000 r2	long	0
+00010 004 00000000 r3	long	0
+00014 005 00000000 r4	long	0
+00018 006 00000000 r5	long	0
+0001c 007 00000000 r6	long	0
+00020 008 00000000 r7	long	0
+00024 009 00000000 r8	long	0
+00028 00a 00000000 r9	long	0
+0002c 00b 00000000 r10	long	0
+00030 00c 00000000 r11	long	0
+00034 00d 00000000 r12	long	0
+00038 00e 00000000 r13	long	0
+0003c 00f 00000000 r14	long	0
+00040 010 00000000 sp	long	0
+                   
+00044 011          _main
+00044 011 f60011fb 	mov	r7, DIRB
+00048 012 f544103f 	or	r7, #63
+0004c 013 f603f608 	mov	DIRB, r7
+00050 014 f6040801 	mov	r3, #1
+00054 015 f6041000 	mov	r7, #0
+00058 016 fd900054 	jmp	#_L7
+0005c 017          _L3
+0005c 017 f6000c04 	mov	r5, r3
+00060 018 f6000ffd 	mov	r6, OUTB
+00064 019 f0600c08 	shl	r5, r7
+00068 01a f5400e06 	or	r6, r5
+0006c 01b f603fa07 	mov	OUTB, r6
+00070 01c f6040432 	mov	r1, #50
+00074 01d fd600e1a 	getct	r6
+00078 01e ff02625a 	mov	r0, ##clock_freq
+0007c 01f f6040200 
+00080 020 fdb0009c 	call	#__UDIVSI
+00084 021 f1000e01 	add	r6, r0
+00088 022 fa640e00 	addct1	r6,#0
+0008c 023 fd602224 	waitct1
+00090 024 f6000ffd 	mov	r6, OUTB
+00094 025 f5200e06 	andn	r6, r5
+00098 026 f603fa07 	mov	OUTB, r6
+0009c 027 fd600e1a 	getct	r6
+000a0 028 f1000e01 	add	r6, r0
+000a4 029 fa640e00 	addct1	r6,#0
+000a8 02a fd602224 	waitct1
+000ac 02b f1041001 	add	r7, #1
+000b0 02c          _L7
+000b0 02c f25c1005 	cmps	r7, #5 wcz
+000b4 02d ed9fffa4 	IF_BE	jmp	#_L3
+000b8 02e f6040c05 	mov	r5, #5
+000bc 02f f6041006 	mov	r7, #6
+                   	'' loop_start register r7 level #1
+000c0 030          _L4
+000c0 030 f6000604 	mov	r2, r3
+000c4 031 f6000ffd 	mov	r6, OUTB
+000c8 032 f0600606 	shl	r2, r5
+000cc 033 f5400e03 	or	r6, r2
+000d0 034 f603fa07 	mov	OUTB, r6
+000d4 035 f6040432 	mov	r1, #50
+000d8 036 fd600e1a 	getct	r6
+000dc 037 ff02625a 	mov	r0, ##clock_freq
+000e0 038 f6040200 
+000e4 039 fdb00038 	call	#__UDIVSI
+000e8 03a f1000e01 	add	r6, r0
+000ec 03b fa640e00 	addct1	r6,#0
+000f0 03c fd602224 	waitct1
+000f4 03d f6000ffd 	mov	r6, OUTB
+000f8 03e f5200e03 	andn	r6, r2
+000fc 03f f603fa07 	mov	OUTB, r6
+00100 040 fd600e1a 	getct	r6
+00104 041 f1000e01 	add	r6, r0
+00108 042 fa640e00 	addct1	r6,#0
+0010c 043 fd602224 	waitct1
+00110 044 f1840c01 	sub	r5, #1
+00114 045 fb6c11ea 	djnz	r7,#_L4
+00118 046 f6041000 	mov	r7, #0
+0011c 047 fd9fff3c 	jmp	#_L3
+                   
+00120 048          __DIVSI
+00120 048 fd100202 __UDIVSI qdiv	r0, r1
+00124 049 fd600218 	getqx	r0
+00128 04a fd600419 	getqy	r1
+0012c 04b fd64002d 	ret

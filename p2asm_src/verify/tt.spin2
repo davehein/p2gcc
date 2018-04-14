@@ -1,0 +1,66 @@
+DAT
+              org     $100
+              ijz     $17, #$-$ff
+              ijz     $17, #$-$7f
+              ijz     $17, #$-$be
+              ijz     $17, #$-$3e
+              ijz     $17, #$-$a0
+              ijz     $17, #$-$20
+              ijz     $17, #$-$9e
+              ijz     $17, #$-$1e
+              ijz     $17, #$-$80
+              ijz     $17, #$
+              ijz     $17, #$-$fc
+              ijz     $17, #$-$7c
+              ijz     $17, #$-$bc
+              ijz     $17, #$-$3c
+              ijz     $17, #$-$a2
+              ijz     $17, #$-$22
+              ijz     $17, #$-$9c
+              ijz     $17, #$-$1c
+              ijz     $17, #$-$82
+              ijz     $17, #$-2
+              ijz     $17, #$-$e2
+              augs    #$1234 << 9
+              augd    #$1e << 9
+              nop     
+              mov     $1f6, $1f7
+              rdlut   $1f6, $1f6
+              add     $1f6, #1
+              nop     
+              nop     
+              nop     
+              jmp     #\$70
+              calld   $1f6, #\$74
+              rep     #1, #1
+              rep     #$100, #$100
+              rep     #1, #5
+              rep     $98, #5
+              rep     #$9c, #5
+              nop     
+              nop     
+              nop     
+              rdlut   $1ff, $1ff wcz
+              rdlut   $1ff, $1f5 wcz
+              rdlut   $1ff, $1f3 wcz
+              rdlut   $1ff, $1f1 wcz
+              rdlut   $1fe, $1ff wcz
+              rdlut   $1f4, $1f5 wcz
+              rdlut   $1f2, $1f3 wcz
+              rdlut   $1f0, $1f1 wcz
+              wrlong  $e0, ##$161
+              wrlong  $e0, ##$1e1
+              ijz     $e0, #$-$a0
+              ijz     $e0, #$-$20
+              rdlut   $1ff, $1ff wcz
+              rdlut   $1ff, $1f5 wcz
+              rdlut   $1ff, $1f3 wcz
+              rdlut   $1ff, $1f1 wcz
+              nop     
+ _ret_        ror     0, $a
+ _ret_        ror     0, $a
+ _ret_        ror     0, $50
+ if_nz_and_c  wrlut   #$15e, #$20
+              long    $4bbebc20
+ if_nz_and_c  loc     $1f6, #\0
+              nop     

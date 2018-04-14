@@ -1,0 +1,116 @@
+                   '******************************
+                   '*  VGA 640 x 480 x 8bpp-lut  *
+                   '******************************
+                   
+                   CON
+                     VGA_BUF       = $11000
+                     PALETTE       = VGA_BUF - 16*4
+                     BMP_HEADER	= PALETTE - $36
+                     VERT_BLANK	= $10000
+                   
+                     intensity	= 80	'0..128
+                   
+                     fclk		= 80_000_000.0
+                     fpix		= 25_000_000.0
+                     fset		= (fpix / fclk * 2.0) * float($4000_0000)
+                   
+                     vsync		=	0	'vsync pin (all FPGA boards now)
+                   
+                   DAT
+                   
+00000 000          		org	0
+00000 000          vga_start
+                   '
+                   '
+                   ' Setup
+                   '
+00000 000 ff000087 		rdfast	#0,##PALETTE		'load .bmp palette into lut
+00004 001 fc7c01c0 
+00008 002 fcdc0810 		rep	@.end,#$10
+0000c 003 fd606a12 		rflong	y
+00010 004 f0646a08 		shl	y,#8
+00014 005 fc306a34 		wrlut	y,x
+00018 006 f1046801 		add	x,#1
+0001c 007          .end
+0001c 007 ff800004 		rdfast	##640*480/128,##VGA_BUF	'set rdfast to wrap on bitmap
+00020 008 ff000088 
+00024 009 fc7ec000 
+                   
+00028 00a ff940000 		setxfrq ##round(fset)		'set transfer frequency to 25MHz
+0002c 00b fd64001d 
+                   
+                   		'the next 4 lines may be commented out to bypass level scaling
+                   
+00030 00c ffa80000 		setcy	##intensity << 24	'r	set colorspace for rgb
+00034 00d fd640038 
+00038 00e ff802800 		setci	##intensity << 16	'g
+0003c 00f fd640039 
+00040 010 ff800028 		setcq	##intensity << 08	'b
+00044 011 fd64003a 
+00048 012 fd64403c 		setcmod	#%01_0_000_0		'enable colorspace conversion
+                   
+0004c 013 fc045c00 		wrpin	dacmode,#0		'enable dac modes in pins 0..3
+00050 014 fc045c01 		wrpin	dacmode,#1
+00054 015 fc045c02 		wrpin	dacmode,#2
+00058 016 fc045c03 		wrpin	dacmode,#3
+                   '
+                   '
+                   ' Field loop
+                   '
+0005c 017 f6046821 field		mov	x,#33			'top blanks
+00060 018 fdb0003c 		call	#blank
+                   
+00064 019 ff000080 		wrlong	#0,##VERT_BLANK
+00068 01a fc6c0000 
+0006c 01b f60469e0 		mov     x,#480			'set visible lines
+00070 01c fdb00038 line		call	#hsync			'do horizontal sync
+00074 01d fcc46604 		xcont	m_rf,#4			'visible line
+00078 01e fb6c69fd 		djnz    x,#line           	'another line?
+                   
+0007c 01f ff000080 		wrlong	#1,##VERT_BLANK
+00080 020 fc6c0200 
+                   
+00084 021 f604680a 		mov	x,#10			'bottom blanks
+00088 022 fdb00014 		call	#blank
+                   
+0008c 023 fd64005f 		drvnot	#vsync			'sync on
+                   
+00090 024 f6046802 		mov	x,#2			'sync blanks
+00094 025 fdb00008 		call	#blank
+                   
+00098 026 fd64005f 		drvnot	#vsync			'sync off
+                   
+0009c 027 fd9fffbc                 jmp     #field                  'loop
+                   '
+                   '
+                   ' Subroutines
+                   '
+000a0 028 fdb00008 blank		call	#hsync			'blank lines
+000a4 029 fcc46400 		xcont	m_vi,#0
+000a8 02a 0b6c69fd 	_ret_	djnz	x,#blank
+                   
+000ac 02b fcc45e00 hsync		xcont	m_bs,#0			'horizontal sync
+000b0 02c fcc46001 		xcont	m_sn,#1
+000b4 02d 0cc46200 	_ret_	xcont	m_bv,#0
+                   '
+                   '
+                   ' Initialized data
+                   '
+                   'dacmode		long	%0000_0000_000_1010000000000_01_00000_0
+000b8 02e 00140040 dacmode		long	%0000_0000_000_1010000000000_01_00000_0
+                   
+000bc 02f cf000010 m_bs		long	$CF000000+16		'before sync
+000c0 030 cf000060 m_sn		long	$CF000000+96		'sync
+000c4 031 cf000030 m_bv		long	$CF000000+48		'before visible
+000c8 032 cf000280 m_vi		long	$CF000000+640		'visible
+                   
+000cc 033 6f000280 m_rf		long	$6F000000+640		'visible rlong 8bpp lut
+                   
+000d0 034          x		res	1
+000d0 035          y		res	1
+                   '
+                   '
+                   ' Bitmap
+                   '
+                   		'orgh	$1000 - 16*4 - $36	'justify pixels at $1000, pallete at $1000-$400
+                   		'file	"lines.bmp"	'640 x 480, 4pbb-lut

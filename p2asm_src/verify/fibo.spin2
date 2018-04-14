@@ -1,0 +1,267 @@
+con
+  __clkfreq = 80000000
+  rx_pin = 63
+  tx_pin = 62
+  clock_freq = 80_000_000
+  baud_rate = 115_200
+  tx_mask = 1 << (tx_pin - 32)
+  rx_mask = 1 << (rx_pin - 32)
+
+dat
+	orgh	0
+	org
+
+	mov	sp, ##$8000
+	drvh    #tx_pin
+	waitx   ##clock_freq
+	waitx   ##clock_freq
+	waitx   ##clock_freq
+	mov     strptr, a_hello
+	call    #putstr
+	'calld	lr, #_main
+	call	#_main
+	cogid	r0
+	cogstop	r0
+
+r0	long	0
+r1	long	0
+r2	long	0
+r3	long	0
+r4	long	0
+r5	long	0
+r6	long	0
+r7	long	0
+r8	long	0
+r9	long	0
+r10	long	0
+r11	long	0
+r12	long	0
+r13	long	0
+r14	long	0
+lr	long	0
+sp	long	0
+
+_fibo
+	pop	lr
+	sub	sp, #4
+	wrlong	r12, sp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	mov	r13, #0
+	mov	r12, r0
+	mov	r14, r0
+_L3
+	cmp	r14, #1 wcz
+	IF_BE	jmp	#_L2
+	mov	r0, r14
+	sub	r0, #1
+	sub	r14, #2
+	'calld	lr,#_fibo
+	call	#_fibo
+	add	r13, r0
+	jmp	#_L3
+_L2
+	mov	r0, r12
+	and	r0, #1
+	add	r0, r13
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	rdlong	r12, sp
+	add	sp, #4
+	jmp	lr
+
+_main
+	pop	lr
+	sub	sp, #4
+	wrlong	r8, sp
+	sub	sp, #4
+	wrlong	r9, sp
+	sub	sp, #4
+	wrlong	r10, sp
+	sub	sp, #4
+	wrlong	r11, sp
+	sub	sp, #4
+	wrlong	r12, sp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	sub	sp, #20
+	mov	r0, _LC1
+	mov	r13, sp
+	mov	r12, sp
+	mov	r14, #0
+	add	r13, #4
+	'calld	lr,#_puts
+	call	#_puts
+	add	r12, #8
+	mov	r9, _LC3
+	mov	r10, _LC5
+	mov	r11, _LC7
+_L5
+	wrlong	r9, sp
+	wrlong	r14, r13
+	'calld	lr,#_printf
+	call	#_printf
+	'calld	lr,#_clock
+	call	#_clock
+	mov	r5, #16
+	mov	r6, r0
+	add	r5, sp
+	mov	r0, r14
+	add	r14, #1
+	wrlong	r6, r5
+	mov	r0, r0
+	'calld	lr, #_fibo
+	call	#_fibo
+	mov	r8, r0
+	'calld	lr,#_clock
+	call	#_clock
+	mov	r5, #16
+	add	r5, sp
+	mov	r7, r0
+	mov	r1, r11
+	rdlong	r6, r5
+	sub	r7, r6
+	mov	r6, sp
+	wrlong	r10, sp
+	add	r6, #12
+	wrlong	r8, r13
+	rdlong	r0, _LC6
+	call	#__UDIVSI
+	mov	r1, r0
+	mov	r0, r7
+	call	#__UDIVSI
+	wrlong	r0, r12
+	wrlong	r7, r6
+	'calld	lr,#_printf
+	call	#_printf
+	cmps	r14, #27 wcz
+	IF_NE	jmp	#_L5
+	add	sp, #20
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	rdlong	r12, sp
+	add	sp, #4
+	rdlong	r11, sp
+	add	sp, #4
+	rdlong	r10, sp
+	add	sp, #4
+	rdlong	r9, sp
+	add	sp, #4
+	rdlong	r8, sp
+	add	sp, #4
+	jmp	lr
+
+_puts	pop	lr
+	mov	strptr, r0
+	mov	strptr, _LC1
+	call	#putstr
+	jmp	lr
+
+_printf	pop	lr
+	rdlong	strptr, sp
+	call	#putstr
+	jmp	lr
+
+__UDIVSI pop	lr
+	jmp	lr
+
+_clock	pop	lr
+	getct	r0
+	jmp	lr
+
+	'alignl
+_LC1
+	long	@_LC0
+_LC3
+	long	@_LC2
+_LC5
+	long	@_LC4
+_LC6
+	long	__clkfreq
+_LC7
+	long	1000
+
+putstr                  rdbyte  parm, strptr  wz
+        if_z            ret
+                        add     strptr, #1
+                        call    #putch
+                        jmp     #putstr
+strptr                  long    0
+
+'*******************************************************************************
+' Get one character from the input port.
+' Input none
+' Changes parm, temp, temp1, temp2
+' Output parm
+'*******************************************************************************
+getch                   mov     temp, bitcycles
+                        shr     temp, #1
+                        mov     temp1, #10
+getch0                  testb   inb, ##1 << (rx_pin & 31) wc
+        if_c            jmp     #getch0
+                        getct   temp2
+                        addct1  temp2, temp
+                        waitct1
+getch1                  mov     temp, inb
+                        and     temp, inbit
+                        ror     parm, #1
+                        or      parm, temp
+                        addct1  temp2, bitcycles
+                        waitct1
+                        djnz    temp1, #getch1
+                        ror     parm, #31 - 8
+                        and     parm, #255
+getch_ret               ret
+
+inbit                   long    1 << (rx_pin & 31)
+bitcycles               long    clock_freq / baud_rate
+
+'*******************************************************************************
+' Send one character to the output port.
+' Input parm
+' Changes parm, temp1, temp2
+' Output none             
+'*******************************************************************************
+putch                   or      parm, #$100
+                        shl     parm, #1
+                        mov     temp1, #10
+                        getct   temp2
+putch1                  shr     parm, #1               wc
+                        drvc    #tx_pin
+                        addct1  temp2, bitcycles
+                        waitct1
+                        djnz    temp1, #putch1
+putch_ret               ret
+
+txmask                  long    tx_mask
+rxmask                  long    rx_mask
+parm                    long    0
+temp                    long    0
+temp1                   long    0
+temp2                   long    0
+a_verbose               long    1
+a_hello                 long    @hello
+	orgh
+hello                   byte    "Hello World", 13, 0
+_LC0
+	byte "hello, world!", 13, 0
+_LC2
+	byte "fibo(%02d) = ", 0
+_LC4
+	byte "%06d (%05ums) (%u ticks)", 13, 0

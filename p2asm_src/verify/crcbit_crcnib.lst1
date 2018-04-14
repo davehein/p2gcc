@@ -1,0 +1,31 @@
+00000 000          dat	org
+                   
+00000 000 fd900010 	jmp	#.nibs		'nibs, comment out for bits
+                   
+                   
+00004 001 fcdc0420 .bits	rep	#2,#32		'32 bits, 130 clocks
+00008 002 f0742201 	shl	b,#1	wc
+0000c 003 f9d02413 	crcbit	crc,poly
+                   
+00010 004 fd900024 	jmp	#.done
+                   
+                   
+00014 005 fd602228 .nibs	setq	b		'8 nibbles (32 bits), 18 clocks
+00018 006 f9d82413 	crcnib	crc,poly
+0001c 007 f9d82413 	crcnib	crc,poly
+00020 008 f9d82413 	crcnib	crc,poly
+00024 009 f9d82413 	crcnib	crc,poly
+00028 00a f9d82413 	crcnib	crc,poly
+0002c 00b f9d82413 	crcnib	crc,poly
+00030 00c f9d82413 	crcnib	crc,poly
+00034 00d f9d82413 	crcnib	crc,poly
+                   
+                   
+00038 00e f9cff60f .done	bmask	dirb,#15	'show crc result on LEDs of Prop123
+0003c 00f f603fa12 	mov	outb,crc
+00040 010 fd9ffffc 	jmp	#$
+                   
+                   
+00044 011 12345678 b	long	$12345678	'data
+00048 012 0000ffff crc	long	$FFFF		'initial crc
+0004c 013 0000a001 poly	long	$8005 >< 16	'polynomial

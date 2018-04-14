@@ -1,0 +1,97 @@
+                   '*************************************
+                   '*  VGA 640 x 480 x 16bpp 5:6:5 RGB  *
+                   '*************************************
+                   
+                   CON
+                   
+                     intensity	= 80	'0..128
+                   
+                     fclk		= 80_000_000.0
+                     fpix		= 25_000_000.0
+                     fset		= (fpix / fclk * 2.0) * float($4000_0000)
+                   
+                     vsync		=	0	'vsync pin (all FPGA boards now)
+                   
+00000 000          DAT		org
+                   '
+                   '
+                   ' Setup
+                   '
+00000 000 fd65fe00 		hubset	#$FF			'set clock to 80MHz
+                   
+00004 001 ff80000d 		rdfast	##640*350*2/64,##$1000	'set rdfast to wrap on bitmap
+00008 002 ff000008 
+0000c 003 fc7eb000 
+                   
+00010 004 ff940000 		setxfrq ##round(fset)		'set transfer frequency to 25MHz
+00014 005 fd64001d 
+                   
+                   		'the next 4 lines may be commented out to bypass signal level scaling
+                   
+00018 006 ffa80000 		setcy	##intensity << 24	'r	set colorspace for rgb
+0001c 007 fd640038 
+00020 008 ff802800 		setci	##intensity << 16	'g
+00024 009 fd640039 
+00028 00a ff800028 		setcq	##intensity << 08	'b
+0002c 00b fd64003a 
+00030 00c fd64403c 		setcmod	#%01_0_000_0		'enable colorspace conversion (may be commented out)
+                   
+00034 00d fc044800 		wrpin	dacmode,#0		'enable dac modes in pins 0..3
+00038 00e fc044801 		wrpin	dacmode,#1
+0003c 00f fc044802 		wrpin	dacmode,#2
+00040 010 fc044803 		wrpin	dacmode,#3
+                   '
+                   '
+                   ' Field loop
+                   '
+00044 011 f604545a field		mov	x,#90			'top blanks
+00048 012 fdb0002c 		call	#blank
+                   
+0004c 013 f604555e 		mov     x,#350			'set visible lines
+00050 014 fdb00030 line		call	#hsync			'do horizontal sync
+00054 015 fcc45201 		xcont	m_rf,#1			'visible line
+00058 016 fb6c55fd 		djnz    x,#line           	'another line?
+                   
+0005c 017 f6045453 		mov	x,#83			'bottom blanks
+00060 018 fdb00014 		call	#blank
+                   
+00064 019 fd64005f 		drvnot	#vsync			'sync on
+                   
+00068 01a f6045402 		mov	x,#2			'sync blanks
+0006c 01b fdb00008 		call	#blank
+                   
+00070 01c fd64005f 		drvnot	#vsync			'sync off
+                   
+00074 01d fd9fffcc                 jmp     #field                  'loop
+                   '
+                   '
+                   ' Subroutines
+                   '
+00078 01e fdb00008 blank		call	#hsync			'blank lines
+0007c 01f fcc45000 		xcont	m_vi,#0
+00080 020 0b6c55fd 	_ret_	djnz	x,#blank
+                   
+00084 021 fcc44a00 hsync		xcont	m_bs,#0			'horizontal sync
+00088 022 fcb44c01 		xzero	m_sn,#1
+0008c 023 0cc44e00 	_ret_	xcont	m_bv,#0
+                   '
+                   '
+                   ' Initialized data
+                   '
+00090 024 00140040 dacmode		long	%0000_0000_000_1010000000000_01_00000_0
+                   
+00094 025 cf000010 m_bs		long	$CF000000+16		'before sync
+00098 026 cf000060 m_sn		long	$CF000000+96		'sync
+0009c 027 cf000030 m_bv		long	$CF000000+48		'before visible
+000a0 028 cf000280 m_vi		long	$CF000000+640		'visible
+                   
+000a4 029 2f000280 m_rf		long	$2F000000+640		'visible rfword rgb16 (5:6:5)
+                   
+000a8 02a          x		res	1
+000a8 02b          y		res	1
+                   '
+                   '
+                   ' Bitmap
+                   '
+00fba              		orgh	$1000 - 70		'justify pixels at $1000
+00fba 000          		file	"birds_16bpp.bmp"	'rayman's picture (640 x 350)

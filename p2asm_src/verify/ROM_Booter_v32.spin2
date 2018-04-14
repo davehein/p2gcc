@@ -1,0 +1,656 @@
+'****************************************
+'*					*
+'*	Propeller II ROM Booter		*
+'*					*
+'*	3/30/2018 - v32			*
+'*					*
+'****************************************
+
+CON
+'	ver		=	"A"		'Prop123-A9 / BeMicro-A9, 16 cogs, 12 smart pins
+'	cogs		=	16
+
+'	ver		=	"B"		'DE2-115
+'	cogs		=	4
+
+'	ver		=	"C"		'DE0-Nano / DE0-Nano Bare
+'	cogs		=	1
+
+'	ver		=	"D"		'BeMicro-A2
+'	cogs		=	1
+
+'	ver		=	"E"		'Prop123-A7
+'	cogs		=	4
+
+	ver		=	"F"		'Prop123-A9 / BeMicro-A9, 8 cogs, 64 smart pins
+	cogs		=	8
+
+
+	rx_pin		=	63		'pin serial receiver
+	tx_pin		=	62		'pin serial transmitter
+	spi_cs		=	61		'pin SPI memory select
+	spi_ck		=	60		'pin SPI memory clock
+	spi_dq		=	59		'pin SPI memory data I/O
+	rx_ths		=	1		'pin autobaud time high states
+	rx_tne		=	0		'pin autobaud time negative edges
+
+	cog_spi		=	$000		'cog SPI program start
+	cog_start	=	$100		'cog code start
+	cog_base64	=	$1B0		'cog base64 start
+
+	lut_buff	=	$000		'lut serial receive buffer
+	lut_btop	=	$00F		'lut serial receive buffer top
+	lut_start	=	$010		'lut code start
+
+	spi_ok		=	0		'bit flags
+	cmd_on		=	1
+
+	rc_max		=	30_000_000	'max frequency of RC oscillator
+
+DAT
+'
+'
+'*******************************************
+'*  Cog init - overwritten by SPI program  *
+'*******************************************
+'
+		orgh	$FC000
+		org
+'
+'
+' Move code into position
+'
+		setq	#cog_end-cog_code-1	'move cog code into position
+		rdlong	cog_start,##@cog_code
+
+		setq2	#lut_end-lut_code-1	'move lut code into position
+		rdlong	lut_start,##@lut_code
+'
+'
+' Seed xoroshiro 128+ using delta-sigma ADC bits from calibration mode
+'
+		wrpin	##$00100000,#rx_pin	'put rx pin in adc gio calibration mode
+
+		mov	x,#50			'ready to seed 50 times with 31 bits
+
+.seed		rep	#2,#31			'get 31 bits (31*4 clocks = 124/20 = ~6us)
+		testp	#63		wc
+		rcl	y,#1
+
+		bith	y,#31			'seed via hubset
+		hubset	y
+
+		djnz	x,#.seed
+
+		wrpin	#0,#rx_pin		'return rx pin to normal mode
+'
+'
+' Make 256-byte base64 lookup table in lut
+'
+		setq	#$FF>>2			'reset table in hub
+		wrlong	##$FFFFFFFF,#0
+
+		callpa	#"A",#fill26		'"A".."Z" --> $00..$19
+
+		callpa	#"a",#fill26		'"a".."z" --> $1A..$33
+
+		mov	x,#10			'"0".."9" --> $34..$3D
+		callpa	#"0",#fill
+
+		wrbyte	#$3E,#"+"		'"+" --> $3E
+
+		wrbyte	#$3F,#"/"		'"/" --> $3F
+
+		setq	#$FF>>2			'load table into cog
+		rdlong	cog_base64,#0
+'
+'
+' Load from SPI memory, if present
+'
+		callpa	#spi_cs,#check_pullup	'if no spi_cs pull-up, skip SPI loading
+	if_nc	jmp	#.nospi			'z=0 from fuse reading
+
+		outh	#spi_cs			'make spi_cs high
+		dirh	#spi_cs			'make spi_cs output
+		dirh	#spi_ck			'make spi_ck output
+
+		neg	pb,#1			'set command bits to all 1's
+		callpa	#2,#spi_cmd		'send exit-quad command
+		callpa	#8,#spi_cmd		'send exit-quad command
+		callpa	#16,#spi_cmd		'send exit-dual command
+
+		callpb	#$66,#spi_cmd8		'send reset-enable command
+		callpb	#$99,#spi_cmd8		'send reset command
+		waitx	##rc_max/20_000		'wait 50us
+
+		callpb	#$04,#spi_cmd8		'send write-disable command to clear WEL
+
+.wait		callpb	#$05,#spi_cmd8		'send read-status command
+		call	#spi_in			'get status
+		testbn	x,#1		wz	'if WEL high, no SPI memory
+	if_nz	jmp	#.float
+		testbn	x,#0		wz	'if BUSY high, wait for erase/write to finish
+	if_nz	jmp	#.wait
+
+		mov	pa,#32			'send read-from-start command
+		callpb	#$03,#spi_cmd
+
+		decod	y,#10			'ready to input $400 bytes from SPI
+		wrfast	#0,#0			'ready to write bytes to hub
+.data		call	#spi_in			'get byte
+		wfbyte	x			'store byte into hub
+		djnz	y,#.data		'loop for next byte (y=0 after)
+
+		rdfast	#0,#0			'ready to read longs from hub
+		rep	#2,#$100		'ready to read and sum $100 longs
+		rflong	z			'read long
+		add	y,z			'sum long
+
+		cmp	y,csum		wz	'verify checksum, z=1 if okay
+
+	if_z	bith	flags,#spi_ok		'if program verified, set spi_ok flag
+
+	if_z	callpa	#spi_ck,#check_pullup	'check pull-up on spi_ck, c=1 if pull-up
+
+.float	if_nz	dirl	#spi_cs			'if no SPI memory or program didn't verify, float SPI pins
+	if_nz	dirl	#spi_ck
+.nospi
+		jmp	#main			'jump to main program in lut, if z=c=1 then run SPI program
+'
+'
+' Fill table
+'
+fill26		mov	x,#26			'ready to fill "A".."Z"/"a".."z" entries
+
+fill		wrfast	#0,pa			'set table pointer
+
+		rep	@.v,x			'fill entries with ascending values
+		wfbyte	.v
+		add	.v,#1
+
+.v	_ret_	cmp	0,#0			'bottom byte used as a counter
+
+
+		fit	cog_start		'make sure below cog code
+'
+'
+'**************
+'*  Cog code  *
+'**************
+'
+		org	cog_start
+cog_code
+'
+'
+' Check pin pull-up
+'
+check_pullup	dirh	pa			'drive pin low (out bit must be low)
+		waitx	#30*1			'wait >1us
+		dirl	pa			'float pin
+		waitx	#30*5			'wait >5us
+	_ret_	testp	pa		wc	'sample pin, c=1 if pull-up
+'
+'
+' SPI long/byte out
+'
+spi_cmd8	mov	pa,#8			'ready to send 8 bits
+
+spi_cmd		outh	#spi_cs			'cs pin high
+		rol	pb,#24			'msb-justify byte
+		dirh	#spi_dq			'drive data pin
+		outl	#spi_cs			'cs pin low
+
+.out		rol	pb,#1		wc	'get bit to send
+		outc	#spi_dq			'set data pin to bit
+		outh	#spi_ck			'clock pin high
+		cmp	pa,#2		wc	'last bit?
+	if_c	dirl	#spi_dq			'if last bit, float data pin
+		outl	#spi_ck			'clock pin low
+	_ret_	djnz	pa,#.out		'loop to output bits, return when done
+'
+'
+' SPI byte in
+'
+spi_in		rep	@.in,#8			'ready to input a byte
+		outh	#spi_ck			'clock pin high
+		outl	#spi_ck			'clock pin low
+		testp	#spi_dq		wc	'sample data pin ('testp' is from before 'outh')
+		rcl	x,#1			'save data bit
+.in
+		ret
+'
+'
+' Autobaud ISR - detects initial "> "
+'
+'	      falls |--7---|
+'	 $3E --> ..10011111001..10000001001..
+'	        highs |-5--|
+'
+autobaud_isr	rdpin	a0,#rx_tne		'2	get fall-to-fall time	(7x if $3E)
+		rdpin	a1,#rx_ths		'2	get high time		(5x if $3E)
+
+		cmpr	a0,limit	wc	'2	make sure both measurements are within limit
+	if_nc	cmpr	a1,limit	wc	'2
+
+		scas	a0,norm0		'2	if they are within 1/35th of each other, $3E
+	if_nc	cmpr	a1,0		wc	'2
+		scas	a1,norm1		'2
+	if_nc	cmpr	a0,0		wc	'2
+	if_c	reti1				'2/4	if not $3E, exit
+
+		resi1				'4	got $3E, resume on next interrupt
+
+		akpin	#rx_tne			'2	acknowledge pin
+		mul	a0,baud0		'2	compute baud rate
+		setbyte	a0,#7,#0		'2	set word size to 8 bits
+		wxpin	a0,#rx_pin		'2	set receiver baud rate and word size
+		wxpin	a0,#tx_pin		'2	set transmitter baud rate and word size
+		resi1				'4	resume on next interrupt
+
+		dirh	#rx_pin			'2	enable receiver before next start bit
+		wrpin	mtpe,#rx_tne		'2	change rx_tne to measure positive edges
+		setse1	#%110<<6+rx_pin		'2	set se1 to trigger on rx_pin high
+		resi1				'4	resume on next interrupt
+'
+'
+' Receiver ISR - detects maintenance ">" chrs
+'
+'	        rises |--7---|
+'	 $3E --> ..10011111001..
+'
+		rdpin	a0,#rx_tne		'2	get rise-to-rise time	(7x if $3E)
+
+		rdpin	a1,#rx_pin	wc	'2	get received chr
+		shr	a1,#32-8		'2	shift to lsb justify
+		cmp	a1,#">"		wz	'2	autobaud chr?
+	if_nz	wrlut	a1,head			'2	if not, write byte to circular buffer in lut
+	if_nz	incmod	head,#lut_btop		'2	..increment buffer head
+	if_nz	reti1				'2/4	..exit
+
+		mul	a0,baud0		'2	autobaud chr, compute baud rate
+		setbyte	a0,#7,#0		'2	set word size to 8 bits
+		wxpin	a0,#rx_pin		'2	set receiver baud rate and word size
+		wxpin	a0,#tx_pin		'2	set transmitter baud rate and word size
+		reti1				'4	exit
+
+
+limit		long	$58E4				'count limit ($58E4 = 1.3889, keeps SCAS within $7FFF w/norm1)
+norm0		long	$41D4*5/7			'fall-to-fall normalization factor
+norm1		long	$41D4*7/5			'high-time normalization factor ($41D4 = 1.0 + 1/(7*5))
+baud0		long	$1_0000/7			'7x baud computation factor
+'
+'
+' Constants / initialized variables
+'
+timeout_per	long	rc_max/10			'100ms timeout for serial receive
+timeout_cnt	long	600				'60s timeout for serial completion
+
+mtxf		long		%111<<11+%01_11110_0	'asynchronous serial transmit, float on high
+mths		long	%0_110_0_000<<24+%00_10001_0	'time high states on pin[-2] (pin 63 in case of pin 1)
+mtne		long	%1_111_1_111<<24+%00_10011_0	'time neg edges   on pin[-1] (pin 63 in case of pin 0)
+mtpe		long	%0_111_0_111<<24+%00_10011_0	'time pos edges   on pin[-1] (pin 63 in case of pin 0)
+flags		long	0				'bit flags
+
+text_prop	byte	"porP"				'text
+text_chk	byte	"khC_"
+text_clk	byte	"klC_"
+text_hex	byte	"xeH_"
+text_txt	byte	"txT_"
+text_ver	byte	13,10,"Prop_Ver ",ver,13,10,0,0
+text_sta	byte	".",0,0,0
+
+csum		byte	"Prop"				'checksum
+
+hexchrs		long	%00000000_00000000_00000000_00000000
+		long	%00000011_11111111_00000000_00000000		'"0".."9"
+		long	%00000000_00000000_00000000_01111110		'"A".."F"
+		long	%00000000_00000000_00000000_01111110		'"a".."f"
+		long	%00000000_00000000_00000000_00000000
+		long	%00000000_00000000_00000000_00000000
+		long	%00000000_00000000_00000000_00000000
+		long	%00000000_00000000_00000000_00000000
+
+whitechrs	long	%00000000_00000000_00100110_00000000		'cr, lf, tab
+		long	%00100000_00000000_00000000_00000001		'"=", space
+		long	%00000000_00000000_00000000_00000000
+		long	%00000000_00000000_00000000_00000000
+		long	%00000000_00000000_00000000_00000000
+		long	%00000000_00000000_00000000_00000000
+		long	%00000000_00000000_00000000_00000000
+		long	%00000000_00000000_00000000_00000000
+
+cog_end
+'
+'
+' Uninitialized variables
+'
+i		res	1		'universal
+x		res	1
+y		res	1
+z		res	1
+
+checksum	res	1		'checksum
+bytemask	res	1
+
+a0		res	1		'serial autobaud/receiver ISR
+a1		res	1
+
+head		res	1		'serial receiver buffer
+tail		res	1
+
+		fit	cog_base64	'make sure below cog_base64
+'
+'
+'**************
+'*  Lut code  *
+'**************
+'
+		org	$200 + lut_start
+lut_code
+'
+'
+' If SPI program verified, move into cog $000..$0FF and run it if spi_ck pull-up
+'
+main	if_z	setq	#$FF			'if verified, move SPI program into cog $000..$0FF
+	if_z	rdlong	0,#0
+
+  if_z_and_c	jmp	#0			'if verified and pull-up on spi_ck, run SPI program
+'
+'
+' Reset serial autobaud/receiver interrupt
+'
+reset_serial	andn	dira,#%11		'disable timing measurements for autobaud
+
+		setint1	#0			'disable int1
+
+		mov	head,#0			'reset serial buffer pointers
+		mov	tail,#0
+
+		dirl	#rx_pin			'disable receiver
+		wrpin	#%00_11111_0,#rx_pin	'configure rx_pin for asynchronous receive, always input
+
+		wrpin	#%01_11110_0,#tx_pin	'configure tx_pin for asynchronous transmit, always output
+		dirh	#tx_pin			'enable transmitter
+
+		wrpin	mths,#rx_ths		'configure rx_ths for timing high states
+
+		wrpin	mtne,#rx_tne		'configure rx_tne for timing negative edges
+		wxpin	#1,#rx_tne		'report each cycle
+		wypin	#0,#rx_tne		'measure fall to fall
+
+		setse1	#%110<<6+rx_tne		'set se1 to trigger on rx_tne high
+
+		mov	ijmp1,#autobaud_isr	'set int1 jump vector to autobaud ISR
+
+		setint1	#4			'set int1 to trigger on se1 (rx_tne high)
+
+		or	dira,#%11		'enable timing measurements for autobaud
+'
+'
+' Attempt to get serial command
+'
+get_command	getct	x			'reset serial timeout in case SPI program ready
+		addct1	x,timeout_per
+
+		mov	z,#0			'reset string buffer
+
+.byte		call	#get_rx			'get byte
+
+		rolbyte	y,z,#3			'scroll byte into 2-long/8-byte string buffer
+		rolbyte	z,x,#0
+
+		cmp	y,text_prop	wz	'"Prop"?
+	if_nz	jmp	#.byte
+
+		cmp	z,text_txt	wz	'"_Txt"?
+	if_z	jmp	#command_txt
+
+		cmp	z,text_hex	wz	'"_Hex"?
+	if_z	jmp	#command_hex
+
+		cmp	z,text_clk	wz	'"_Clk"?
+	if_z	jmp	#command_clk
+
+		cmp	z,text_chk	wz	'"_Chk"?
+	if_nz	jmp	#.byte
+'
+'
+' Command - check device
+'
+		call	#match_device		'receive and check INA/INB filter values
+
+		mov	i,#text_ver		'transmit version string
+		call	#transmit
+
+		jmp	#get_command		'get next command
+'
+'
+' Command - clock setup
+'
+command_clk	call	#match_device		'receive and check INA/INB filter values
+
+		call	#get_hex		'get clock setting
+	if_nc	jmp	#get_command		'if not hex, error, wait for another command
+
+		mov	text_sta,#"."		'transmit acknowledgement character
+		call	#transmit_sta
+
+		zerox	x,#24			'clear non-clock bits
+
+		mov	y,x			'switch to partial setting, but in RC fast mode
+		andn	y,#%11
+		hubset	y
+
+		waitx	##rc_max/200		'wait 5ms
+
+		hubset	x			'switch to full setting
+
+		jmp	#reset_serial		'restart serial at new setting, get next command
+'
+'
+' Command - text load
+'
+command_txt	call	#match_device		'receive and check INA/INB filter values
+
+		mov	i,#0			'reset bit counter
+
+.chr		call	#get_rx			'get byte
+
+		altb	x,#whitechrs		'whitespace?
+		testbn	0,x		wz
+	if_nz	jmp	#.chr			'if whitespace, get another byte
+
+		altgb	x,#cog_base64		'lookup base64 value in table
+		getbyte	y
+
+		testbn	y,#7		wz	'if msb set, not base64 chr
+
+if_z		shl	z,#6			'if base64 chr, shift data buffer up 6 bits
+if_z		or	z,y			'..or in new value
+if_z		add	i,#6			'..add 6 into bit counter
+if_z		cmpsub	i,#8		wc	'..if bit counter >= 8, subtract 8, byte ready
+if_z_and_c	mov	x,z			'....get data buffer value
+if_z_and_c	shr	x,i			'....shift down to justify byte
+if_z_and_c	wfbyte	x			'....write byte to hub
+if_z_and_c	movbyts	x,#%%0000		'....replicate byte within long
+if_z_and_c	and	x,bytemask		'....mask current byte position
+if_z_and_c	add	checksum,x		'....add into checksum
+if_z_and_c	rol	bytemask,#8		'....update byte position mask
+if_z		jmp	#.chr			'..loop for next chr
+
+		decmod	tail,#lut_btop		'not base64 chr, repoint to prior chr
+		jmp	#end_of_data		'done
+'
+'
+' Command - hex load
+'
+command_hex	call	#match_device		'receive and check INA/INB filter values
+
+.byte		call	#get_hex		'get hex byte
+	if_c	wfbyte	x			'if hex, write byte to hub
+	if_c	movbyts	x,#%%0000		'..replicate byte within long
+	if_c	and	x,bytemask		'..mask current byte position
+	if_c	add	checksum,x		'..add into checksum
+	if_c	rol	bytemask,#8		'..update byte position mask
+	if_c	jmp	#.byte			'..loop for next byte (followed by end_of_data)
+'
+'
+' End of data for text/hex load - get "~" and launch code
+'
+end_of_data	call	#get_chr		'end of data, check terminus chr
+
+		cmp	x,#"~"		wz	'if "~", run program
+	if_z	jmp	#.run
+
+		cmp	x,#"?"		wz	'if not "?", error, wait for another command
+	if_nz	jmp	#get_command
+
+		xor	checksum,csum	wz	'test checksum
+
+	if_z	mov	text_sta,#"."		'(okay)
+	if_nz	mov	text_sta,#"!"		'(error)
+		call	#transmit_sta		'transmit status character
+
+		tjnz	checksum,#get_command	'if error, wait for another command
+
+.run		call	#reset_pins		'reset smart pins
+
+		coginit	#0,#$00000		'relaunch cog from $00000
+'
+'
+' Get and check INA/INB mask and data values
+'
+match_device	bith	flags,#cmd_on		'command on, enable serial timeout for SPI program
+
+		mov	i,#ina			'check INA first
+
+.pair		call	#get_hex		'get hex mask
+	if_nc	jmp	#get_command		'if not hex, error, wait for another command
+		mov	z,x		wz	'got mask
+	if_nz	wrpin	mtxf,#tx_pin		'if mask non-0, make tx_pin float on high
+		alts	i			'point to INA/INB
+		and	z,ina			'mask INA/INB
+		call	#get_hex		'get hex data
+	if_nc	jmp	#get_command		'if not hex, wait for another command
+		cmp	z,x		wz	'test for match
+	if_nz	jmp	#get_command		'if mismatch, wait for another command
+
+		bitnot	i,#0		wcz	'toggle INA/INB pointer
+	if_nc	jmp	#.pair			'if INA checked, loop to check INB
+
+		mov	checksum,#0		'reset checksum
+		mov	bytemask,#$FF		'reset bytemask
+
+	_ret_	wrfast	#0,#0			'ready to load data bytes into hub
+'
+'
+' Get hex value, c=1 if hex
+'
+get_hex		call	#get_chr		'get chr
+
+		call	#.check			'check for hex
+	if_nc	jmp	#.prior			'if not hex, repoint to chr, c=0
+
+		mov	y,x			'got first hex digit
+
+.digit		call	#.get			'get any additional hex digits
+	if_c	rolnib	y,x,#0
+	if_c	jmp	#.digit
+
+		mov	x,y			'done, set result
+		modcz	_set,0		wc	'c=1 for hex
+.prior	_ret_	decmod	tail,#lut_btop		'repoint to chr, exit
+
+
+.get		call	#get_rx			'get byte
+.check		altb	x,#hexchrs		'check for hex
+		testb	0,x		wc
+	if_nc	ret				'if not hex, c=0
+
+		testbn	x,#6		wz	'hex, "0".."9"?
+	if_z	sub	x,#"0"			'if so, make $0..$9
+	if_nz	bitl	x,#5			'else, force uppercase
+	if_nz	sub	x,#"A"-10		'..make $A..$F
+		ret				'c=1
+'
+'
+' Get chr after any whitespace
+'
+get_chr		call	#get_rx			'get byte
+
+		altb	x,#whitechrs		'whitespace?
+		testbn	0,x		wz
+
+	if_nz	jmp	#get_chr		'if whitespace, get another byte
+
+		ret
+'
+'
+' Get serial byte
+'
+get_rx_res	getct	x			'reset timer
+		addct1	x,timeout_per
+
+
+get_rx		jct1	#.timeout		'timeout?
+		cmp	head,tail	wz	'byte received?
+	if_z	jmp	#get_rx			'loop until timeout or byte received
+
+		rdlut	x,tail			'get byte from circular buffer in lut
+	_ret_	incmod	tail,#lut_btop		'increment buffer tail
+
+
+.timeout	testbn	flags,#spi_ok	wz	'timeout, SPI program?
+		testb	flags,#cmd_on	wc	'command on?
+if_z_or_c	djnz	timeout_cnt,#get_rx_res	'if no SPI program or command on, try until 60s
+
+		call	#reset_pins		'SPI program and command off or 60s, reset pins
+
+		testbn	flags,#spi_ok	wz	'SPI program?
+	if_nz	jmp	#0			'if so, run it
+
+		hubset	#1			'else, set 20KHz oscillator
+		cogstop	#0			'shut down cog (floats pins)
+'
+'
+' Transmit message
+'
+transmit_sta	mov	i,#text_sta		'point to status character
+
+transmit	mov	y,##rc_max/1000/4	'wait 1ms to allow host turn-around
+		djnz	y,#$			't0=0 after (djnz allows interrupts, unlike waitx)
+
+.byte		decmod	y,#3		wc	'if initial or 4th byte,
+	if_c	alts	i			'..point to 4 bytes (address set by caller)
+	if_c	mov	z,0			'..get 4 bytes
+	if_c	add	i,#1			'..point to next 4 bytes
+
+		test	z,#$FF		wz	'if not end of string,
+	if_nz	wypin	z,#tx_pin		'..send byte
+	if_nz	shr	z,#8			'..ready next byte, covers 'wypin'->'testin' latency
+
+.wait	if_nz	testp	#tx_pin		wc	'..wait for transmit buffer empty
+ if_nz_and_nc	jmp	#.wait
+
+	if_nz	jmp	#.byte			'..loop for more bytes
+
+
+.busy		rdpin	y,#tx_pin	wc	'end of string, wait for transmit done
+	if_c	jmp	#.busy
+
+		ret
+'
+'
+' Reset smart pins
+'
+reset_pins	setint1	#0			'disable int1
+
+		mov	dira,#0			'reset smart pins (avoids output on mode clears)
+		zerox	dirb,#30
+
+		wrpin	#0,#rx_ths		'clear rx_ths mode
+		wrpin	#0,#rx_tne		'clear rx_tne mode
+		wrpin	#0,#rx_pin		'clear rx_pin mode
+	_ret_	wrpin	#0,#tx_pin		'clear tx_pin mode
+
+lut_end

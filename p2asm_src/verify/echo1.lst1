@@ -1,0 +1,88 @@
+                   CON
+                     rx_pin = 63
+                     tx_pin = 62
+                     clock_freq = 80_000_000
+                     baud_rate = 115_200
+                     tx_mask = 1 << (tx_pin - 32)
+                     rx_mask = 1 << (rx_pin - 32)
+                   
+                   DAT
+00000                                      orgh    0
+00000 000                                  org
+00000 000 ff200000 start                   mov     dirb, ##tx_mask
+00004 001 f607f600 
+00008 002 ff200000                         mov     outb, ##tx_mask
+0000c 003 f607fa00 
+00010 004 fd60181f                         waitx   clk_freq
+00014 005 fd60181f                         waitx   clk_freq
+00018 006 fd60181f                         waitx   clk_freq
+0001c 007 f600243a                         mov     strptr, a_hello
+00020 008 fdb00010                         call    #putstr
+00024 009 fdb00024 .loop                   call    #getch
+00028 00a fdb00074                         call    #putch
+0002c 00b fd9ffff4                         jmp     #.loop
+00030 00c 04c4b400 clk_freq                long    clock_freq
+                   
+00034 00d fac86a12 putstr                  rdbyte  parm, strptr  wz
+00038 00e ad64002d         if_z            ret
+0003c 00f f1042401                         add     strptr, #1
+00040 010 fdb0005c                         call    #putch
+00044 011 fd9fffec                         jmp     #putstr
+00048 012 00000000 strptr                  long    0
+                   
+                   '*******************************************************************************
+                   ' Get one character from the input port.
+                   ' Input none
+                   ' Changes parm, temp, temp1, temp2
+                   ' Output parm
+                   '*******************************************************************************
+0004c 013 f6006c27 getch                   mov     temp, bitcycles
+00050 014 f0446c01                         shr     temp, #1
+00054 015 f6046e0a                         mov     temp1, #10
+00058 016 ff400000 getch0                  testb   inb, ##rx_mask wc
+0005c 017 f417fe00 
+00060 018 cd9ffff4         if_c            jmp     #getch0
+00064 019 fd60701a                         getct   temp2
+00068 01a fa607036                         addct1  temp2, temp
+0006c 01b fd602224                         waitct1
+00070 01c f6006dff getch1                  mov     temp, inb
+00074 01d f5006c26                         and     temp, inbit
+00078 01e f0046a01                         ror     parm, #1
+0007c 01f f5406a36                         or      parm, temp
+00080 020 fa607027                         addct1  temp2, bitcycles
+00084 021 fd602224                         waitct1
+00088 022 fb6c6ff9                         djnz    temp1, #getch1
+0008c 023 f0046a17                         ror     parm, #31 - 8
+00090 024 f5046aff                         and     parm, #255
+00094 025 fd64002d getch_ret               ret
+                   
+00098 026 80000000 inbit                   long    1 << (rx_pin & 31)
+0009c 027 000002b6 bitcycles               long    clock_freq / baud_rate
+                   
+                   '*******************************************************************************
+                   ' Send one character to the output port.
+                   ' Input parm
+                   ' Changes parm, temp1, temp2
+                   ' Output none             
+                   '*******************************************************************************
+000a0 028 f5446b00 putch                   or      parm, #$100
+000a4 029 f0646a01                         shl     parm, #1
+000a8 02a f6046e0a                         mov     temp1, #10
+000ac 02b fd60701a                         getct   temp2
+000b0 02c f0546a01 putch1                  shr     parm, #1               wc
+000b4 02d c543fa33         if_c            or      outb, txmask
+000b8 02e 3523fa33         if_nc           andn    outb, txmask
+000bc 02f fa607027                         addct1  temp2, bitcycles
+000c0 030 fd602224                         waitct1
+000c4 031 fb6c6ffa                         djnz    temp1, #putch1
+000c8 032 fd64002d putch_ret               ret
+                   
+000cc 033 40000000 txmask                  long    tx_mask
+000d0 034 80000000 rxmask                  long    rx_mask
+000d4 035 00000000 parm                    long    0
+000d8 036 00000000 temp                    long    0
+000dc 037 00000000 temp1                   long    0
+000e0 038 00000000 temp2                   long    0
+000e4 039 00000001 a_verbose               long    1
+000e8 03a 000000ec a_hello                 long    @hello
+000ec 03b 6c6c6548 hello                   byte    "Hello World", 13, 0

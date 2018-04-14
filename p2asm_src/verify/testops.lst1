@@ -1,0 +1,293 @@
+                   dat
+00000 000          		org
+00000 000 00000000 temp1		long	0
+00004 001 00000000 temp2		long	0
+00008 002 f3000001 		fge	temp1, temp2
+0000c 003 f3100001 		fge	temp1, temp2	wc
+00010 004 f3080001 		fge	temp1, temp2	wz
+00014 005 f3180001 		fge	temp1, temp2	wcz
+00018 006 f3200001 		fle	temp1, temp2
+0001c 007 f3300001 		fle	temp1, temp2	wc
+00020 008 f3280001 		fle	temp1, temp2	wz
+00024 009 f3380001 		fle	temp1, temp2	wcz
+00028 00a f3400001 		fges	temp1, temp2
+0002c 00b f3500001 		fges	temp1, temp2	wc
+00030 00c f3480001 		fges	temp1, temp2	wz
+00034 00d f3580001 		fges	temp1, temp2	wcz
+00038 00e f3600001 		fles	temp1, temp2
+0003c 00f f3700001 		fles	temp1, temp2	wc
+00040 010 f3680001 		fles	temp1, temp2	wz
+00044 011 f3780001 		fles	temp1, temp2	wcz
+00048 012 f4000001 		bitl	temp1, temp2
+0004c 013 f4180001 		bitl	temp1, temp2	wcz
+00050 014 f4200001 		bith	temp1, temp2
+00054 015 f4380001 		bith	temp1, temp2	wcz
+00058 016 f4400001 		bitc	temp1, temp2
+0005c 017 f4580001 		bitc	temp1, temp2	wcz
+00060 018 f4600001 		bitnc	temp1, temp2
+00064 019 f4780001 		bitnc	temp1, temp2	wcz
+00068 01a f4800001 		bitz	temp1, temp2
+0006c 01b f4980001 		bitz	temp1, temp2	wcz
+00070 01c f4c00001 		bitrnd	temp1, temp2
+00074 01d f4d80001 		bitrnd	temp1, temp2	wcz
+00078 01e f4e00001 		bitnot	temp1, temp2
+0007c 01f f4f80001 		bitnot	temp1, temp2	wcz
+00080 020 f4a00001 		bitnz	temp1, temp2
+00084 021 f4b80001 		bitnz	temp1, temp2	wcz
+00088 022 f4100001 		testb	temp1, temp2	wc
+0008c 023 f4080001 		testb	temp1, temp2	wz
+00090 024 f4500001 		testb	temp1, temp2	andc
+00094 025 f4480001 		testb	temp1, temp2	andz
+00098 026 f4900001 		testb	temp1, temp2	orc
+0009c 027 f4880001 		testb	temp1, temp2	orz
+000a0 028 f4d00001 		testb	temp1, temp2	xorc
+000a4 029 f4c80001 		testb	temp1, temp2	xorz
+000a8 02a f4300001 		testbn	temp1, temp2	wc
+000ac 02b f4280001 		testbn	temp1, temp2	wz
+000b0 02c f4700001 		testbn	temp1, temp2	andc
+000b4 02d f4680001 		testbn	temp1, temp2	andz
+000b8 02e f4b00001 		testbn	temp1, temp2	orc
+000bc 02f f4a80001 		testbn	temp1, temp2	orz
+000c0 030 f4f00001 		testbn	temp1, temp2	xorc
+000c4 031 f4e80001 		testbn	temp1, temp2	xorz
+000c8 032 f9c00001 		decod	temp1, temp2
+000cc 033 f9c80001 		bmask	temp1, temp2
+000d0 034 f7400001 		zerox	temp1, temp2
+000d4 035 f7600001 		signx	temp1, temp2
+000d8 036 f9e00001 		muxnits	temp1, temp2
+000dc 037 f9e80001 		muxnibs	temp1, temp2
+000e0 038 f9f00001 		muxq	temp1, temp2
+000e4 039 f9f80001 		movbyts	temp1, temp2
+000e8 03a fd600024 		pollint
+000ec 03b fd700024 		pollint	wc
+000f0 03c fd680024 		pollint	wz
+000f4 03d fd600224 		pollct1
+000f8 03e fd700224 		pollct1	wc
+000fc 03f fd680224 		pollct1	wz
+00100 040 fd600424 		pollct2
+00104 041 fd700424 		pollct2	wc
+00108 042 fd680424 		pollct2	wz
+0010c 043 fd600624 		pollct3
+00110 044 fd700624 		pollct3	wc
+00114 045 fd680624 		pollct3	wz
+00118 046 fd600824 		pollse1
+0011c 047 fd700824 		pollse1	wc
+00120 048 fd680824 		pollse1	wz
+00124 049 fd600a24 		pollse2
+00128 04a fd700a24 		pollse2	wc
+0012c 04b fd680a24 		pollse2	wz
+00130 04c fd600c24 		pollse3
+00134 04d fd700c24 		pollse3	wc
+00138 04e fd680c24 		pollse3	wz
+0013c 04f fd600e24 		pollse4
+00140 050 fd700e24 		pollse4	wc
+00144 051 fd680e24 		pollse4	wz
+00148 052 fd601024 		pollpat
+0014c 053 fd701024 		pollpat	wc
+00150 054 fd681024 		pollpat	wz
+00154 055 fd601224 		pollfbw
+00158 056 fd701224 		pollfbw	wc
+0015c 057 fd681224 		pollfbw	wz
+00160 058 fd601424 		pollxmt
+00164 059 fd701424 		pollxmt	wc
+00168 05a fd681424 		pollxmt	wz
+0016c 05b fd601624 		pollxfi
+00170 05c fd701624 		pollxfi	wc
+00174 05d fd681624 		pollxfi	wz
+00178 05e fd601824 		pollxro
+0017c 05f fd701824 		pollxro	wc
+00180 060 fd681824 		pollxro	wz
+00184 061 fd601a24 		pollxrl
+00188 062 fd701a24 		pollxrl	wc
+0018c 063 fd681a24 		pollxrl	wz
+00190 064 fd601c24 		pollatn
+00194 065 fd701c24 		pollatn	wc
+00198 066 fd681c24 		pollatn	wz
+0019c 067 fd601e24 		pollqmt
+001a0 068 fd701e24 		pollqmt	wc
+001a4 069 fd681e24 		pollqmt	wz
+                   
+001a8 06a fd602024 		waitint
+001ac 06b fd702024 		waitint	wc
+001b0 06c fd682024 		waitint	wz
+001b4 06d fd602224 		waitct1
+001b8 06e fd702224 		waitct1	wc
+001bc 06f fd682224 		waitct1	wz
+001c0 070 fd602424 		waitct2
+001c4 071 fd702424 		waitct2	wc
+001c8 072 fd682424 		waitct2	wz
+001cc 073 fd602624 		waitct3
+001d0 074 fd702624 		waitct3	wc
+001d4 075 fd682624 		waitct3	wz
+001d8 076 fd602824 		waitse1
+001dc 077 fd702824 		waitse1	wc
+001e0 078 fd682824 		waitse1	wz
+001e4 079 fd602a24 		waitse2
+001e8 07a fd702a24 		waitse2	wc
+001ec 07b fd682a24 		waitse2	wz
+001f0 07c fd602c24 		waitse3
+001f4 07d fd702c24 		waitse3	wc
+001f8 07e fd682c24 		waitse3	wz
+001fc 07f fd602e24 		waitse4
+00200 080 fd702e24 		waitse4	wc
+00204 081 fd682e24 		waitse4	wz
+00208 082 fd603024 		waitpat
+0020c 083 fd703024 		waitpat	wc
+00210 084 fd683024 		waitpat	wz
+00214 085 fd603224 		waitfbw
+00218 086 fd703224 		waitfbw	wc
+0021c 087 fd683224 		waitfbw	wz
+00220 088 fd603424 		waitxmt
+00224 089 fd703424 		waitxmt	wc
+00228 08a fd683424 		waitxmt	wz
+0022c 08b fd603624 		waitxfi
+00230 08c fd703624 		waitxfi	wc
+00234 08d fd683624 		waitxfi	wz
+00238 08e fd603824 		waitxro
+0023c 08f fd703824 		waitxro	wc
+00240 090 fd683824 		waitxro	wz
+00244 091 fd603a24 		waitxrl
+00248 092 fd703a24 		waitxrl	wc
+0024c 093 fd683a24 		waitxrl	wz
+00250 094 fd603c24 		waitatn
+00254 095 fd703c24 		waitatn	wc
+00258 096 fd683c24 		waitatn	wz
+                   
+0025c 097 fd700040 		testp	temp1	wc
+00260 098 fd680040 		testp	temp1	wz
+00264 099 fd700042 		testp	temp1	andc
+00268 09a fd680042 		testp	temp1	andz
+0026c 09b fd700044 		testp	temp1	orc
+00270 09c fd680044 		testp	temp1	orz
+00274 09d fd700046 		testp	temp1	xorc
+00278 09e fd680046 		testp	temp1	xorz
+0027c 09f fd700041 		testpn	temp1	wc
+00280 0a0 fd680041 		testpn	temp1	wz
+00284 0a1 fd700043 		testpn	temp1	andc
+00288 0a2 fd680043 		testpn	temp1	andz
+0028c 0a3 fd700045 		testpn	temp1	orc
+00290 0a4 fd680045 		testpn	temp1	orz
+00294 0a5 fd700047 		testpn	temp1	xorc
+00298 0a6 fd680047 		testpn	temp1	xorz
+                   
+0029c 0a7 fd600040 		dirl	temp1
+002a0 0a8 fd780040 		dirl	temp1	wcz
+002a4 0a9 fd600041 		dirh	temp1
+002a8 0aa fd780041 		dirh	temp1	wcz
+002ac 0ab fd600042 		dirc	temp1
+002b0 0ac fd780042 		dirc	temp1	wcz
+002b4 0ad fd600043 		dirnc	temp1
+002b8 0ae fd780043 		dirnc	temp1	wcz
+002bc 0af fd600044 		dirz	temp1
+002c0 0b0 fd780044 		dirz	temp1	wcz
+002c4 0b1 fd600045 		dirnz	temp1
+002c8 0b2 fd780045 		dirnz	temp1	wcz
+002cc 0b3 fd600046 		dirrnd	temp1
+002d0 0b4 fd780046 		dirrnd	temp1	wcz
+002d4 0b5 fd600047 		dirnot	temp1
+002d8 0b6 fd780047 		dirnot	temp1	wcz
+                   
+002dc 0b7 fd600048 		outl	temp1
+002e0 0b8 fd780048 		outl	temp1	wcz
+002e4 0b9 fd600049 		outh	temp1
+002e8 0ba fd780049 		outh	temp1	wcz
+002ec 0bb fd60004a 		outc	temp1
+002f0 0bc fd78004a 		outc	temp1	wcz
+002f4 0bd fd60004b 		outnc	temp1
+002f8 0be fd78004b 		outnc	temp1	wcz
+002fc 0bf fd60004c 		outz	temp1
+00300 0c0 fd78004c 		outz	temp1	wcz
+00304 0c1 fd60004d 		outnz	temp1
+00308 0c2 fd78004d 		outnz	temp1	wcz
+0030c 0c3 fd60004e 		outrnd	temp1
+00310 0c4 fd78004e 		outrnd	temp1	wcz
+00314 0c5 fd60004f 		outnot	temp1
+00318 0c6 fd78004f 		outnot	temp1	wcz
+                   
+0031c 0c7 fd600050 		fltl	temp1
+00320 0c8 fd780050 		fltl	temp1	wcz
+00324 0c9 fd600051 		flth	temp1
+00328 0ca fd780051 		flth	temp1	wcz
+0032c 0cb fd600052 		fltc	temp1
+00330 0cc fd780052 		fltc	temp1	wcz
+00334 0cd fd600053 		fltnc	temp1
+00338 0ce fd780053 		fltnc	temp1	wcz
+0033c 0cf fd600054 		fltz	temp1
+00340 0d0 fd780054 		fltz	temp1	wcz
+00344 0d1 fd600055 		fltnz	temp1
+00348 0d2 fd780055 		fltnz	temp1	wcz
+0034c 0d3 fd600056 		fltrnd	temp1
+00350 0d4 fd780056 		fltrnd	temp1	wcz
+00354 0d5 fd600057 		fltnot	temp1
+00358 0d6 fd780057 		fltnot	temp1	wcz
+                   
+0035c 0d7 fd600058 		drvl	temp1
+00360 0d8 fd780058 		drvl	temp1	wcz
+00364 0d9 fd600059 		drvh	temp1
+00368 0da fd780059 		drvh	temp1	wcz
+0036c 0db fd60005a 		drvc	temp1
+00370 0dc fd78005a 		drvc	temp1	wcz
+00374 0dd fd60005b 		drvnc	temp1
+00378 0de fd78005b 		drvnc	temp1	wcz
+0037c 0df fd60005c 		drvz	temp1
+00380 0e0 fd78005c 		drvz	temp1	wcz
+00384 0e1 fd60005d 		drvnz	temp1
+00388 0e2 fd78005d 		drvnz	temp1	wcz
+0038c 0e3 fd60005e 		drvrnd	temp1
+00390 0e4 fd78005e 		drvrnd	temp1	wcz
+00394 0e5 fd60005f 		drvnot	temp1
+00398 0e6 fd78005f 		drvnot	temp1	wcz
+                   
+0039c 0e7 fd600060 		splitb	temp1
+003a0 0e8 fd600061 		mergeb	temp1
+003a4 0e9 fd600062 		splitw	temp1
+003a8 0ea fd600063 		mergew	temp1
+003ac 0eb fd600064 		seussf	temp1
+003b0 0ec fd600065 		seussr	temp1
+003b4 0ed fd600066 		rgbsqz	temp1
+003b8 0ee fd600067 		rgbexp	temp1
+003bc 0ef fd600068 		xoro32	temp1
+003c0 0f0 fd600069 		rev	temp1
+003c4 0f1 fd60006a 		rczr	temp1
+003c8 0f2 fd70006a 		rczr	temp1	wc
+003cc 0f3 fd68006a 		rczr	temp1	wz
+003d0 0f4 fd78006a 		rczr	temp1	wcz
+003d4 0f5 fd60006c 		wrc	temp1
+003d8 0f6 fd60006d 		wrnc	temp1
+003dc 0f7 fd60006e 		wrz	temp1
+003e0 0f8 fd60006f 		wrnz	temp1
+003e4 0f9 fd600013 		rfvar	temp1
+003e8 0fa fd700013 		rfvar	temp1	wc
+003ec 0fb fd680013 		rfvar	temp1	wz
+003f0 0fc fd780013 		rfvar	temp1	wcz
+003f4 0fd fd600014 		rfvars	temp1
+003f8 0fe fd700014 		rfvars	temp1	wc
+003fc 0ff fd680014 		rfvars	temp1	wz
+00400 100 fd780014 		rfvars	temp1	wcz
+00404 101 fd64006f 		modcz	0, 0
+00408 102 fd74006f 		modcz	0, 0	wc
+0040c 103 fd6c006f 		modcz	0, 0	wz
+00410 104 fd7c006f 		modcz	0, 0	wcz
+00414 105 fd64006f 		modcz	_clr, 0
+00418 106 fd74006f 		modcz	_clr, 0	wc
+0041c 107 fd6c006f 		modcz	_clr, 0	wz
+00420 108 fd7c006f 		modcz	_clr, 0	wcz
+00424 109 fd743e6f 		modcz	_nc_and_nz, _set	wc
+00428 10a fd6c3c6f 		modcz	_nz_and_nc, _le	wz
+0042c 10b fd7c3c6f 		modcz	_gt, _z_or_c wcz
+00430 10c fd645c6f 		modcz	_nc_and_z, _c_or_z
+00434 10d fd745a6f 		modcz	_z_and_nc, _nz_or_c	wc
+00438 10e fd6c746f 		modcz	_nc, _e	wz
+0043c 10f fd7c746f 		modcz	_ge, _z	wcz
+00440 110 fd64926f 		modcz	_c_and_nz, _z_eq_c
+00444 111 fd74926f 		modcz	_nz_and_c, _c_eq_z	wc
+00448 112 fd6cb06f 		modcz	_nz, _c_and_z	wz
+0044c 113 fd7cb06f 		modcz	_ne, _z_and_c	wcz
+00450 114 fd64ce6f 		modcz	_c_ne_z, _nc_or_nz
+00454 115 fd74ce6f 		modcz	_z_ne_c, _nz_or_nc	wc
+00458 116 fd6cee6f 		modcz	_nc_or_nz, _nc_or_nz	wz
+                   
+                   
+                   
+                   
+                   

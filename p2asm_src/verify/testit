@@ -1,0 +1,5 @@
+echo $1
+../p2asm $1.spin2
+cmp $1.bin $1.obj
+dos2unix $1.lst 2>t
+diff $1.lst $1.lst1

@@ -1,0 +1,94 @@
+con
+	clock_freq = 80_000_000
+
+dat
+	orgh	0
+
+'*******************************************************************************
+'  COG Code
+'*******************************************************************************
+	org
+start
+	jmp	#_main
+
+r0	long	0
+r1	long	0
+r2	long	0
+r3	long	0
+r4	long	0
+r5	long	0
+r6	long	0
+r7	long	0
+r8	long	0
+r9	long	0
+r10	long	0
+r11	long	0
+r12	long	0
+r13	long	0
+r14	long	0
+sp	long	0
+
+_main
+	mov	r7, DIRB
+	or	r7, #63
+	mov	DIRB, r7
+	mov	r3, #1
+	mov	r7, #0
+	jmp	#_L7
+_L3
+	mov	r5, r3
+	mov	r6, OUTB
+	shl	r5, r7
+	or	r6, r5
+	mov	OUTB, r6
+	mov	r1, #50
+	getct	r6
+	mov	r0, ##clock_freq
+	call	#__UDIVSI
+	add	r6, r0
+	addct1	r6,#0
+	waitct1
+	mov	r6, OUTB
+	andn	r6, r5
+	mov	OUTB, r6
+	getct	r6
+	add	r6, r0
+	addct1	r6,#0
+	waitct1
+	add	r7, #1
+_L7
+	cmps	r7, #5 wcz
+	IF_BE	jmp	#_L3
+	mov	r5, #5
+	mov	r7, #6
+	'' loop_start register r7 level #1
+_L4
+	mov	r2, r3
+	mov	r6, OUTB
+	shl	r2, r5
+	or	r6, r2
+	mov	OUTB, r6
+	mov	r1, #50
+	getct	r6
+	mov	r0, ##clock_freq
+	call	#__UDIVSI
+	add	r6, r0
+	addct1	r6,#0
+	waitct1
+	mov	r6, OUTB
+	andn	r6, r2
+	mov	OUTB, r6
+	getct	r6
+	add	r6, r0
+	addct1	r6,#0
+	waitct1
+	sub	r5, #1
+	djnz	r7,#_L4
+	mov	r7, #0
+	jmp	#_L3
+
+__DIVSI
+__UDIVSI qdiv	r0, r1
+	getqx	r0
+	getqy	r1
+	ret

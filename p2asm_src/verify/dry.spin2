@@ -1,0 +1,2257 @@
+con
+	rx_pin = 63
+	tx_pin = 62
+	clock_freq = 80_000_000
+	baud_rate = 115_200
+	lr = $1f6
+	hub_ram_kb = 32
+
+dat
+	orgh	0
+
+'*******************************************************************************
+'  COG Code
+'*******************************************************************************
+	org
+
+start	mov	sp, ##hub_ram_kb*1024 - 64
+	drvh    #tx_pin
+	mov	lr, #start1
+	jmp	#_main
+start1	cogid	r0
+	cogstop	r0
+
+r0	long	0
+r1	long	0
+r2	long	0
+r3	long	0
+r4	long	0
+r5	long	0
+r6	long	0
+r7	long	0
+r8	long	0
+r9	long	0
+r10	long	0
+r11	long	0
+r12	long	0
+r13	long	0
+r14	long	0
+sp	long	0
+
+getch	mov     temp, bitcycles
+	shr     temp, #1
+	mov     temp1, #10
+	mov	parm, #0
+getch0	testb   inb, ##1 << (rx_pin & 31) wc
+  if_c  jmp     #getch0
+	getct   temp2
+	addct1  temp2, temp
+	waitct1
+getch1	mov     temp, inb
+	and     temp, inbit
+	ror     parm, #1
+	or      parm, temp
+	addct1  temp2, bitcycles
+	waitct1
+	djnz    temp1, #getch1
+	ror     parm, #31 - 8
+	and     parm, #255
+	ret
+
+inbit	long    1 << (rx_pin & 31)
+bitcycles long    clock_freq / baud_rate
+
+putch	or      parm, #$100
+	shl     parm, #1
+	mov     temp1, #10
+	getct   temp2
+putch1	shr     parm, #1               wc
+	drvc    #tx_pin
+	addct1  temp2, bitcycles
+	waitct1
+	djnz    temp1, #putch1
+	ret
+
+parm	long    0
+temp	long    0
+temp1	long    0
+temp2	long    0
+
+putnl
+	mov	parm, #13
+	call	#putch
+'	mov	parm, #10
+'	call	#putch
+	ret
+
+__MULSI	qmul	r0, r1
+	getqx	r0
+	getqy	r1
+	ret
+
+__DIVSI	mov	temp, #0
+	abs	r0, r0 wc
+ if_c	mov	temp, #1
+	abs	r1, r1 wc
+ if_c	xor	temp, #1
+	call	#__UDIVSI
+	cmp	temp, #0 wz
+ if_nz	neg	r0, r0
+	ret
+
+__UDIVSI qdiv	r0, r1
+	getqx	r0
+	getqy	r1
+	ret
+
+'*******************************************************************************
+'  HUB Code
+'*******************************************************************************
+	orgh	$400
+
+__clkfreq long clock_freq
+
+_clock	getct	r0
+	jmp	lr
+
+___muldi3
+	call	#__MULSI
+	jmp	lr
+
+___divdi3
+	call	#__DIVSI
+	jmp	lr
+
+_atol
+_atoi
+	mov	r7, r0
+	mov	r0, #0
+	jmp	#_atoi2
+_atoi1
+	mov	r1, #10
+	add	r7, #1
+	call	#__MULSI
+	add	r0, r6
+	sub	r0, #48
+_atoi2
+	rdbyte	r6, r7
+	mov	r5, r6
+	sub	r5, #48
+	cmp	r5, #9 wcz
+ IF_BE	jmp	#_atoi1
+	jmp	lr
+
+___ctype
+	byte	1, 1, 1, 1, 1, 1, 1, 1, 1, -111, 17, 17, 17, 17, 1, 1, 1, 1, 1
+	byte	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -112, 32, 32, 32, 32
+	byte	32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 66, 66, 66, 66, 66
+	byte	66, 66, 66, 66, 66, 32, 32, 32, 32, 32, 32, 32, 68, 68, 68, 68
+	byte	68, 68, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4
+	byte	4, 32, 32, 32, 32, 32, 32, 72, 72, 72, 72, 72, 72, 8, 8, 8, 8, 8
+	byte	8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 32, 32, 32, 32, 1, 0
+
+_toupper
+	mov	r7, r0
+	sub	r7, #97
+	cmp	r7, #25 wcz
+ IF_BE	sub	r0, #32
+	jmp	lr
+
+_tolower
+	mov	r7, r0
+	sub	r7, #65
+	cmp	r7, #25 wcz
+ IF_BE	add	r0, #32
+	jmp	lr
+
+_rand	getct	r0
+	jmp	lr
+
+_srand	jmp	lr
+
+_exit	jmp	#start1
+
+_sleep	mov	r1, ##clock_freq
+	call	#__MULSI
+	waitx	r0
+	jmp	lr
+
+_memset
+	add	r2, #1
+	jmp	#_memset2
+_memset1
+	wrbyte	r1, r0
+	add	r0, #1
+_memset2
+	djnz	r2,#_memset1
+	jmp	lr
+
+_memcpy	cmp	r2, #0 wz
+ if_z	jmp	lr
+	rdbyte	temp, r1
+	wrbyte	temp, r0
+	add	r1, #1
+	add	r0, #1
+	sub	r2, #1
+	jmp	#_memcpy
+
+_strcmp
+	rdbyte	r6, r0
+	cmps	r6, #0 wcz
+	add	r0, #1
+	rdbyte	r7, r1
+	add	r1, #1
+ if_ne	jmp	#_strcmp1
+	neg	r0, r7
+	jmp	lr
+_strcmp1
+	cmps	r6, r7 wcz
+ if_e 	jmp	#_strcmp
+	mov	r0, r6
+	sub	r0, r7
+	jmp	lr
+
+_strncmp
+	add	r2, #1
+	jmp	#_strncmp2
+_strncmp1
+	rdbyte	r6, r0
+	add	r0, #1
+	rdbyte	r7, r1
+	cmps	r6, r7 wcz
+	add	r1, #1
+ IF_E 	jmp	#_strncmp2
+	mov	r0, r6
+	sub	r0, r7
+	jmp	lr
+_strncmp2
+	djnz	r2,#_strncmp1
+	mov	r0, #0
+	jmp	lr
+
+_strcpy	rdbyte	r6, r1
+	cmps	r6, #0 wz
+	add	r1, #1
+	wrbyte	r6, r0
+	add	r0, #1
+ if_nz	jmp	#_strcpy
+	jmp	lr
+
+_strlen	mov	r7, r0
+	jmp	#_strle1
+_strle0	add	r0, #1
+_strle1	rdbyte	r6, r0
+	cmps	r6, #0 wz
+ if_nz	jmp	#_strle0
+	sub	r0, r7
+        jmp	lr
+
+_getchar
+	call	#getch
+	mov	r0, parm
+	jmp	lr
+
+_gets	mov	r7, r0
+_gets2	call	#getch
+	mov	r6, parm
+	cmp	r6, #8 wz
+ if_nz	jmp	#_gets0
+	cmp	r0, r7 wcz
+ if_be	jmp	#_gets2
+	mov	parm, #8
+	call	#putch
+	mov	parm, #" "
+	call	#putch
+	mov	parm, #8
+	call	#putch
+	sub	r0, #1
+	jmp	#_gets2
+_gets0	call	#putch
+	cmp	r6, #13 wz
+ if_nz	cmp	r6, #10 wz
+ if_z	jmp	#_gets1
+	wrbyte	r6, r0
+	add	r0, #1
+	jmp	#_gets2
+_gets1	mov	r6, #0
+	wrbyte	r6, r0
+	mov	r0, r7
+	jmp	lr
+
+_putchar
+	cmp	r0, #10 wz
+ if_z	call	#putnl
+ if_nz	mov	parm, r0
+ if_nz	call	#putch
+	jmp	lr
+
+_puts	rdbyte  parm, r0  wz
+ if_z	jmp	#_puts1
+	add     r0, #1
+	call    #putch
+	jmp     #_puts
+_puts1	call	#putnl
+	jmp	lr
+
+_PUTCW
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	mov	r13, r1
+	mov	r14, r13
+	calld	lr, #_putchar
+	jmp	#_LPF2
+_LPF3
+	mov	r0, #32
+	calld	lr, #_putchar
+_LPF2
+	sub	r14, #1
+	cmps	r14, #0 wcz
+	IF_A 	jmp	#_LPF3
+	mov	r0, r13
+	fges	r0, #1
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	jmp	lr
+        alignl
+_printf
+	sub	sp, #4
+	wrlong	r8, sp
+	sub	sp, #4
+	wrlong	r9, sp
+	sub	sp, #4
+	wrlong	r10, sp
+	sub	sp, #4
+	wrlong	r11, sp
+	sub	sp, #4
+	wrlong	r12, sp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	sub	sp, #32
+	mov	r7, sp
+	add	r7, #64
+	mov	r11, sp
+	add	r11, #68
+	mov	r13, #0
+	mov	r8, ##_LPFC3
+	rdlong	r12, r7
+	jmp	#_LPF38
+_LPF31
+	mov	r7, r12
+	cmps	r0, #37 wcz
+	add	r7, #1
+	IF_NE mov	r12, r7
+	IF_NE mov	r1, #1
+	IF_NE	jmp	#_LPF39
+	rdbyte	r7, r7
+	cmps	r7, #48 wcz
+	mov	r6, #28
+	IF_E  mov	r5,#48
+	IF_NE mov	r5,#32
+	add	r6, sp
+	add	r12, #2
+	mov	r14, #0
+	wrlong	r5, r6
+	jmp	#_LPF9
+_LPF11
+	mov	r0, r14
+	mov	r1, #10
+	sub	r7, #48
+	call	#__MULSI
+	mov	r14, r0
+	add	r14, r7
+	rdbyte	r7, r12
+	add	r12, #1
+_LPF9
+	cmps	r7, #0 wcz
+	IF_E 	jmp	#_LPF37
+	mov	r6, r7
+	cmps	r7, #"0" wcz
+ IF_B   jmp	#_LPF37
+	cmps	r7, #"9" wcz
+ IF_A   jmp	#_LPF37
+	jmp	#_LPF11
+_LPF13
+	rdbyte	r7, r12
+	add	r12, #1
+_LPF37
+	cmps	r7, #76 wcz
+	mov	r5, #0
+	muxz	r5,#1
+	mov	r6, #0
+	cmps	r7, #108 wcz
+	muxz	r6,#1
+	mov	temp, r5
+	or	temp, r6 wz
+	IF_NE	jmp	#_LPF13
+	cmps	r7, #0 wcz
+	IF_E 	jmp	#_LPF14
+	cmps	r7, #115 wcz
+	IF_E 	jmp	#_LPF18
+	cmp	r7, #115 wcz
+	IF_A 	jmp	#_LPF19
+	cmps	r7, #99 wcz
+	IF_E 	jmp	#_LPF16
+	cmps	r7, #100 wcz
+	IF_E 	jmp	#_LPF17
+	cmps	r7, #37 wcz
+	IF_NE	jmp	#_LPF38
+	jmp	#_LPF40
+_LPF19
+	cmps	r7, #117 wcz
+	IF_E 	jmp	#_LPF17
+	cmps	r7, #120 wcz
+	IF_NE	jmp	#_LPF38
+	jmp	#_LPF35
+_LPF40
+	mov	r0, #37
+	mov	r1, r14
+_LPF39
+	calld	lr, #_PUTCW
+	add	r13, r0
+	jmp	#_LPF38
+_LPF16
+	mov	r10, r11
+	mov	r1, r14
+	add	r10, #4
+	rdlong	r0, r11
+	mov	r11, r10
+	calld	lr, #_PUTCW
+	add	r13, r0
+	jmp	#_LPF38
+_LPF18
+	mov	r6, r11
+	mov	r7, #24
+	add	r6, #4
+	add	r7, sp
+	rdlong	r10, r11
+	mov	r11, #0
+	wrlong	r6, r7
+	jmp	#_LPF20
+_LPF21
+	add	r10, #1
+	add	r11, #1
+	calld	lr, #_putchar
+_LPF20
+	mov	r9, r14
+	sub	r9, r11
+	rdbyte	r0, r10 wz
+	IF_NE	jmp	#_LPF21
+	mov	r14, r9
+	jmp	#_LPF22
+_LPF23
+	mov	r0, #32
+	sub	r14, #1
+	calld	lr, #_putchar
+_LPF22
+	cmps	r14, #0 wcz
+	IF_A 	jmp	#_LPF23
+	mov	r7, r9
+	fges	r7, #0
+	mov	r5, #24
+	add	r7, r11
+	add	r5, sp
+	add	r13, r7
+	rdlong	r11, r5
+	jmp	#_LPF38
+_LPF17
+	cmps	r7, #120 wcz
+	IF_NE mov	r9, #10
+	IF_NE	jmp	#_LPF24
+_LPF35
+	mov	r9, #16
+_LPF24
+	mov	r6, r11
+	mov	r5, #24
+	add	r6, #4
+	add	r5, sp
+	cmps	r7, #100 wcz
+	wrlong	r6, r5
+	rdlong	r11, r11
+	IF_NE	jmp	#_LPF25
+	cmps	r11, #0 wcz
+	IF_AE	jmp	#_LPF25
+	mov	r0, #45
+	mov	r1, #1
+	sub	r14, #1
+	neg	r11, r11
+	calld	lr, #_PUTCW
+	add	r13, r0
+_LPF25
+	mov	r10, sp
+_LPF26
+	mov	r0, r11
+	mov	r1, r9
+	sub	r14, #1
+	call	#__UDIVSI
+	mov	r7, r1
+	mov	r0, r11
+	add	r7, r8
+	mov	r1, r9
+	call	#__UDIVSI
+	rdbyte	r7, r7
+	cmps	r0, #0 wcz
+	mov	r11, r0
+	wrbyte	r7, r10
+	add	r10, #1
+	IF_NE	jmp	#_LPF26
+	mov	r11, r14
+	jmp	#_LPF27
+_LPF28
+	mov	r6, #28
+	add	r6, sp
+	sub	r11, #1
+	rdlong	r0, r6
+	calld	lr, #_putchar
+_LPF27
+	cmps	r11, #0 wcz
+	IF_A 	jmp	#_LPF28
+	fges	r14, #0
+	mov	r7, r10
+	mov	r9, sp
+	jmp	#_LPF29
+_LPF30
+	mov	r11, r7
+	sub	r11, #1
+	rdbyte	r0, r11
+	calld	lr, #_putchar
+	mov	r7, r11
+_LPF29
+	cmps	r7, r9 wcz
+	IF_NE	jmp	#_LPF30
+	sub	r10, r7
+	mov	r7, #24
+	add	r10, r14
+	add	r7, sp
+	add	r13, r10
+	rdlong	r11, r7
+_LPF38
+	rdbyte	r0, r12 wz
+	IF_NE	jmp	#_LPF31
+_LPF14
+	mov	r0, r13
+	add	sp, #32
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	rdlong	r12, sp
+	add	sp, #4
+	rdlong	r11, sp
+	add	sp, #4
+	rdlong	r10, sp
+	add	sp, #4
+	rdlong	r9, sp
+	add	sp, #4
+	rdlong	r8, sp
+	add	sp, #4
+	jmp	lr
+
+_LPFC3	byte "0123456789ABCDEF", 0
+        alignl
+
+'*******************************************************************************
+'  Program Code
+'*******************************************************************************
+
+	alignl
+_Proc_2
+	rdlong	temp, ##_LC0
+	rdbyte	r6, temp
+	cmps	r6, #65 wcz
+	rdlong	r7, r0
+	IF_E  add	r7, #9
+	IF_E  rdlong	temp, ##_LC1
+	IF_E  rdlong	r6, temp
+	IF_E  sub	r7, r6
+	IF_E  wrlong	r7, r0
+	jmp	lr
+	alignl
+_LC0
+	long	_Ch_1_Glob
+	alignl
+_LC1
+	long	_Int_Glob
+	alignl
+_Proc_3
+	rdlong	r7, ##_LC2
+	rdlong	r6, r7
+	cmps	r6, #0 wcz
+	IF_E  mov	r6, #0
+	IF_NE rdlong	r6, r6
+	IF_NE wrlong	r6, r0
+	IF_NE rdlong	r6, r7
+	add	r6, #12
+	rdlong	temp, ##_LC3
+	rdlong	r7, temp
+	add	r7, #12
+	wrlong	r7, r6
+	jmp	lr
+	alignl
+_LC2
+	long	_Ptr_Glob
+	alignl
+_LC3
+	long	_Int_Glob
+	alignl
+_Proc_4
+	rdlong	temp, ##_LC5
+	rdbyte	r7, temp
+	rdlong	r6, ##_LC4
+	cmps	r7, #65 wcz
+	mov	r7, #0
+	muxz	r7,#1
+	rdlong	r5, r6
+	or	r7, r5
+	wrlong	r7, r6
+	mov	r7, #66
+	rdlong	temp, ##_LC6
+	wrbyte	r7, temp
+	jmp	lr
+	alignl
+_LC4
+	long	_Bool_Glob
+	alignl
+_LC5
+	long	_Ch_1_Glob
+	alignl
+_LC6
+	long	_Ch_2_Glob
+	alignl
+_Proc_5
+	mov	r7, #65
+	rdlong	temp, ##_LC7
+	wrbyte	r7, temp
+	mov	r7, #0
+	rdlong	temp, ##_LC8
+	wrlong	r7, temp
+	jmp	lr
+	alignl
+_LC7
+	long	_Ch_1_Glob
+	alignl
+_LC8
+	long	_Bool_Glob
+	alignl
+_Proc_6
+	wrlong	r0, r1
+	cmps	r0, #2 wcz
+	IF_E 	jmp	#_L10
+	mov	r7, #3
+	cmps	r0, #1 wcz
+	wrlong	r7, r1
+	IF_E 	jmp	#_L13
+	cmp	r0, #1 wcz
+	IF_AE	jmp	#_L18
+	mov	r7, #0
+	wrlong	r7, r1
+	jmp	lr
+_L18
+	cmps	r0, #2 wcz
+	IF_E 	jmp	#_L10
+	cmps	r0, #4 wcz
+	IF_NE	jmp	#_L15
+	mov	r7, #2
+	wrlong	r7, r1
+_L15
+	jmp	lr
+_L10
+	mov	r7, #1
+	wrlong	r7, r1
+	jmp	lr
+_L13
+	rdlong	temp, ##_LC9
+	rdlong	r7, temp
+	cmps	r7, #100 wcz
+	IF_BE	jmp	#_L15
+	mov	r7, #0
+	wrlong	r7, r1
+	jmp	lr
+	alignl
+_LC9
+	long	_Int_Glob
+	alignl
+_Proc_1
+	sub	sp, #4
+	wrlong	r12, sp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	rdlong	r13, ##_LC10
+	mov	r4, r0
+	rdlong	r7, r13
+	mov	r3, r7
+	add	r3, #16
+	rdlong	r14, r0
+	mov	r5, r14
+	add	r5, #4
+	rdlong	r6, r7
+	mov	r1, r14
+	add	r1, #8
+	wrlong	r6, r14
+	mov	r6, r7
+	add	r6, #4
+	rdlong	r6, r6
+	mov	r12, r14
+	add	r12, #12
+	wrlong	r6, r5
+	mov	r6, r7
+	add	r6, #8
+	rdlong	r6, r6
+	add	r4, #12
+	wrlong	r6, r1
+	mov	r6, r7
+	add	r6, #12
+	rdlong	r6, r6
+	wrlong	r6, r12
+	mov	r6, r14
+	add	r6, #16
+	rdlong	r3, r3
+	wrlong	r3, r6
+	mov	r3, r7
+	add	r3, #20
+	rdlong	r3, r3
+	add	r6, #4
+	wrlong	r3, r6
+	mov	r3, r7
+	add	r3, #24
+	rdlong	r3, r3
+	add	r6, #4
+	wrlong	r3, r6
+	mov	r3, r7
+	add	r3, #28
+	rdlong	r3, r3
+	add	r6, #4
+	wrlong	r3, r6
+	mov	r3, r7
+	add	r3, #32
+	rdlong	r3, r3
+	add	r6, #4
+	wrlong	r3, r6
+	mov	r3, r7
+	add	r3, #36
+	rdlong	r3, r3
+	add	r6, #4
+	wrlong	r3, r6
+	mov	r3, r7
+	add	r3, #40
+	rdlong	r3, r3
+	add	r6, #4
+	wrlong	r3, r6
+	mov	r3, r7
+	add	r3, #44
+	rdlong	r3, r3
+	add	r6, #4
+	wrlong	r3, r6
+	mov	r6, #5
+	wrlong	r6, r4
+	wrlong	r6, r12
+	rdlong	r6, r0
+	wrlong	r6, r14
+	rdlong	r7, r7
+	wrlong	r7, r14
+	rdlong	r7, r13
+	add	r7, #12
+	rdlong	temp, ##_LC11
+	rdlong	r6, temp
+	add	r6, #12
+	wrlong	r6, r7
+	rdlong	r7, r5
+	cmps	r7, #0 wcz
+	IF_E 	jmp	#_L23
+	rdlong	r7, r0
+	mov	r5, r7
+	add	r5, #4
+	rdlong	r6, r7
+	wrlong	r6, r0
+	mov	r6, r0
+	add	r6, #4
+	rdlong	r5, r5
+	wrlong	r5, r6
+	mov	r5, r7
+	add	r5, #8
+	rdlong	r5, r5
+	add	r6, #4
+	wrlong	r5, r6
+	mov	r6, r7
+	add	r6, #12
+	rdlong	r6, r6
+	mov	r5, r7
+	add	r5, #16
+	wrlong	r6, r4
+	mov	r6, r0
+	add	r6, #16
+	rdlong	r5, r5
+	add	r0, #44
+	wrlong	r5, r6
+	mov	r5, r7
+	add	r5, #20
+	rdlong	r5, r5
+	add	r6, #4
+	wrlong	r5, r6
+	mov	r5, r7
+	add	r5, #24
+	rdlong	r5, r5
+	add	r6, #4
+	wrlong	r5, r6
+	mov	r5, r7
+	add	r5, #28
+	rdlong	r5, r5
+	add	r6, #4
+	wrlong	r5, r6
+	mov	r5, r7
+	add	r5, #32
+	rdlong	r5, r5
+	add	r6, #4
+	wrlong	r5, r6
+	mov	r5, r7
+	add	r5, #36
+	rdlong	r5, r5
+	add	r6, #4
+	wrlong	r5, r6
+	mov	r5, r7
+	add	r5, #40
+	rdlong	r5, r5
+	add	r6, #4
+	add	r7, #44
+	wrlong	r5, r6
+	rdlong	r7, r7
+	wrlong	r7, r0
+_L22
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	rdlong	r12, sp
+	add	sp, #4
+	jmp	lr
+_L23
+	mov	r7, #6
+	add	r0, #8
+	wrlong	r7, r12
+	rdlong	r0, r0
+	calld	lr,#_Proc_6
+	rdlong	r6, r13
+	rdlong	r7, r12
+	add	r7, #12
+	rdlong	r6, r6
+	wrlong	r6, r14
+	wrlong	r7, r12
+	jmp	#_L22
+	alignl
+_LC10
+	long	_Ptr_Glob
+	alignl
+_LC11
+	long	_Int_Glob
+	alignl
+_Proc_7
+	add	r0, #2
+	add	r1, r0
+	wrlong	r1, r2
+	jmp	lr
+	alignl
+_Proc_8
+	sub	sp, #4
+	wrlong	r12, sp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	mov	r7, r2
+	add	r7, #5
+	mov	r4, r7
+	mov	r6, r7
+	shl	r6, #5
+	shl	r4, #3
+	add	r4, r6
+	mov	lr, r7
+	mov	r5, r2
+	mov	r14, r4
+	shl	lr, #2
+	mov	r13, r0
+	mov	r6, r2
+	add	r5, #6
+	shl	r14, #2
+	add	r13, lr
+	mov	r12, r0
+	add	r14, r4
+	shl	r5, #2
+	add	r6, #35
+	add	r1, r14
+	add	r12, r5
+	shl	r6, #2
+	add	r6, r0
+	mov	r4, r1
+	add	r4, lr
+	add	r2, #4
+	add	r5, r1
+	shl	r2, #2
+	add	r2, r1
+	rdlong	temp, ##_LC12
+	add	r1, temp
+	add	r1, lr
+	wrlong	r3, r13
+	wrlong	r3, r12
+	wrlong	r7, r6
+	wrlong	r7, r4
+	wrlong	r7, r5
+	rdlong	r7, r2
+	add	r7, #1
+	wrlong	r7, r2
+	mov	r7, #5
+	rdlong	r13, r13
+	wrlong	r13, r1
+	rdlong	temp, ##_LC13
+	wrlong	r7, temp
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	rdlong	r12, sp
+	add	sp, #4
+	jmp	lr
+	alignl
+_LC12
+	long	4000
+	alignl
+_LC13
+	long	_Int_Glob
+	alignl
+_Func_1
+	and	r0,#255
+	and	r1,#255
+	cmps	r0, r1 wcz
+	IF_NE mov	r0, #0
+	IF_E  rdlong	temp, ##_LC14
+	IF_E  wrbyte	r0, temp
+	IF_E  mov	r0, #1
+	jmp	lr
+	alignl
+_LC14
+	long	_Ch_1_Glob
+	alignl
+_Func_2
+	sub	sp, #4
+	wrlong	lr, sp
+	mov	r5, r1
+	mov	r6, r0
+	add	r5, #3
+	add	r6, #2
+	rdlong	r7, ##_LC15
+	rdbyte	r4, r5
+	rdbyte	r5, r6
+	cmps	r4, r5 wcz
+	rdbyte	r6, r7
+	IF_E 	jmp	#_L34
+	wrbyte	r6, r7
+	calld	lr,#_strcmp
+	cmps	r0, #0 wcz
+	IF_BE mov	r0, #0
+	IF_BE	jmp	#_L33
+	mov	r7, #10
+	mov	r0, #1
+	rdlong	temp, ##_LC16
+	wrlong	r7, temp
+_L33
+	rdlong	lr, sp
+	add	sp, #4
+	jmp	lr
+_L34
+_L31
+	jmp	#_L31
+	alignl
+_LC15
+	long	_Ch_1_Glob
+	alignl
+_LC16
+	long	_Int_Glob
+	alignl
+_Func_3
+	cmps	r0, #2 wcz
+	mov	r0, #0
+	muxz	r0,#1
+	jmp	lr
+	alignl
+_LC17
+	byte "malloc %d bytes", 10, 0
+	alignl
+_malloc
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	sub	sp, #8
+	mov	r7, sp
+	add	r7, #4
+	mov	r14, r0
+	rdlong	temp, ##_LC18
+	wrlong	temp, sp
+	wrlong	r0, r7
+	calld	lr,#_printf
+	rdlong	r6, ##_LC19
+	mov	r7, r14
+	add	r7, #3
+	shr	r7, #2
+	rdlong	r5, r6
+	mov	r0, r5
+	add	r7, r5
+	shl	r0, #2
+	rdlong	temp, ##_LC20
+	add	r0, temp
+	wrlong	r7, r6
+	add	sp, #8
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	jmp	lr
+	alignl
+_LC18
+	long	_LC17
+	alignl
+_LC19
+	long	_heapindex
+	alignl
+_LC20
+	long	_heap
+	alignl
+_LC24
+	byte "DHRYSTONE PROGRAM, SOME STRING", 0
+	alignl
+_LC26
+	byte "DHRYSTONE PROGRAM, 1'ST STRING", 0
+	alignl
+_LC30
+	byte "Dhrystone Benchmark, Version %s", 10, 0
+	alignl
+_LC32
+	byte "C, Version 2.2", 0
+	alignl
+_LC35
+	byte "Program compiled with 'register' attribute", 0
+	alignl
+_LC37
+	byte "Program compiled without 'register' attribute", 0
+	alignl
+_LC39
+	byte "Using %s, HZ=%d", 10, 0
+	alignl
+_LC41
+	byte "STDC clock()", 0
+	alignl
+_LC45
+	byte "Trying %d runs through Dhrystone:", 10, 0
+	alignl
+_LC51
+	byte "DHRYSTONE PROGRAM, 2'ND STRING", 0
+	alignl
+_LC54
+	byte "DHRYSTONE PROGRAM, 3'RD STRING", 0
+	alignl
+_LC59
+	byte "User_Time = %d - %d = %d", 10, 0
+	alignl
+_LC61
+	byte "Too_Small_Time = %d", 10, 0
+	alignl
+_LC63
+	byte "Measured time too small to obtain meaningful results", 0
+	alignl
+_LC65
+	byte "Final values of the variables used in the benchmark:", 0
+	alignl
+_LC67
+	byte "Int_Glob:            %d", 10, 0
+	alignl
+_LC69
+	byte "        should be:   %d", 10, 0
+	alignl
+_LC71
+	byte "Bool_Glob:           %d", 10, 0
+	alignl
+_LC73
+	byte "Ch_1_Glob:           %c", 10, 0
+	alignl
+_LC75
+	byte "        should be:   %c", 10, 0
+	alignl
+_LC77
+	byte "Ch_2_Glob:           %c", 10, 0
+	alignl
+_LC79
+	byte "Arr_1_Glob[8]:       %d", 10, 0
+	alignl
+_LC81
+	byte "Arr_2_Glob[8][7]:    %d", 10, 0
+	alignl
+_LC83
+	byte "        should be:   Number_Of_Runs + 10", 0
+	alignl
+_LC85
+	byte "Ptr_Glob->", 0
+	alignl
+_LC87
+	byte "  Ptr_Comp:          %d", 10, 0
+	alignl
+_LC89
+	byte "        should be:   (implementation-dependent)", 0
+	alignl
+_LC91
+	byte "  Discr:             %d", 10, 0
+	alignl
+_LC93
+	byte "  Enum_Comp:         %d", 10, 0
+	alignl
+_LC95
+	byte "  Int_Comp:          %d", 10, 0
+	alignl
+_LC97
+	byte "  Str_Comp:          %s", 10, 0
+	alignl
+_LC99
+	byte "        should be:   DHRYSTONE PROGRAM, SOME STRING", 0
+	alignl
+_LC101
+	byte "Next_Ptr_Glob->", 0
+	alignl
+_LC103
+	byte "        should be:   (implementation-dependent), same as above", 0
+	alignl
+_LC105
+	byte "Int_1_Loc:           %d", 10, 0
+	alignl
+_LC107
+	byte "Int_2_Loc:           %d", 10, 0
+	alignl
+_LC109
+	byte "Int_3_Loc:           %d", 10, 0
+	alignl
+_LC111
+	byte "Enum_Loc:            %d", 10, 0
+	alignl
+_LC113
+	byte "Str_1_Loc:           %s", 10, 0
+	alignl
+_LC115
+	byte "        should be:   DHRYSTONE PROGRAM, 1'ST STRING", 0
+	alignl
+_LC117
+	byte "Str_2_Loc:           %s", 10, 0
+	alignl
+_LC119
+	byte "        should be:   DHRYSTONE PROGRAM, 2'ND STRING", 0
+	alignl
+_LC124
+	byte "Microseconds for one run through Dhrystone: ", 0
+	alignl
+_LC126
+	byte "%u ", 10, 0
+	alignl
+_LC128
+	byte "Dhrystones per Second:                      ", 0
+	alignl
+_main
+	sub	sp, #4
+	wrlong	r8, sp
+	sub	sp, #4
+	wrlong	r9, sp
+	sub	sp, #4
+	wrlong	r10, sp
+	sub	sp, #4
+	wrlong	r11, sp
+	sub	sp, #4
+	wrlong	r12, sp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	sub	sp, #96
+	mov	r2, #84
+	mov	r1, sp
+	add	r1, #4
+	add	r2, sp
+	mov	r0, #48
+	wrlong	r1, r2
+	calld	lr,#_malloc
+	mov	r14, r0
+	rdlong	r4, ##_LC22
+	mov	r0, #48
+	wrlong	r14, r4
+	calld	lr,#_malloc
+	rdlong	r5, ##_LC25
+	mov	r6, r0
+	add	r6, #16
+	mov	r4, r5
+	add	r4, #4
+	mov	r3, r5
+	add	r3, #24
+	mov	r13, r0
+	add	r13, #4
+	mov	lr, r0
+	add	lr, #8
+	mov	r7, r0
+	mov	r1, r7
+	add	r1, #46
+	rdlong	r12, r5
+	wrlong	r12, r6
+	add	r6, #4
+	mov	r12, #0
+	rdlong	r4, r4
+	wrlong	r4, r6
+	mov	r4, r5
+	add	r4, #8
+	rdlong	r4, r4
+	add	r6, #4
+	wrlong	r4, r6
+	mov	r4, r5
+	add	r4, #12
+	rdlong	r4, r4
+	add	r6, #4
+	wrlong	r4, r6
+	mov	r4, r5
+	add	r4, #16
+	rdlong	r4, r4
+	add	r6, #4
+	wrlong	r4, r6
+	mov	r4, r5
+	add	r4, #20
+	rdlong	r4, r4
+	add	r6, #4
+	wrlong	r4, r6
+	mov	r4, r0
+	add	r4, #40
+	rdlong	r3, r3
+	add	r0, #12
+	rdlong	r6, ##_LC27
+	wrlong	r3, r4
+	mov	r3, r5
+	add	r3, #28
+	rdword	r3, r3
+	add	r4, #4
+	add	r5, #30
+	wrlong	r12, r13
+	mov	r13, #2
+	mov	r2, r6
+	wrlong	r13, lr
+	mov	lr, #40
+	add	r2, #4
+	wrword	r3, r4
+	mov	r3, r6
+	mov	r4, r6
+	wrlong	lr, r0
+	add	r3, #8
+	add	r4, #12
+	rdbyte	r5, r5
+	rdlong	r12, ##_LC23
+	mov	lr, r6
+	wrbyte	r5, r1
+	mov	r5, #52
+	add	r5, sp
+	rdlong	r1, r6
+	add	lr, #20
+	mov	r0, #10
+	wrlong	r1, r5
+	mov	r5, sp
+	add	r5, #56
+	rdlong	r2, r2
+	wrlong	r2, r5
+	add	r5, #4
+	mov	r2, r6
+	rdlong	r3, r3
+	add	r2, #24
+	wrlong	r3, r5
+	add	r5, #4
+	mov	r3, r6
+	rdlong	r4, r4
+	add	r3, #28
+	wrlong	r4, r5
+	mov	r5, r6
+	add	r5, #16
+	wrlong	r7, r12
+	mov	r4, sp
+	add	r4, #72
+	wrlong	r14, r7
+	mov	r7, sp
+	add	r7, #68
+	rdlong	r5, r5
+	add	r6, #30
+	mov	r14, #84
+	wrlong	r5, r7
+	rdlong	r5, ##_LC28
+	rdlong	temp, ##_LC29
+	add	r5, temp
+	rdlong	lr, lr
+	add	r14, sp
+	wrlong	lr, r4
+	add	r4, #4
+	rdlong	r2, r2
+	wrlong	r2, r4
+	add	r4, #4
+	rdword	r3, r3
+	wrword	r3, r4
+	add	r4, #2
+	rdbyte	r6, r6
+	wrbyte	r6, r4
+	wrlong	r0, r5
+	calld	lr,#_putchar
+	rdlong	temp, ##_LC31
+	wrlong	temp, sp
+	rdlong	r14, r14
+	rdlong	temp, ##_LC33
+	wrlong	temp, r14
+	calld	lr,#_printf
+	rdlong	temp, ##_LC34
+	rdlong	r6, temp
+	cmps	r6, #0 wcz
+	IF_NE rdlong	r0, ##_LC36
+	IF_E  rdlong	r0, ##_LC38
+	calld	lr,#_puts
+	mov	lr, sp
+	mov	r1, #88
+	mov	r2, #84
+	add	lr, #8
+	add	r1, sp
+	add	r2, sp
+	rdlong	r3, ##_LC43
+	rdlong	temp, ##_LC40
+	wrlong	temp, sp
+	wrlong	lr, r1
+	rdlong	r2, r2
+	rdlong	temp, ##_LC42
+	wrlong	temp, r2
+	rdlong	r3, r3
+	wrlong	r3, lr
+	calld	lr,#_printf
+	mov	r0, #10
+	calld	lr,#_putchar
+	mov	r6, sp
+	mov	r7, #92
+	mov	r4, #0
+	rdlong	r5, ##_LC44
+	add	r6, #12
+	add	r7, sp
+	rdlong	r9, ##_LC21
+	rdlong	r8, ##_LC50
+	wrlong	r4, r5
+	wrlong	r6, r7
+_L48
+	rdlong	r12, ##_LC46
+	mov	r13, #84
+	add	r13, sp
+	rdlong	r10, ##_LC55
+	mov	r11, #1
+	add	r10, #4
+	wrlong	r12, sp
+	rdlong	r13, r13
+	wrlong	r9, r13
+	calld	lr,#_printf
+	calld	lr,#_clock
+	rdlong	r14, ##_LC47
+	wrlong	r0, r14
+_L46
+	rdlong	r13, ##_LC48
+	mov	r12, #65
+	mov	r14, #1
+	mov	r1, sp
+	add	r1, #20
+	rdlong	lr, ##_LC52
+	rdlong	r2, ##_LC52
+	add	lr, #8
+	rdlong	r3, ##_LC52
+	add	r2, #12
+	rdlong	r4, ##_LC52
+	add	r3, #16
+	rdlong	r5, ##_LC52
+	add	r4, #20
+	rdlong	r6, ##_LC52
+	add	r5, #24
+	rdlong	r7, ##_LC52
+	add	r6, #28
+	add	r7, #30
+	mov	r0, sp
+	add	r0, #52
+	wrbyte	r12, r13
+	rdlong	r12, ##_LC49
+	mov	r13, #66
+	wrlong	r14, r12
+	rdlong	r14, ##_LC52
+	rdlong	r12, ##_LC151
+	rdlong	r14, r14
+	wrbyte	r13, r8
+	mov	r13, #24
+	add	r13, sp
+	wrlong	r14, r1
+	mov	r14, #32
+	add	r14, sp
+	rdlong	r12, r12
+	wrlong	r12, r13
+	mov	r13, #28
+	add	r13, sp
+	rdlong	lr, lr
+	wrlong	lr, r13
+	mov	lr, #36
+	add	lr, sp
+	rdlong	r2, r2
+	wrlong	r2, r14
+	mov	r2, #40
+	add	r2, sp
+	rdlong	r3, r3
+	wrlong	r3, lr
+	mov	r3, #44
+	add	r3, sp
+	rdlong	r4, r4
+	wrlong	r4, r2
+	mov	r4, #48
+	add	r4, sp
+	rdlong	r5, r5
+	wrlong	r5, r3
+	mov	r5, #50
+	add	r5, sp
+	rdword	r6, r6
+	wrword	r6, r4
+	mov	r6, #1
+	rdbyte	r7, r7
+	wrbyte	r7, r5
+	mov	r7, #16
+	add	r7, sp
+	wrlong	r6, r7
+	calld	lr,#_Func_2
+	cmps	r0, #0 wcz
+	mov	r7, #0
+	muxz	r7,#1
+	rdlong	r12, ##_LC49
+	rdlong	r1, ##_LC28
+	mov	r2, #3
+	mov	r3, #7
+	rdlong	r0, ##_LC53
+	wrlong	r7, r12
+	calld	lr,#_Proc_8
+	rdlong	r13, ##_LC23
+	rdlong	r0, r13
+	calld	lr,#_Proc_1
+	rdbyte	r7, r8
+	cmp	r7, #64 wcz
+	IF_BE mov	r12, #13
+	IF_BE mov	r0, #1
+	IF_BE	jmp	#_L41
+	rdlong	r12, ##_LC55
+	rdlong	r13, ##_LC55
+	mov	r14, #65
+	mov	r4, #3
+	mov	r5, #0
+	add	r12, #12
+	add	r13, #16
+_L54
+	mov	r6, #16
+	add	r6, sp
+	rdlong	r7, r6
+	cmps	r7, r5 wcz
+	IF_E 	jmp	#_L55
+_L43
+	add	r14, #1
+	and	r14,#255
+	mov	r5, #0
+	rdbyte	r7, r8
+	cmp	r7, r14 wcz
+	IF_B 	jmp	#_L56
+_L44
+	cmps	r14, #67 wcz
+	IF_NE	jmp	#_L54
+	mov	r6, #16
+	rdlong	r5, ##_LC48
+	mov	lr, #67
+	add	r6, sp
+	wrbyte	lr, r5
+	mov	r5, #1
+	rdlong	r7, r6
+	cmps	r7, r5 wcz
+	IF_NE	jmp	#_L43
+_L55
+	mov	r1, r6
+	mov	r0, #0
+	add	r14, #1
+	and	r14,#255
+	calld	lr,#_Proc_6
+	rdlong	lr, ##_LC55
+	mov	r1, #20
+	add	r1, sp
+	mov	r2, #24
+	add	r2, sp
+	rdlong	r3, ##_LC130
+	rdlong	r4, ##_LC55
+	add	r4, #20
+	rdlong	r5, ##_LC55
+	add	r5, #24
+	rdlong	r6, ##_LC55
+	add	r6, #28
+	rdlong	r7, ##_LC55
+	add	r7, #30
+	rdlong	lr, lr
+	wrlong	lr, r1
+	mov	lr, #28
+	add	lr, sp
+	rdlong	r1, r10
+	wrlong	r1, r2
+	mov	r1, #32
+	add	r1, sp
+	rdlong	r3, r3
+	wrlong	r3, lr
+	mov	r3, #36
+	add	r3, sp
+	rdlong	lr, r12
+	wrlong	lr, r1
+	mov	lr, #40
+	add	lr, sp
+	rdlong	r2, r13
+	mov	r1, #44
+	add	r1, sp
+	wrlong	r2, r3
+	mov	r2, #48
+	add	r2, sp
+	rdlong	r4, r4
+	mov	r3, #50
+	add	r3, sp
+	wrlong	r4, lr
+	mov	r4, r11
+	rdlong	r5, r5
+	wrlong	r5, r1
+	rdlong	r5, ##_LC56
+	rdword	r6, r6
+	rdbyte	r7, r7
+	wrword	r6, r2
+	wrbyte	r7, r3
+	rdbyte	r7, r8
+	cmp	r7, r14 wcz
+	wrlong	r11, r5
+	mov	r5, #0
+	IF_AE	jmp	#_L44
+_L56
+	mov	r0, r4
+	shl	r0, #1
+	add	r0, r4
+	mov	r7, r0
+	sub	r7, #7
+	mov	r12, r7
+	mov	r1, #7
+	shl	r12, #3
+	sub	r12, r7
+	call	#__DIVSI
+	sub	r12, r0
+_L41
+	rdlong	r6, ##_LC48
+	add	r11, #1
+	rdbyte	r7, r6
+	cmps	r7, #65 wcz
+	IF_E  rdlong	r13, ##_LC56
+	IF_E  add	r0, #9
+	IF_E  rdlong	r7, r13
+	IF_E  sub	r0, r7
+	cmps	r11, r9 wcz
+	IF_BE	jmp	#_L46
+	mov	r14, r0
+	mov	r13, #88
+	add	r13, sp
+	calld	lr,#_clock
+	mov	r5, #84
+	add	r5, sp
+	rdlong	r4, ##_LC47
+	mov	r6, r0
+	rdlong	temp, ##_LC60
+	wrlong	temp, sp
+	rdlong	r5, r5
+	rdlong	r7, r4
+	sub	r6, r7
+	rdlong	r4, ##_LC57
+	wrlong	r0, r5
+	rdlong	r5, ##_LC58
+	rdlong	r13, r13
+	wrlong	r7, r13
+	mov	r7, #92
+	add	r7, sp
+	wrlong	r0, r4
+	wrlong	r6, r5
+	rdlong	r7, r7
+	wrlong	r6, r7
+	calld	lr,#_printf
+	mov	lr, #84
+	rdlong	r13, ##_LC43
+	add	lr, sp
+	rdlong	r7, r13
+	shl	r7, #1
+	rdlong	temp, ##_LC62
+	wrlong	temp, sp
+	rdlong	lr, lr
+	wrlong	r7, lr
+	calld	lr,#_printf
+	rdlong	r7, r13
+	rdlong	r4, ##_LC58
+	shl	r7, #1
+	rdlong	r6, r4
+	cmp	r6, r7 wcz
+	IF_B 	jmp	#_L57
+	mov	r6, #1
+	rdlong	r7, ##_LC44
+	wrlong	r6, r7
+_L49
+	rdlong	r0, ##_LC66
+	calld	lr,#_puts
+	mov	r0, #10
+	calld	lr,#_putchar
+	mov	lr, #84
+	rdlong	r13, ##_LC56
+	add	lr, sp
+	rdlong	temp, ##_LC68
+	wrlong	temp, sp
+	rdlong	r13, r13
+	rdlong	lr, lr
+	wrlong	r13, lr
+	mov	r13, #65
+	calld	lr,#_printf
+	mov	r1, #84
+	add	r1, sp
+	mov	lr, #5
+	rdlong	temp, ##_LC70
+	wrlong	temp, sp
+	rdlong	r1, r1
+	wrlong	lr, r1
+	calld	lr,#_printf
+	mov	r3, #84
+	rdlong	r2, ##_LC49
+	add	r3, sp
+	rdlong	temp, ##_LC72
+	wrlong	temp, sp
+	rdlong	r2, r2
+	rdlong	r3, r3
+	wrlong	r2, r3
+	calld	lr,#_printf
+	mov	r4, #84
+	add	r4, sp
+	mov	r3, #1
+	rdlong	temp, ##_LC70
+	wrlong	temp, sp
+	rdlong	r4, r4
+	wrlong	r3, r4
+	calld	lr,#_printf
+	mov	r7, #84
+	rdlong	r6, ##_LC48
+	add	r7, sp
+	rdlong	temp, ##_LC74
+	wrlong	temp, sp
+	rdlong	r7, r7
+	rdbyte	r5, r6
+	wrlong	r5, r7
+	calld	lr,#_printf
+	mov	lr, #84
+	add	lr, sp
+	rdlong	temp, ##_LC76
+	wrlong	temp, sp
+	rdlong	lr, lr
+	wrlong	r13, lr
+	mov	r13, #84
+	add	r13, sp
+	calld	lr,#_printf
+	mov	r1, #84
+	add	r1, sp
+	rdlong	temp, ##_LC78
+	wrlong	temp, sp
+	rdlong	r1, r1
+	rdbyte	r5, r8
+	wrlong	r5, r1
+	calld	lr,#_printf
+	mov	r3, #84
+	add	r3, sp
+	mov	r2, #66
+	rdlong	temp, ##_LC76
+	wrlong	temp, sp
+	rdlong	r3, r3
+	wrlong	r2, r3
+	calld	lr,#_printf
+	rdlong	r6, ##_LC53
+	mov	r4, #84
+	add	r4, sp
+	add	r6, #32
+	rdlong	temp, ##_LC80
+	wrlong	temp, sp
+	rdlong	r4, r4
+	rdlong	r6, r6
+	wrlong	r6, r4
+	calld	lr,#_printf
+	mov	r6, #84
+	add	r6, sp
+	mov	r5, #7
+	rdlong	temp, ##_LC70
+	wrlong	temp, sp
+	rdlong	r6, r6
+	wrlong	r5, r6
+	calld	lr,#_printf
+	rdlong	r7, ##_LC28
+	mov	lr, #84
+	rdlong	temp, ##_LC29
+	add	r7, temp
+	add	lr, sp
+	rdlong	temp, ##_LC82
+	wrlong	temp, sp
+	rdlong	lr, lr
+	rdlong	r7, r7
+	wrlong	r7, lr
+	calld	lr,#_printf
+	rdlong	r0, ##_LC84
+	calld	lr,#_puts
+	rdlong	r0, ##_LC86
+	calld	lr,#_puts
+	rdlong	r4, ##_LC23
+	mov	r5, #84
+	add	r5, sp
+	rdlong	temp, ##_LC88
+	wrlong	temp, sp
+	rdlong	r7, r4
+	rdlong	r5, r5
+	rdlong	r7, r7
+	wrlong	r7, r5
+	calld	lr,#_printf
+	rdlong	r0, ##_LC90
+	calld	lr,#_puts
+	rdlong	r6, ##_LC23
+	rdlong	r7, r6
+	add	r7, #4
+	rdlong	temp, ##_LC92
+	wrlong	temp, sp
+	rdlong	r13, r13
+	rdlong	r7, r7
+	wrlong	r7, r13
+	calld	lr,#_printf
+	mov	lr, #0
+	rdlong	temp, ##_LC70
+	wrlong	temp, sp
+	wrlong	lr, r13
+	calld	lr,#_printf
+	rdlong	r4, ##_LC23
+	rdlong	r7, r4
+	add	r7, #8
+	rdlong	temp, ##_LC94
+	wrlong	temp, sp
+	rdlong	r7, r7
+	wrlong	r7, r13
+	calld	lr,#_printf
+	mov	r6, #2
+	rdlong	temp, ##_LC70
+	wrlong	temp, sp
+	wrlong	r6, r13
+	calld	lr,#_printf
+	rdlong	r13, ##_LC23
+	mov	lr, #84
+	add	lr, sp
+	rdlong	r7, r13
+	add	r7, #12
+	rdlong	temp, ##_LC96
+	wrlong	temp, sp
+	rdlong	lr, lr
+	rdlong	r7, r7
+	wrlong	r7, lr
+	calld	lr,#_printf
+	mov	r2, #84
+	add	r2, sp
+	mov	r1, #17
+	rdlong	temp, ##_LC70
+	wrlong	temp, sp
+	rdlong	r2, r2
+	wrlong	r1, r2
+	calld	lr,#_printf
+	mov	r3, #84
+	add	r3, sp
+	rdlong	r7, r13
+	add	r7, #16
+	rdlong	temp, ##_LC98
+	wrlong	temp, sp
+	rdlong	r3, r3
+	wrlong	r7, r3
+	calld	lr,#_printf
+	rdlong	r13, ##_LC100
+	mov	r0, r13
+	calld	lr,#_puts
+	rdlong	r0, ##_LC102
+	calld	lr,#_puts
+	rdlong	r4, ##_LC22
+	mov	r5, #84
+	add	r5, sp
+	rdlong	temp, ##_LC88
+	wrlong	temp, sp
+	rdlong	r7, r4
+	rdlong	r5, r5
+	rdlong	r7, r7
+	wrlong	r7, r5
+	calld	lr,#_printf
+	rdlong	r0, ##_LC104
+	calld	lr,#_puts
+	rdlong	r6, ##_LC22
+	mov	lr, #84
+	add	lr, sp
+	rdlong	r7, r6
+	add	r7, #4
+	rdlong	temp, ##_LC92
+	wrlong	temp, sp
+	rdlong	lr, lr
+	rdlong	r7, r7
+	wrlong	r7, lr
+	calld	lr,#_printf
+	mov	r2, #84
+	add	r2, sp
+	mov	r1, #0
+	rdlong	temp, ##_LC70
+	wrlong	temp, sp
+	rdlong	r2, r2
+	wrlong	r1, r2
+	calld	lr,#_printf
+	rdlong	r4, ##_LC22
+	mov	r5, #84
+	add	r5, sp
+	rdlong	r7, r4
+	add	r7, #8
+	rdlong	temp, ##_LC94
+	wrlong	temp, sp
+	rdlong	r5, r5
+	rdlong	r7, r7
+	wrlong	r7, r5
+	calld	lr,#_printf
+	mov	r7, #84
+	add	r7, sp
+	mov	r6, #1
+	rdlong	temp, ##_LC70
+	wrlong	temp, sp
+	rdlong	r7, r7
+	wrlong	r6, r7
+	calld	lr,#_printf
+	rdlong	r4, ##_LC22
+	mov	r5, #84
+	add	r5, sp
+	rdlong	r7, r4
+	add	r7, #12
+	rdlong	temp, ##_LC96
+	wrlong	temp, sp
+	rdlong	r5, r5
+	rdlong	r7, r7
+	wrlong	r7, r5
+	calld	lr,#_printf
+	mov	r7, #84
+	add	r7, sp
+	mov	r6, #18
+	rdlong	temp, ##_LC70
+	wrlong	temp, sp
+	rdlong	r7, r7
+	wrlong	r6, r7
+	calld	lr,#_printf
+	rdlong	r4, ##_LC22
+	mov	r5, #84
+	add	r5, sp
+	rdlong	r7, r4
+	add	r7, #16
+	rdlong	temp, ##_LC98
+	wrlong	temp, sp
+	rdlong	r5, r5
+	wrlong	r7, r5
+	calld	lr,#_printf
+	mov	r0, r13
+	mov	r13, #84
+	add	r13, sp
+	calld	lr,#_puts
+	mov	r6, #84
+	add	r6, sp
+	rdlong	temp, ##_LC106
+	wrlong	temp, sp
+	rdlong	r6, r6
+	wrlong	r14, r6
+	mov	r14, #52
+	add	r14, sp
+	calld	lr,#_printf
+	rdlong	temp, ##_LC70
+	wrlong	temp, sp
+	mov	r7, #5
+	rdlong	r13, r13
+	wrlong	r7, r13
+	calld	lr,#_printf
+	rdlong	temp, ##_LC108
+	wrlong	temp, sp
+	wrlong	r12, r13
+	calld	lr,#_printf
+	mov	lr, #13
+	rdlong	temp, ##_LC70
+	wrlong	temp, sp
+	wrlong	lr, r13
+	calld	lr,#_printf
+	mov	r2, #7
+	rdlong	temp, ##_LC110
+	wrlong	temp, sp
+	wrlong	r2, r13
+	calld	lr,#_printf
+	mov	r4, #7
+	rdlong	temp, ##_LC70
+	wrlong	temp, sp
+	wrlong	r4, r13
+	calld	lr,#_printf
+	mov	r6, #16
+	add	r6, sp
+	rdlong	temp, ##_LC112
+	wrlong	temp, sp
+	rdlong	r6, r6
+	wrlong	r6, r13
+	calld	lr,#_printf
+	mov	r7, #1
+	rdlong	temp, ##_LC70
+	wrlong	temp, sp
+	wrlong	r7, r13
+	calld	lr,#_printf
+	rdlong	temp, ##_LC114
+	wrlong	temp, sp
+	wrlong	r14, r13
+	calld	lr,#_printf
+	rdlong	r0, ##_LC116
+	calld	lr,#_puts
+	mov	r1, #20
+	add	r1, sp
+	rdlong	temp, ##_LC118
+	wrlong	temp, sp
+	wrlong	r1, r13
+	calld	lr,#_printf
+	rdlong	r0, ##_LC120
+	calld	lr,#_puts
+	mov	r0, #10
+	calld	lr,#_putchar
+	rdlong	r4, ##_LC43
+	rdlong	r1, ##_LC122
+	rdlong	r5, ##_LC58
+	rdlong	r13, ##_LC121
+	rdlong	r14, ##_LC123
+	rdlong	r7, r4
+	mov	r0, r7
+	call	#__UDIVSI
+	mov	r1, r0
+	mov	r0, r9
+	call	#__MULSI
+	rdlong	r6, r5
+	mov	r1, r0
+	mov	r0, r6
+	call	#__UDIVSI
+	mov	r5, r0
+	mov	r1, r9
+	mov	r0, r6
+	call	#__DIVSI
+	mov	r1, r0
+	mov	r0, r7
+	call	#__UDIVSI
+	wrlong	r5, r13
+	wrlong	r0, r14
+	rdlong	temp, ##_LC125
+	wrlong	temp, sp
+	calld	lr,#_printf
+	mov	r6, #84
+	add	r6, sp
+	rdlong	temp, ##_LC127
+	wrlong	temp, sp
+	rdlong	r6, r6
+	rdlong	r13, r13
+	wrlong	r13, r6
+	calld	lr,#_printf
+	rdlong	temp, ##_LC129
+	wrlong	temp, sp
+	calld	lr,#_printf
+	mov	r7, #84
+	add	r7, sp
+	rdlong	temp, ##_LC127
+	wrlong	temp, sp
+	rdlong	r7, r7
+	rdlong	r14, r14
+	wrlong	r14, r7
+	calld	lr,#_printf
+	mov	r0, #10
+	calld	lr,#_putchar
+	add	sp, #96
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	rdlong	r12, sp
+	add	sp, #4
+	rdlong	r11, sp
+	add	sp, #4
+	rdlong	r10, sp
+	add	sp, #4
+	rdlong	r9, sp
+	add	sp, #4
+	rdlong	r8, sp
+	add	sp, #4
+	jmp	lr
+_L57
+	rdlong	r0, ##_LC64
+	calld	lr,#_puts
+	mov	r7, r9
+	shl	r7, #1
+	mov	r0, #10
+	shl	r9, #3
+	add	r9, r7
+	calld	lr,#_putchar
+	rdlong	r5, ##_LC44
+	rdlong	r7, r5
+	cmps	r7, #0 wcz
+	IF_E 	jmp	#_L48
+	jmp	#_L49
+	alignl
+_LC21
+	long	2000
+	alignl
+_LC22
+	long	_Next_Ptr_Glob
+	alignl
+_LC23
+	long	_Ptr_Glob
+	alignl
+_LC25
+	long	_LC24
+	alignl
+_LC27
+	long	_LC26
+	alignl
+_LC28
+	long	_Arr_2_Glob
+	alignl
+_LC29
+	long	1628
+	alignl
+_LC31
+	long	_LC30
+	alignl
+_LC33
+	long	_LC32
+	alignl
+_LC34
+	long	_Reg
+	alignl
+_LC36
+	long	_LC35
+	alignl
+_LC38
+	long	_LC37
+	alignl
+_LC40
+	long	_LC39
+	alignl
+_LC42
+	long	_LC41
+	alignl
+_LC43
+	long	__clkfreq
+	alignl
+_LC44
+	long	_Done
+	alignl
+_LC46
+	long	_LC45
+	alignl
+_LC47
+	long	_Begin_Time
+	alignl
+_LC48
+	long	_Ch_1_Glob
+	alignl
+_LC49
+	long	_Bool_Glob
+	alignl
+_LC50
+	long	_Ch_2_Glob
+	alignl
+_LC52
+	long	_LC51
+	alignl
+_LC53
+	long	_Arr_1_Glob
+	alignl
+_LC55
+	long	_LC54
+	alignl
+_LC56
+	long	_Int_Glob
+	alignl
+_LC57
+	long	_End_Time
+	alignl
+_LC58
+	long	_User_Time
+	alignl
+_LC60
+	long	_LC59
+	alignl
+_LC62
+	long	_LC61
+	alignl
+_LC64
+	long	_LC63
+	alignl
+_LC66
+	long	_LC65
+	alignl
+_LC68
+	long	_LC67
+	alignl
+_LC70
+	long	_LC69
+	alignl
+_LC72
+	long	_LC71
+	alignl
+_LC74
+	long	_LC73
+	alignl
+_LC76
+	long	_LC75
+	alignl
+_LC78
+	long	_LC77
+	alignl
+_LC80
+	long	_LC79
+	alignl
+_LC82
+	long	_LC81
+	alignl
+_LC84
+	long	_LC83
+	alignl
+_LC86
+	long	_LC85
+	alignl
+_LC88
+	long	_LC87
+	alignl
+_LC90
+	long	_LC89
+	alignl
+_LC92
+	long	_LC91
+	alignl
+_LC94
+	long	_LC93
+	alignl
+_LC96
+	long	_LC95
+	alignl
+_LC98
+	long	_LC97
+	alignl
+_LC100
+	long	_LC99
+	alignl
+_LC102
+	long	_LC101
+	alignl
+_LC104
+	long	_LC103
+	alignl
+_LC106
+	long	_LC105
+	alignl
+_LC108
+	long	_LC107
+	alignl
+_LC110
+	long	_LC109
+	alignl
+_LC112
+	long	_LC111
+	alignl
+_LC114
+	long	_LC113
+	alignl
+_LC116
+	long	_LC115
+	alignl
+_LC118
+	long	_LC117
+	alignl
+_LC120
+	long	_LC119
+	alignl
+_LC121
+	long	_Microseconds
+	alignl
+_LC122
+	long	1000000
+	alignl
+_LC123
+	long	_Dhrystones_Per_Second
+	alignl
+_LC125
+	long	_LC124
+	alignl
+_LC127
+	long	_LC126
+	alignl
+_LC129
+	long	_LC128
+	alignl
+_LC130
+	long	_LC54+8
+	alignl
+_LC151
+	long	_LC51+4
+_heap
+	long	0[100]
+	alignl
+_heapindex
+	long	0
+_Dhrystones_Per_Second
+	long	0
+_Microseconds
+	long	0
+_User_Time
+	long	0
+_End_Time
+	long	0
+_Begin_Time
+	long	0
+_Done
+	long	0
+	alignl
+_Reg
+	long	0
+_Arr_2_Glob
+	long	0[2500]
+_Arr_1_Glob
+	long	0[50]
+_Ch_2_Glob
+	long	0
+_Ch_1_Glob
+	long	0
+_Bool_Glob
+	long	0
+_Int_Glob
+	long	0
+_Next_Ptr_Glob
+	long	0
+_Ptr_Glob
+	long	0

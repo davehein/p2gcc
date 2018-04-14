@@ -1,0 +1,37 @@
+                   dat
+                   '
+                   ' Launch each cog with catch-hold-release program.
+                   '
+00000 000          		org
+                   
+00000 000 fce4040c .loop		coginit	cog,#@lock	'last iteration relaunches cog 0
+00004 001 fb7c05fe 		djnf	cog,#.loop
+                   
+00008 002 0000000f cog		long	15
+                   '
+                   ' Get lock, hold it for some random time, release it, loop
+                   '
+0000c 000          		org
+                   
+0000c 000 fd601e01 lock		cogid	x		'which cog am I, 0..15?
+00010 001 f1041e20 		add	x,#32		'make led pin number
+                   
+00014 002 fd741e06 .try		locktry	#15	wc	'keep trying to get lock
+00018 003 3d9ffff8 	if_nc	jmp	#.try
+                   
+0001c 004 fd601e59 		drvh	x		'got it, turn on my led
+00020 005 ff801fff 		waitx	##$3FFFFF wc	'hold it for random period
+00024 006 fd77fe1f 
+00028 007 fd641e07 		lockrel	#15		'release lock
+0002c 008 fd601e58 		drvl	x		'turn off my led
+                   
+00030 009 fd60201b 		getrnd	y		'randomly turn off a random cog
+00034 00a ff000000 		test	y,##$1F	wz	'(this will remove cogs from the pool)
+00038 00b f7cc201f 
+0003c 00c fd60201b 		getrnd	y
+00040 00d ad602003 	if_z	cogstop	y
+                   
+00044 00e fd9fffcc 		jmp	#.try		'loop
+                   
+00048 00f          x		res	1
+00048 010          y		res	1

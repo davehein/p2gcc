@@ -1,0 +1,3390 @@
+con
+	rx_pin = 63
+	tx_pin = 62
+	clock_freq = 80_000_000
+	baud_rate = 115_200
+	lr = $1f6
+	hub_ram_kb = 32
+
+dat
+	orgh	0
+
+'*******************************************************************************
+'  COG Code
+'*******************************************************************************
+	org
+
+start	mov	sp, ##hub_ram_kb*1024 - 64
+	drvh    #tx_pin
+	mov	lr, #start1
+	jmp	#_main
+start1	cogid	r0
+	cogstop	r0
+
+r0	long	0
+r1	long	0
+r2	long	0
+r3	long	0
+r4	long	0
+r5	long	0
+r6	long	0
+r7	long	0
+r8	long	0
+r9	long	0
+r10	long	0
+r11	long	0
+r12	long	0
+r13	long	0
+r14	long	0
+sp	long	0
+
+getch	mov     temp, bitcycles
+	shr     temp, #1
+	mov     temp1, #10
+	mov	parm, #0
+getch0	test    inb, ##1 << (rx_pin & 31) wc
+  if_c  jmp     #getch0
+	getct   temp2
+	addct1  temp2, temp
+	waitct1
+getch1	mov     temp, inb
+	and     temp, inbit
+	ror     parm, #1
+	or      parm, temp
+	addct1  temp2, bitcycles
+	waitct1
+	djnz    temp1, #getch1
+	ror     parm, #31 - 8
+	and     parm, #255
+	ret
+
+inbit	long    1 << (rx_pin & 31)
+bitcycles long    clock_freq / baud_rate
+
+putch	or      parm, #$100
+	shl     parm, #1
+	mov     temp1, #10
+	getct   temp2
+putch1	shr     parm, #1               wc
+	drvc    #tx_pin
+	addct1  temp2, bitcycles
+	waitct1
+	djnz    temp1, #putch1
+	ret
+
+parm	long    0
+temp	long    0
+temp1	long    0
+temp2	long    0
+
+putnl
+	mov	parm, #13
+	call	#putch
+'	mov	parm, #10
+'	call	#putch
+	ret
+
+__MULSI	qmul	r0, r1
+	getqx	r0
+	getqy	r1
+	ret
+
+__DIVSI	mov	temp, #0
+	abs	r0, r0 wc
+ if_c	mov	temp, #1
+	abs	r1, r1 wc
+ if_c	xor	temp, #1
+	call	#__UDIVSI
+	cmp	temp, #0 wz
+ if_nz	neg	r0, r0
+	ret
+
+__UDIVSI qdiv	r0, r1
+	getqx	r0
+	getqy	r1
+	ret
+
+'*******************************************************************************
+'  HUB Code
+'*******************************************************************************
+	orgh	$400
+
+__clkfreq long clock_freq
+
+_clock	getct	r0
+	jmp	lr
+
+___muldi3
+	call	#__MULSI
+	jmp	lr
+
+___divdi3
+	call	#__DIVSI
+	jmp	lr
+
+_atol
+_atoi
+	mov	r7, r0
+	mov	r0, #0
+	jmp	#_atoi2
+_atoi1
+	mov	r1, #10
+	add	r7, #1
+	call	#__MULSI
+	add	r0, r6
+	sub	r0, #48
+_atoi2
+	rdbyte	r6, r7
+	mov	r5, r6
+	sub	r5, #48
+	cmp	r5, #9 wcz
+ IF_BE	jmp	#_atoi1
+	jmp	lr
+
+___ctype
+	byte	1, 1, 1, 1, 1, 1, 1, 1, 1, -111, 17, 17, 17, 17, 1, 1, 1, 1, 1
+	byte	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -112, 32, 32, 32, 32
+	byte	32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 66, 66, 66, 66, 66
+	byte	66, 66, 66, 66, 66, 32, 32, 32, 32, 32, 32, 32, 68, 68, 68, 68
+	byte	68, 68, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4
+	byte	4, 32, 32, 32, 32, 32, 32, 72, 72, 72, 72, 72, 72, 8, 8, 8, 8, 8
+	byte	8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 32, 32, 32, 32, 1, 0
+
+_toupper
+	mov	r7, r0
+	sub	r7, #97
+	cmp	r7, #25 wcz
+ IF_BE	sub	r0, #32
+	jmp	lr
+
+_tolower
+	mov	r7, r0
+	sub	r7, #65
+	cmp	r7, #25 wcz
+ IF_BE	add	r0, #32
+	jmp	lr
+
+_rand	getct	r0
+	jmp	lr
+
+_srand	jmp	lr
+
+_exit	jmp	#start1
+
+_sleep	mov	r1, ##clock_freq
+	call	#__MULSI
+	waitx	r0
+	jmp	lr
+
+_memset
+	add	r2, #1
+	jmp	#_memset2
+_memset1
+	wrbyte	r1, r0
+	add	r0, #1
+_memset2
+	djnz	r2,#_memset1
+	jmp	lr
+
+_memcpy	cmp	r2, #0 wz
+ if_z	jmp	lr
+	rdbyte	temp, r1
+	wrbyte	temp, r0
+	add	r1, #1
+	add	r0, #1
+	sub	r2, #1
+	jmp	#_memcpy
+
+_strcmp
+	rdbyte	r6, r0
+	cmps	r6, #0 wcz
+	add	r0, #1
+	rdbyte	r7, r1
+	add	r1, #1
+ if_ne	jmp	#_strcmp1
+	neg	r0, r7
+	jmp	lr
+_strcmp1
+	cmps	r6, r7 wcz
+ if_e 	jmp	#_strcmp
+	mov	r0, r6
+	sub	r0, r7
+	jmp	lr
+
+_strncmp
+	add	r2, #1
+	jmp	#_strncmp2
+_strncmp1
+	rdbyte	r6, r0
+	add	r0, #1
+	rdbyte	r7, r1
+	cmps	r6, r7 wcz
+	add	r1, #1
+ IF_E 	jmp	#_strncmp2
+	mov	r0, r6
+	sub	r0, r7
+	jmp	lr
+_strncmp2
+	djnz	r2,#_strncmp1
+	mov	r0, #0
+	jmp	lr
+
+_strcpy	rdbyte	r6, r1
+	cmps	r6, #0 wz
+	add	r1, #1
+	wrbyte	r6, r0
+	add	r0, #1
+ if_nz	jmp	#_strcpy
+	jmp	lr
+
+_strlen	mov	r7, r0
+	jmp	#_strle1
+_strle0	add	r0, #1
+_strle1	rdbyte	r6, r0
+	cmps	r6, #0 wz
+ if_nz	jmp	#_strle0
+	sub	r0, r7
+        jmp	lr
+
+_getchar
+	call	#getch
+	mov	r0, parm
+	jmp	lr
+
+_gets	mov	r7, r0
+_gets2	call	#getch
+	mov	r6, parm
+	cmp	r6, #8 wz
+ if_nz	jmp	#_gets0
+	cmp	r0, r7 wcz
+ if_be	jmp	#_gets2
+	mov	parm, #8
+	call	#putch
+	mov	parm, #" "
+	call	#putch
+	mov	parm, #8
+	call	#putch
+	sub	r0, #1
+	jmp	#_gets2
+_gets0	call	#putch
+	cmp	r6, #13 wz
+ if_nz	cmp	r6, #10 wz
+ if_z	jmp	#_gets1
+	wrbyte	r6, r0
+	add	r0, #1
+	jmp	#_gets2
+_gets1	mov	r6, #0
+	wrbyte	r6, r0
+	mov	r0, r7
+	jmp	lr
+
+_putchar
+	cmp	r0, #10 wz
+ if_z	call	#putnl
+ if_nz	mov	parm, r0
+ if_nz	call	#putch
+	jmp	lr
+
+_puts	rdbyte  parm, r0  wz
+ if_z	jmp	#_puts1
+	add     r0, #1
+	call    #putch
+	jmp     #_puts
+_puts1	call	#putnl
+	jmp	lr
+
+_PUTCW
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	mov	r13, r1
+	mov	r14, r13
+	calld	lr, #_putchar
+	jmp	#_LPF2
+_LPF3
+	mov	r0, #32
+	calld	lr, #_putchar
+_LPF2
+	sub	r14, #1
+	cmps	r14, #0 wcz
+	IF_A 	jmp	#_LPF3
+	mov	r0, r13
+	fges	r0, #1
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	jmp	lr
+        alignl
+_printf
+	sub	sp, #4
+	wrlong	r8, sp
+	sub	sp, #4
+	wrlong	r9, sp
+	sub	sp, #4
+	wrlong	r10, sp
+	sub	sp, #4
+	wrlong	r11, sp
+	sub	sp, #4
+	wrlong	r12, sp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	sub	sp, #32
+	mov	r7, sp
+	add	r7, #64
+	mov	r11, sp
+	add	r11, #68
+	mov	r13, #0
+	mov	r8, ##_LPFC3
+	rdlong	r12, r7
+	jmp	#_LPF38
+_LPF31
+	mov	r7, r12
+	cmps	r0, #37 wcz
+	add	r7, #1
+	IF_NE mov	r12, r7
+	IF_NE mov	r1, #1
+	IF_NE	jmp	#_LPF39
+	rdbyte	r7, r7
+	cmps	r7, #48 wcz
+	mov	r6, #28
+	IF_E  mov	r5,#48
+	IF_NE mov	r5,#32
+	add	r6, sp
+	add	r12, #2
+	mov	r14, #0
+	wrlong	r5, r6
+	jmp	#_LPF9
+_LPF11
+	mov	r0, r14
+	mov	r1, #10
+	sub	r7, #48
+	call	#__MULSI
+	mov	r14, r0
+	add	r14, r7
+	rdbyte	r7, r12
+	add	r12, #1
+_LPF9
+	cmps	r7, #0 wcz
+	IF_E 	jmp	#_LPF37
+	mov	r6, r7
+	cmps	r7, #"0" wcz
+ IF_B   jmp	#_LPF37
+	cmps	r7, #"9" wcz
+ IF_A   jmp	#_LPF37
+	jmp	#_LPF11
+_LPF13
+	rdbyte	r7, r12
+	add	r12, #1
+_LPF37
+	cmps	r7, #76 wcz
+	mov	r5, #0
+	muxz	r5,#1
+	mov	r6, #0
+	cmps	r7, #108 wcz
+	muxz	r6,#1
+	mov	temp, r5
+	or	temp, r6 wz
+	IF_NE	jmp	#_LPF13
+	cmps	r7, #0 wcz
+	IF_E 	jmp	#_LPF14
+	cmps	r7, #115 wcz
+	IF_E 	jmp	#_LPF18
+	cmp	r7, #115 wcz
+	IF_A 	jmp	#_LPF19
+	cmps	r7, #99 wcz
+	IF_E 	jmp	#_LPF16
+	cmps	r7, #100 wcz
+	IF_E 	jmp	#_LPF17
+	cmps	r7, #37 wcz
+	IF_NE	jmp	#_LPF38
+	jmp	#_LPF40
+_LPF19
+	cmps	r7, #117 wcz
+	IF_E 	jmp	#_LPF17
+	cmps	r7, #120 wcz
+	IF_NE	jmp	#_LPF38
+	jmp	#_LPF35
+_LPF40
+	mov	r0, #37
+	mov	r1, r14
+_LPF39
+	calld	lr, #_PUTCW
+	add	r13, r0
+	jmp	#_LPF38
+_LPF16
+	mov	r10, r11
+	mov	r1, r14
+	add	r10, #4
+	rdlong	r0, r11
+	mov	r11, r10
+	calld	lr, #_PUTCW
+	add	r13, r0
+	jmp	#_LPF38
+_LPF18
+	mov	r6, r11
+	mov	r7, #24
+	add	r6, #4
+	add	r7, sp
+	rdlong	r10, r11
+	mov	r11, #0
+	wrlong	r6, r7
+	jmp	#_LPF20
+_LPF21
+	add	r10, #1
+	add	r11, #1
+	calld	lr, #_putchar
+_LPF20
+	mov	r9, r14
+	sub	r9, r11
+	rdbyte	r0, r10 wz
+	IF_NE	jmp	#_LPF21
+	mov	r14, r9
+	jmp	#_LPF22
+_LPF23
+	mov	r0, #32
+	sub	r14, #1
+	calld	lr, #_putchar
+_LPF22
+	cmps	r14, #0 wcz
+	IF_A 	jmp	#_LPF23
+	mov	r7, r9
+	fges	r7, #0
+	mov	r5, #24
+	add	r7, r11
+	add	r5, sp
+	add	r13, r7
+	rdlong	r11, r5
+	jmp	#_LPF38
+_LPF17
+	cmps	r7, #120 wcz
+	IF_NE mov	r9, #10
+	IF_NE	jmp	#_LPF24
+_LPF35
+	mov	r9, #16
+_LPF24
+	mov	r6, r11
+	mov	r5, #24
+	add	r6, #4
+	add	r5, sp
+	cmps	r7, #100 wcz
+	wrlong	r6, r5
+	rdlong	r11, r11
+	IF_NE	jmp	#_LPF25
+	cmps	r11, #0 wcz
+	IF_AE	jmp	#_LPF25
+	mov	r0, #45
+	mov	r1, #1
+	sub	r14, #1
+	neg	r11, r11
+	calld	lr, #_PUTCW
+	add	r13, r0
+_LPF25
+	mov	r10, sp
+_LPF26
+	mov	r0, r11
+	mov	r1, r9
+	sub	r14, #1
+	call	#__UDIVSI
+	mov	r7, r1
+	mov	r0, r11
+	add	r7, r8
+	mov	r1, r9
+	call	#__UDIVSI
+	rdbyte	r7, r7
+	cmps	r0, #0 wcz
+	mov	r11, r0
+	wrbyte	r7, r10
+	add	r10, #1
+	IF_NE	jmp	#_LPF26
+	mov	r11, r14
+	jmp	#_LPF27
+_LPF28
+	mov	r6, #28
+	add	r6, sp
+	sub	r11, #1
+	rdlong	r0, r6
+	calld	lr, #_putchar
+_LPF27
+	cmps	r11, #0 wcz
+	IF_A 	jmp	#_LPF28
+	fges	r14, #0
+	mov	r7, r10
+	mov	r9, sp
+	jmp	#_LPF29
+_LPF30
+	mov	r11, r7
+	sub	r11, #1
+	rdbyte	r0, r11
+	calld	lr, #_putchar
+	mov	r7, r11
+_LPF29
+	cmps	r7, r9 wcz
+	IF_NE	jmp	#_LPF30
+	sub	r10, r7
+	mov	r7, #24
+	add	r10, r14
+	add	r7, sp
+	add	r13, r10
+	rdlong	r11, r7
+_LPF38
+	rdbyte	r0, r12 wz
+	IF_NE	jmp	#_LPF31
+_LPF14
+	mov	r0, r13
+	add	sp, #32
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	rdlong	r12, sp
+	add	sp, #4
+	rdlong	r11, sp
+	add	sp, #4
+	rdlong	r10, sp
+	add	sp, #4
+	rdlong	r9, sp
+	add	sp, #4
+	rdlong	r8, sp
+	add	sp, #4
+	jmp	lr
+
+_LPFC3	byte "0123456789ABCDEF", 0
+        alignl
+
+'*******************************************************************************
+'  Program Code
+'*******************************************************************************
+
+	alignl
+_iabs
+	abs	r0, r0
+	jmp	lr
+	alignl
+_LC0
+	byte "@", 0
+	alignl
+_LC2
+	byte "Bad Variable -- %s", 10, 0
+	alignl
+_CheckVar
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	sub	sp, #8
+	rdlong	r1, ##_LC1
+	mov	r14, r0
+	calld	lr,#_strcmp
+	cmps	r0, #0 wcz
+	IF_E 	jmp	#_L6
+	mov	r0, r14
+	calld	lr,#_strlen
+	cmps	r0, #1 wcz
+	IF_E 	jmp	#_L8
+_L4
+	mov	r7, sp
+	add	r7, #4
+	rdlong	temp, ##_LC3
+	wrlong	temp, sp
+	wrlong	r14, r7
+	calld	lr,#_printf
+	mov	r0, #1
+	add	sp, #8
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	jmp	lr
+_L8
+	rdbyte	r7, r14
+	cmp	r7, #96 wcz
+	IF_BE	jmp	#_L4
+	cmp	r7, #122 wcz
+	IF_A 	jmp	#_L4
+_L6
+	mov	r0, #0
+	add	sp, #8
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	jmp	lr
+	alignl
+_LC1
+	long	_LC0
+	alignl
+_LC3
+	long	_LC2
+	alignl
+_FindChar
+	rdbyte	r7, r0 wz
+	IF_E 	jmp	#_L10
+	cmps	r7, r1 wcz
+	IF_NE	jmp	#_L14
+	jmp	#_L16
+_L13
+	cmps	r7, r1 wcz
+	IF_E 	jmp	#_L10
+_L14
+	add	r0, #1
+	rdbyte	r7, r0 wz
+	IF_NE	jmp	#_L13
+_L10
+	jmp	lr
+_L16
+	jmp	lr
+	alignl
+_SkipChar
+	rdbyte	r6, r0 wz
+	IF_E 	jmp	#_L18
+	cmps	r6, r1 wcz
+	IF_E 	jmp	#_L22
+	jmp	#_L24
+_L21
+	cmps	r7, r6 wcz
+	IF_NE	jmp	#_L18
+_L22
+	add	r0, #1
+	rdbyte	r7, r0 wz
+	IF_NE	jmp	#_L21
+_L18
+	jmp	lr
+_L24
+	jmp	lr
+	alignl
+_SearchListN
+	sub	sp, #4
+	wrlong	r11, sp
+	sub	sp, #4
+	wrlong	r12, sp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	mov	r11, r1
+	rdlong	r14, r0
+	cmps	r14, #0 wcz
+	IF_E 	jmp	#_L28
+	mov	r13, r0
+	add	r13, #4
+	mov	r12, #0
+	jmp	#_L27
+_L30
+	rdlong	r14, r7
+	cmps	r14, #0 wcz
+	add	r12, #1
+	IF_E 	jmp	#_L28
+_L27
+	mov	r0, r14
+	add	r13, #4
+	calld	lr,#_strlen
+	mov	r2, r0
+	mov	r1, r14
+	mov	r0, r11
+	calld	lr,#_strncmp
+	mov	r7, r13
+	cmps	r0, #0 wcz
+	sub	r7, #4
+	IF_NE	jmp	#_L30
+_L26
+	mov	r0, r12
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	rdlong	r12, sp
+	add	sp, #4
+	rdlong	r11, sp
+	add	sp, #4
+	jmp	lr
+_L28
+	neg	r12, #1
+	jmp	#_L26
+	alignl
+_FindChars
+	rdbyte	r5, r0 wz
+	IF_E 	jmp	#_L32
+	rdbyte	r4, r1
+_L33
+	cmps	r4, #0 wcz
+	IF_E 	jmp	#_L35
+	cmps	r4, r5 wcz
+	IF_E 	jmp	#_L32
+	mov	r6, r1
+	jmp	#_L36
+_L34
+	cmps	r5, r7 wcz
+	IF_E 	jmp	#_L32
+_L36
+	mov	r7, r6
+	add	r7, #1
+	mov	r6, r7
+	rdbyte	r7, r7 wz
+	IF_NE	jmp	#_L34
+_L35
+	add	r0, #1
+	rdbyte	r5, r0 wz
+	IF_NE	jmp	#_L33
+_L32
+	jmp	lr
+	alignl
+_Tokenize
+	sub	sp, #4
+	wrlong	r8, sp
+	sub	sp, #4
+	wrlong	r9, sp
+	sub	sp, #4
+	wrlong	r10, sp
+	sub	sp, #4
+	wrlong	r11, sp
+	sub	sp, #4
+	wrlong	r12, sp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	rdlong	r10, ##_LC9
+	mov	r5, #0
+	mov	r13, r0
+	rdlong	r12, ##_LC8
+	rdlong	r8, ##_LC10
+	rdlong	r9, ##_LC12
+	wrlong	r5, r10
+_L71
+	rdbyte	r7, r13 wz
+	IF_E 	jmp	#_L37
+	mov	r14, r13
+	jmp	#_L75
+_L76
+	add	r14, #1
+	rdbyte	r7, r14 wz
+	IF_E 	jmp	#_L37
+_L75
+	cmps	r7, #32 wcz
+	IF_E 	jmp	#_L76
+	rdlong	r3, r8
+	rdbyte	r4, r3 wz
+	IF_E 	jmp	#_L43
+	cmps	r4, r7 wcz
+	IF_NE mov	r5, r3
+	IF_NE	jmp	#_L45
+	jmp	#_L44
+_L46
+	cmps	r6, r7 wcz
+	IF_E 	jmp	#_L44
+_L45
+	mov	r6, r5
+	add	r6, #1
+	mov	r5, r6
+	rdbyte	r6, r6 wz
+	IF_NE	jmp	#_L46
+_L43
+	rdbyte	r5, r14 wz
+	mov	r13, r14
+	IF_E  mov	r11, #0
+	IF_E 	jmp	#_L65
+_L59
+	cmps	r4, #0 wcz
+	IF_E 	jmp	#_L60
+	cmps	r5, r4 wcz
+	IF_E 	jmp	#_L61
+	mov	r6, r3
+	jmp	#_L57
+_L58
+	cmps	r7, r5 wcz
+	IF_E 	jmp	#_L61
+_L57
+	mov	r7, r6
+	add	r7, #1
+	mov	r6, r7
+	rdbyte	r7, r7 wz
+	IF_NE	jmp	#_L58
+_L60
+	add	r13, #1
+	rdbyte	r5, r13 wz
+	IF_NE	jmp	#_L59
+_L61
+	mov	r11, r13
+	sub	r11, r14
+_L65
+	mov	r0, r12
+	mov	r2, r11
+	mov	r1, r14
+	add	r11, r12
+	calld	lr,#_memcpy
+	rdlong	r6, r10
+	mov	r7, r6
+	shl	r7, #2
+	add	r6, #1
+	add	r7, r9
+	mov	r5, #0
+	cmps	r6, #1 wcz
+	wrlong	r12, r7
+	mov	r12, r11
+	add	r12, #1
+	wrbyte	r5, r11
+	wrlong	r6, r10
+	IF_NE	jmp	#_L71
+	rdlong	r7, r9
+	rdbyte	r7, r7
+	fle	r7, #128
+	rdlong	temp, ##_LC13
+	add	r7, temp
+	rdbyte	r7, r7
+	test	r7,#$2 wz
+	IF_E 	jmp	#_L71
+	rdbyte	r7, r13
+	cmps	r7, #32 wcz
+	IF_E 	jmp	#_L77
+_L63
+	cmps	r7, #0 wcz
+	IF_NE	jmp	#_L78
+_L37
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	rdlong	r12, sp
+	add	sp, #4
+	rdlong	r11, sp
+	add	sp, #4
+	rdlong	r10, sp
+	add	sp, #4
+	rdlong	r9, sp
+	add	sp, #4
+	rdlong	r8, sp
+	add	sp, #4
+	jmp	lr
+_L44
+	cmps	r7, #34 wcz
+	IF_NE	jmp	#_L72
+	mov	r13, r14
+	jmp	#_L74
+_L79
+	cmps	r7, #34 wcz
+	IF_E 	jmp	#_L52
+_L74
+	add	r13, #1
+	rdbyte	r7, r13 wz
+	IF_NE	jmp	#_L79
+	jmp	#_L61
+_L72
+	rdlong	r0, ##_LC11
+	mov	r1, r14
+	calld	lr,#_SearchListN
+	cmps	r0, #0 wcz
+	IF_B  mov	r13, r14
+	mov	r7, r0
+	IF_B  add	r13, #1
+	IF_B  mov	r11, #1
+	IF_B 	jmp	#_L65
+	shl	r7, #2
+	rdlong	temp, ##_LC11
+	add	r7, temp
+	rdlong	r0, r7
+	calld	lr,#_strlen
+	mov	r13, r0
+	add	r13, r14
+	mov	r11, r13
+	sub	r11, r14
+	jmp	#_L65
+_L52
+	mov	r11, r13
+	sub	r11, r14
+	add	r13, #1
+	jmp	#_L65
+_L78
+	mov	r0, r12
+	mov	r1, r13
+	add	r9, #4
+	calld	lr,#_strcpy
+	mov	r7, #2
+	wrlong	r7, r10
+	wrlong	r12, r9
+	jmp	#_L37
+_L77
+	mov	r7, r13
+	add	r7, #1
+	mov	r13, r7
+	rdbyte	r7, r7
+	jmp	#_L63
+	alignl
+_LC8
+	long	_tokenbuf
+	alignl
+_LC9
+	long	_numtokens
+	alignl
+_LC10
+	long	_delim
+	alignl
+_LC11
+	long	_ops
+	alignl
+_LC12
+	long	_tokens
+	alignl
+_LC13
+	long	___ctype
+	alignl
+_SearchList
+	sub	sp, #4
+	wrlong	r12, sp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	mov	r12, r1
+	rdlong	r7, r0
+	cmps	r7, #0 wcz
+	IF_E 	jmp	#_L83
+	mov	r14, r0
+	add	r14, #4
+	mov	r13, #0
+	jmp	#_L82
+_L85
+	rdlong	r7, r7
+	cmps	r7, #0 wcz
+	add	r13, #1
+	IF_E 	jmp	#_L83
+_L82
+	mov	r0, r7
+	mov	r1, r12
+	add	r14, #4
+	calld	lr,#_strcmp
+	mov	r7, r14
+	cmps	r0, #0 wcz
+	sub	r7, #4
+	IF_NE	jmp	#_L85
+_L81
+	mov	r0, r13
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	rdlong	r12, sp
+	add	sp, #4
+	jmp	lr
+_L83
+	neg	r13, #1
+	jmp	#_L81
+	alignl
+_GetOpPrecedence
+	sub	sp, #4
+	wrlong	lr, sp
+	mov	r1, r0
+	rdlong	r0, ##_LC14
+	calld	lr,#_SearchList
+	cmps	r0, #0 wcz
+	IF_B  neg	r0, #1
+	IF_B 	jmp	#_L87
+	rdlong	temp, ##_LC15
+	add	r0, temp
+	rdbyte	r0, r0
+_L87
+	rdlong	lr, sp
+	add	sp, #4
+	jmp	lr
+	alignl
+_LC14
+	long	_oplist
+	alignl
+_LC15
+	long	_opprec
+	alignl
+_EvalBinaryOp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	mov	r7, r0
+	mov	r13, r1
+	rdlong	r0, ##_LC16
+	mov	r1, r7
+	mov	r14, r2
+	calld	lr,#_SearchList
+	cmps	r0, #4 wcz
+	IF_E 	jmp	#_L95
+	cmps	r0, #4 wcz
+	IF_BE	jmp	#_L105
+	cmps	r0, #7 wcz
+	IF_E  mov	r0, r13
+	IF_E  sub	r0, r14
+	IF_E 	jmp	#_L90
+	cmps	r0, #7 wcz
+	IF_BE	jmp	#_L106
+	cmps	r0, #8 wcz
+	IF_E 	jmp	#_L99
+	cmps	r0, #9 wcz
+	IF_E 	jmp	#_L107
+_L104
+	mov	r0, #0
+_L90
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	jmp	lr
+_L105
+	cmps	r0, #1 wcz
+	IF_E 	jmp	#_L92
+	cmps	r0, #1 wcz
+	IF_BE	jmp	#_L108
+	cmps	r0, #2 wcz
+	IF_E 	jmp	#_L93
+	cmps	r0, #3 wcz
+	IF_NE	jmp	#_L104
+	cmps	r13, r14 wcz
+	IF_A  mov	r0,#1
+	IF_BE mov	r0,#0
+	jmp	#_L90
+_L106
+	cmps	r0, #5 wcz
+	IF_E 	jmp	#_L96
+	cmps	r0, #6 wcz
+	IF_NE	jmp	#_L104
+	mov	r0, r13
+	add	r0, r14
+	jmp	#_L90
+_L108
+	cmps	r0, #0 wcz
+	IF_NE	jmp	#_L104
+	cmps	r13, r14 wcz
+	mov	r0, #0
+	muxz	r0,#1
+	jmp	#_L90
+_L107
+	mov	r0, r13
+	mov	r1, r14
+	call	#__DIVSI
+	jmp	#_L90
+_L96
+	cmps	r13, r14 wcz
+	mov	r0, #0
+	muxnc	r0,#1
+	jmp	#_L90
+_L93
+	cmps	r13, r14 wcz
+	mov	r0, #0
+	muxc	r0,#1
+	jmp	#_L90
+_L99
+	mov	r0, r13
+	mov	r1, r14
+	call	#__MULSI
+	jmp	#_L90
+_L95
+	cmps	r13, r14 wcz
+	IF_BE mov	r0,#1
+	IF_A  mov	r0,#0
+	jmp	#_L90
+_L92
+	cmps	r13, r14 wcz
+	mov	r0, #0
+	muxnz	r0,#1
+	jmp	#_L90
+	alignl
+_LC16
+	long	_oplist
+	alignl
+_LC22
+	byte "rnd", 0
+	alignl
+_LC25
+	byte "abs", 0
+	alignl
+_LC27
+	byte "asc", 0
+	alignl
+_Expression
+	sub	sp, #4
+	wrlong	r8, sp
+	sub	sp, #4
+	wrlong	r9, sp
+	sub	sp, #4
+	wrlong	r10, sp
+	sub	sp, #4
+	wrlong	r11, sp
+	sub	sp, #4
+	wrlong	r12, sp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	rdlong	r13, ##_LC17
+	rdlong	r10, ##_LC18
+	rdlong	r14, r13
+	mov	r7, r14
+	shl	r7, #2
+	add	r7, r10
+	mov	r8, r0
+	rdlong	r12, r7
+	rdbyte	r7, r12
+	cmps	r7, #45 wcz
+	IF_E 	jmp	#_L124
+	mov	r6, r7
+	fle	r6, #128
+	rdlong	temp, ##_LC21
+	add	r6, temp
+	rdbyte	r6, r6
+	test	r6,#$2 wz
+	IF_NE	jmp	#_L125
+	cmps	r7, #40 wcz
+	IF_E 	jmp	#_L126
+	mov	r0, r12
+	rdlong	r1, ##_LC23
+	calld	lr,#_strcmp
+	cmps	r0, #0 wcz
+	IF_E 	jmp	#_L127
+	mov	r0, r12
+	rdlong	r1, ##_LC26
+	calld	lr,#_strcmp
+	cmps	r0, #0 wcz
+	IF_E 	jmp	#_L128
+	mov	r0, r12
+	rdlong	r1, ##_LC28
+	calld	lr,#_strcmp
+	cmps	r0, #0 wcz
+	IF_NE	jmp	#_L119
+	mov	r6, r14
+	add	r6, #2
+	mov	r7, r6
+	shl	r7, #2
+	add	r7, r10
+	add	r14, #4
+	rdlong	r7, r7
+	add	r7, #1
+	wrlong	r6, r13
+	rdbyte	r12, r7
+	wrlong	r14, r13
+	jmp	#_L114
+_L125
+	add	r14, #1
+	mov	r0, r12
+	wrlong	r14, r13
+	calld	lr,#_atol
+	mov	r12, r0
+	rdlong	r14, r13
+_L114
+	rdlong	r9, ##_LC20
+	rdlong	r7, r9
+	sub	r7, #1
+	cmps	r7, r14 wcz
+	IF_A 	jmp	#_L121
+	jmp	#_L112
+_L129
+	wrlong	r14, r13
+	calld	lr,#_Expression
+	mov	r2, r0
+	mov	r1, r12
+	mov	r0, r11
+	calld	lr,#_EvalBinaryOp
+	rdlong	r7, r9
+	sub	r7, #1
+	mov	r12, r0
+	rdlong	r14, r13
+	cmps	r7, r14 wcz
+	IF_BE	jmp	#_L112
+_L121
+	mov	r7, r14
+	shl	r7, #2
+	add	r7, r10
+	add	r14, #1
+	rdlong	r11, r7
+	mov	r0, r11
+	calld	lr,#_GetOpPrecedence
+	mov	r6, r0
+	mov	r7, r0
+	add	r6, #1
+	cmps	r7, r8 wcz
+	mov	r0, r6
+	mov	r6, #0
+	muxc	r6,#1
+	cmps	r7, #0 wcz
+	IF_BE mov	r7,#1
+	IF_A  mov	r7,#0
+	mov	temp, r6
+	or	temp, r7 wz
+	IF_E 	jmp	#_L129
+_L112
+	mov	r0, r12
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	rdlong	r12, sp
+	add	sp, #4
+	rdlong	r11, sp
+	add	sp, #4
+	rdlong	r10, sp
+	add	sp, #4
+	rdlong	r9, sp
+	add	sp, #4
+	rdlong	r8, sp
+	add	sp, #4
+	jmp	lr
+_L127
+	add	r14, #1
+	rdlong	r0, ##_LC19
+	wrlong	r14, r13
+	calld	lr,#_Expression
+	mov	r14, r0
+	calld	lr,#_rand
+	mov	r7, r0
+	rdlong	temp, ##_LC24
+	and	r7, temp
+	mov	r1, r14
+	mov	r0, r7
+	call	#__DIVSI
+	mov	r12, r1
+	rdlong	r14, r13
+	jmp	#_L114
+_L119
+	calld	lr,#_GetIndex
+	shl	r0, #2
+	rdlong	temp, ##_LC29
+	add	r0, temp
+	rdlong	r12, r0
+	rdlong	r14, r13
+	jmp	#_L114
+_L124
+	add	r14, #1
+	rdlong	r0, ##_LC19
+	wrlong	r14, r13
+	calld	lr,#_Expression
+	neg	r12, r0
+_L123
+	rdlong	r14, r13
+	jmp	#_L114
+_L128
+	add	r14, #1
+	rdlong	r0, ##_LC19
+	wrlong	r14, r13
+	calld	lr,#_Expression
+	cmps	r0, #0 wcz
+	mov	r12, r0
+	IF_AE	jmp	#_L123
+	neg	r12, r0
+	rdlong	r14, r13
+	jmp	#_L114
+_L126
+	add	r14, #1
+	mov	r0, #0
+	wrlong	r14, r13
+	calld	lr,#_Expression
+	rdlong	r14, r13
+	add	r14, #1
+	mov	r12, r0
+	wrlong	r14, r13
+	jmp	#_L114
+	alignl
+_LC17
+	long	_tokenum
+	alignl
+_LC18
+	long	_tokens
+	alignl
+_LC19
+	long	999
+	alignl
+_LC20
+	long	_numtokens
+	alignl
+_LC21
+	long	___ctype
+	alignl
+_LC23
+	long	_LC22
+	alignl
+_LC24
+	long	2147483647
+	alignl
+_LC26
+	long	_LC25
+	alignl
+_LC28
+	long	_LC27
+	alignl
+_LC29
+	long	_var_buf
+	alignl
+_LC36
+	byte "GetIndex: idx = %d", 10, 0
+	alignl
+_GetIndex
+	sub	sp, #4
+	wrlong	r12, sp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	sub	sp, #8
+	rdlong	r13, ##_LC31
+	rdlong	r7, r13
+	rdlong	r12, ##_LC30
+	shl	r7, #2
+	add	r7, r12
+	rdlong	r0, r7
+	calld	lr,#_CheckVar
+	cmps	r0, #0 wcz
+	IF_NE neg	r14, #1
+	IF_NE	jmp	#_L131
+	rdlong	r6, r13
+	mov	r7, r6
+	shl	r7, #2
+	add	r7, r12
+	add	r6, #1
+	rdlong	r7, r7
+	rdbyte	r7, r7
+	and	r7, #31
+	shl	r7, #2
+	rdlong	temp, ##_LC32
+	add	r7, temp
+	rdlong	r14, r7
+	cmps	r14, #0 wcz
+	wrlong	r6, r13
+	IF_B 	jmp	#_L135
+_L132
+	rdlong	temp, ##_LC34
+	rdlong	r7, temp
+	cmps	r6, r7 wcz
+	IF_B 	jmp	#_L136
+_L133
+	cmp	r14, #199 wcz
+	IF_A  mov	r7, sp
+	IF_A  add	r7, #4
+	IF_A  rdlong	temp, ##_LC37
+	IF_A  wrlong	temp, sp
+	IF_A  wrlong	r14, r7
+	IF_A  calld	lr,#_printf
+_L131
+	mov	r0, r14
+	add	sp, #8
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	rdlong	r12, sp
+	add	sp, #4
+	jmp	lr
+_L136
+	shl	r6, #2
+	add	r6, r12
+	rdlong	r7, r6
+	rdbyte	r7, r7
+	cmps	r7, #40 wcz
+	IF_NE	jmp	#_L133
+	rdlong	r0, ##_LC35
+	calld	lr,#_Expression
+	add	r14, r0
+	jmp	#_L133
+_L135
+	rdlong	r5, ##_LC33
+	rdlong	r14, r5
+	mov	r4, r14
+	add	r4, #1
+	wrlong	r14, r7
+	wrlong	r4, r5
+	jmp	#_L132
+	alignl
+_LC30
+	long	_tokens
+	alignl
+_LC31
+	long	_tokenum
+	alignl
+_LC32
+	long	_vars
+	alignl
+_LC33
+	long	_baseaddr
+	alignl
+_LC34
+	long	_numtokens
+	alignl
+_LC35
+	long	999
+	alignl
+_LC37
+	long	_LC36
+	alignl
+_LC38
+	byte "%s", 0
+	alignl
+_PrintString
+	sub	sp, #4
+	wrlong	lr, sp
+	sub	sp, #8
+	mov	r7, sp
+	add	r7, #4
+	add	r0, #1
+	rdlong	temp, ##_LC39
+	wrlong	temp, sp
+	wrlong	r0, r7
+	calld	lr,#_printf
+	add	sp, #8
+	rdlong	lr, sp
+	add	sp, #4
+	jmp	lr
+	alignl
+_LC39
+	long	_LC38
+	alignl
+_NumDigits
+	cmps	r0, #0 wcz
+	IF_B  neg	r0, r0
+	IF_B  mov	r7, #2
+	IF_AE mov	r7, #1
+	jmp	#_L145
+_L143
+	mov	r1, #10
+	add	r7, #1
+	call	#__DIVSI
+_L145
+	cmps	r0, #9 wcz
+	IF_A 	jmp	#_L143
+	mov	r0, r7
+	jmp	lr
+	alignl
+_LC43
+	byte "%d", 0
+	alignl
+_Print
+	sub	sp, #4
+	wrlong	r8, sp
+	sub	sp, #4
+	wrlong	r9, sp
+	sub	sp, #4
+	wrlong	r10, sp
+	sub	sp, #4
+	wrlong	r11, sp
+	sub	sp, #4
+	wrlong	r12, sp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	sub	sp, #16
+	mov	r5, #8
+	add	r5, sp
+	mov	r9, #1
+	mov	r6, sp
+	mov	r7, #12
+	add	r7, sp
+	rdlong	r11, ##_LC40
+	add	r6, #4
+	mov	r14, #0
+	mov	r12, #0
+	rdlong	r10, ##_LC42
+	neg	r13, #1
+	wrlong	r9, r5
+	rdlong	r5, ##_LC41
+	wrlong	r6, r7
+	rdlong	r4, r5
+	rdlong	r7, r11
+_L169
+	cmps	r7, r4 wcz
+	IF_AE	jmp	#_L161
+_L174
+	mov	r6, r7
+	shl	r6, #2
+	add	r6, r10
+	rdlong	r5, r6
+	rdbyte	r6, r5
+	cmps	r6, #58 wcz
+	IF_E 	jmp	#_L161
+	cmps	r6, #35 wcz
+	IF_E 	jmp	#_L171
+	cmps	r6, #34 wcz
+	IF_E 	jmp	#_L172
+	cmps	r6, #44 wcz
+	IF_E 	jmp	#_L173
+	cmps	r6, #59 wcz
+	IF_NE	jmp	#_L154
+	add	r7, #1
+	cmps	r7, r4 wcz
+	mov	r9, #0
+	mov	r14, #0
+	wrlong	r7, r11
+	IF_B 	jmp	#_L174
+_L161
+	cmps	r9, #0 wcz
+	IF_NE mov	r0, #10
+	IF_NE calld	lr,#_putchar
+	add	sp, #16
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	rdlong	r12, sp
+	add	sp, #4
+	rdlong	r11, sp
+	add	sp, #4
+	rdlong	r10, sp
+	add	sp, #4
+	rdlong	r9, sp
+	add	sp, #4
+	rdlong	r8, sp
+	add	sp, #4
+	jmp	lr
+_L172
+	cmps	r14, #0 wcz
+	add	r12, r14
+	IF_E 	jmp	#_L151
+	sub	r14, #1
+_L152
+	mov	r0, #32
+	sub	r14, #1
+	calld	lr,#_putchar
+	cmps	r14, r13 wcz
+	IF_NE	jmp	#_L152
+	rdlong	r7, r11
+	shl	r7, #2
+	add	r7, r10
+	rdlong	r5, r7
+_L151
+	mov	r0, r5
+	sub	r12, #1
+	mov	r9, #1
+	mov	r14, #1
+	calld	lr,#_PrintString
+	rdlong	r8, r11
+	mov	r6, r8
+	shl	r6, #2
+	add	r6, r10
+	rdlong	r0, r6
+	calld	lr,#_strlen
+	mov	r7, r8
+	add	r7, #1
+	rdlong	r6, ##_LC41
+	add	r12, r0
+	wrlong	r7, r11
+	rdlong	r4, r6
+	jmp	#_L169
+_L154
+	mov	r0, #0
+	calld	lr,#_Expression
+	cmps	r0, #0 wcz
+	mov	r8, r0
+	IF_B  neg	r7, r0
+	IF_B  mov	r6, #2
+	IF_AE mov	r7, r0
+	IF_AE mov	r6, #1
+	jmp	#_L170
+_L165
+	mov	r0, r7
+	mov	r1, #10
+	add	r6, #1
+	call	#__DIVSI
+	mov	r7, r0
+_L170
+	cmps	r7, #9 wcz
+	IF_A 	jmp	#_L165
+	mov	r7, #8
+	add	r7, sp
+	rdlong	r7, r7
+	cmps	r7, r6 wcz
+	IF_A  sub	r7, r6
+	IF_A  add	r14, r7
+	add	r6, r14
+	cmps	r14, #0 wcz
+	add	r12, r6
+	IF_BE	jmp	#_L159
+	sub	r14, #1
+_L160
+	mov	r0, #32
+	sub	r14, #1
+	calld	lr,#_putchar
+	cmps	r14, r13 wcz
+	IF_NE	jmp	#_L160
+_L159
+	rdlong	r6, ##_LC44
+	mov	r7, #12
+	add	r7, sp
+	mov	r5, #8
+	add	r5, sp
+	mov	r14, #1
+	mov	r9, #1
+	wrlong	r6, sp
+	rdlong	r7, r7
+	wrlong	r8, r7
+	wrlong	r14, r5
+	calld	lr,#_printf
+	rdlong	r6, ##_LC41
+	rdlong	r7, r11
+	rdlong	r4, r6
+	jmp	#_L169
+_L173
+	mov	r14, r12
+	sar	r14, #31
+	shr	r14, #29
+	mov	r6, r12
+	add	r6, r14
+	and	r6, #7
+	sub	r14, r6
+	add	r7, #1
+	add	r14, #8
+	mov	r9, #0
+	wrlong	r7, r11
+	jmp	#_L169
+_L171
+	add	r7, #1
+	mov	r0, #0
+	wrlong	r7, r11
+	calld	lr,#_Expression
+	mov	r6, #8
+	add	r6, sp
+	rdlong	r5, ##_LC41
+	wrlong	r0, r6
+	rdlong	r7, r11
+	rdlong	r4, r5
+	jmp	#_L169
+	alignl
+_LC40
+	long	_tokenum
+	alignl
+_LC41
+	long	_numtokens
+	alignl
+_LC42
+	long	_tokens
+	alignl
+_LC44
+	long	_LC43
+	alignl
+_RemoveCRLF
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	mov	r14, r0
+	calld	lr,#_strlen
+	cmps	r0, #0 wcz
+	IF_E 	jmp	#_L175
+	mov	r6, r0
+	sub	r6, #1
+	add	r6, r14
+	mov	r4, #0
+	rdbyte	r7, r6
+	cmps	r7, #10 wcz
+	muxnz	r4,#1
+	cmps	r7, #13 wcz
+	mov	r7, #0
+	muxnz	r7,#1
+	test	r4,r7 wz
+	IF_NE	jmp	#_L175
+	mov	r7, r0
+	sub	r7, #2
+	add	r7, r14
+	'' loop_start register r0 level #1
+_L177
+	mov	r5, #0
+	wrbyte	r5, r6
+	mov	r6, r7
+	djnz	r0,#_L178
+_L175
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	jmp	lr
+_L178
+	rdbyte	r5, r7
+	cmps	r5, #10 wcz
+	mov	r4, #0
+	muxnz	r4,#1
+	cmps	r5, #13 wcz
+	mov	r5, #0
+	muxnz	r5,#1
+	test	r4,r5 wz
+	sub	r7, #1
+	IF_E 	jmp	#_L177
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	jmp	lr
+	alignl
+_EndOfLine
+	rdlong	r5, ##_LC45
+	rdlong	r7, r5
+	rdlong	temp, ##_LC46
+	rdlong	r4, temp
+	cmps	r7, r4 wcz
+	IF_AE	jmp	#_L182
+	mov	r6, r7
+	shl	r6, #2
+	rdlong	temp, ##_LC47
+	add	r6, temp
+	rdlong	r6, r6
+	rdbyte	r6, r6
+	cmps	r6, #58 wcz
+	IF_E 	jmp	#_L184
+	mov	r0, #0
+	jmp	lr
+_L182
+	mov	r0, #1
+	jmp	lr
+_L184
+	add	r7, #1
+	cmps	r4, r7 wcz
+	IF_BE mov	r0,#1
+	IF_A  mov	r0,#0
+	wrlong	r7, r5
+	jmp	lr
+	alignl
+_LC45
+	long	_tokenum
+	alignl
+_LC46
+	long	_numtokens
+	alignl
+_LC47
+	long	_tokens
+	alignl
+_CheckLine
+	sub	sp, #4
+	wrlong	lr, sp
+	calld	lr,#_EndOfLine
+	cmps	r0, #0 wcz
+	IF_NE mov	r7, #0
+	IF_NE rdlong	r6, ##_LC48
+	IF_NE mov	r0, #1
+	IF_E  mov	r0, #0
+	IF_NE rdlong	temp, ##_LC49
+	IF_NE wrlong	r7, temp
+	IF_NE rdlong	r7, r6
+	IF_NE add	r7, #1
+	IF_NE wrlong	r7, r6
+	rdlong	lr, sp
+	add	sp, #4
+	jmp	lr
+	alignl
+_LC48
+	long	_linenum
+	alignl
+_LC49
+	long	_tokenum
+	alignl
+_LC50
+	byte 10,"%d-%d: ", 0
+	alignl
+_PrintStatement
+	sub	sp, #4
+	wrlong	r10, sp
+	sub	sp, #4
+	wrlong	r11, sp
+	sub	sp, #4
+	wrlong	r12, sp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	sub	sp, #12
+	mov	r11, sp
+	rdlong	temp, ##_LC51
+	wrlong	temp, sp
+	add	r11, #4
+	rdlong	r14, ##_LC53
+	rdlong	temp, ##_LC52
+	rdlong	r6, temp
+	mov	r7, sp
+	add	r7, #8
+	wrlong	r6, r11
+	rdlong	r6, r14
+	wrlong	r6, r7
+	calld	lr,#_printf
+	rdlong	r12, ##_LC54
+	rdlong	r14, r14
+	rdlong	r7, r12
+	cmps	r14, r7 wcz
+	IF_AE	jmp	#_L189
+	mov	r7, r14
+	rdlong	r6, ##_LC55
+	shl	r7, #2
+	add	r7, r6
+	rdlong	r7, r7
+	rdbyte	r5, r7
+	cmps	r5, #58 wcz
+	IF_E 	jmp	#_L189
+	add	r14, #1
+	mov	r13, r14
+	shl	r13, #2
+	add	r13, r6
+	rdlong	r10, ##_LC56
+	jmp	#_L190
+_L192
+	rdlong	r7, r13
+	add	r14, #1
+	add	r13, #4
+	rdbyte	r6, r7
+	cmps	r6, #58 wcz
+	IF_E 	jmp	#_L189
+_L190
+	wrlong	r10, sp
+	wrlong	r7, r11
+	calld	lr,#_printf
+	rdlong	r7, r12
+	cmps	r7, r14 wcz
+	IF_A 	jmp	#_L192
+_L189
+	mov	r0, #10
+	calld	lr,#_putchar
+	add	sp, #12
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	rdlong	r12, sp
+	add	sp, #4
+	rdlong	r11, sp
+	add	sp, #4
+	rdlong	r10, sp
+	add	sp, #4
+	jmp	lr
+	alignl
+_LC51
+	long	_LC50
+	alignl
+_LC52
+	long	_linenum
+	alignl
+_LC53
+	long	_tokenum
+	alignl
+_LC54
+	long	_numtokens
+	alignl
+_LC55
+	long	_tokens
+	alignl
+_LC56
+	long	_LC38
+	alignl
+_Run
+	mov	r5, #0
+	rdlong	r7, ##_LC62
+	mov	r6, #32
+	rdlong	temp, ##_LC57
+	wrlong	r5, temp
+	mov	r5, #1
+	rdlong	temp, ##_LC58
+	wrlong	r5, temp
+	rdlong	temp, ##_LC59
+	wrlong	r5, temp
+	rdlong	temp, ##_LC60
+	wrlong	r5, temp
+	mov	r5, #0
+	rdlong	temp, ##_LC61
+	wrlong	r5, temp
+	'' loop_start register r6 level #1
+_L194
+	neg	r5, #1
+	wrlong	r5, r7
+	add	r7, #4
+	djnz	r6,#_L194
+	jmp	lr
+	alignl
+_LC57
+	long	_tokenum
+	alignl
+_LC58
+	long	_linenum
+	alignl
+_LC59
+	long	_runmode
+	alignl
+_LC60
+	long	_needline
+	alignl
+_LC61
+	long	_baseaddr
+	alignl
+_LC62
+	long	_vars
+	alignl
+_LC64
+	byte "%d %s", 10, 0
+	alignl
+_LC67
+	byte "<more>", 0
+	alignl
+_LC69
+	byte 8, 8, 8, 8, 8, 8,"      ", 8, 8, 8, 8, 8, 8, 0
+	alignl
+_List
+	sub	sp, #4
+	wrlong	r8, sp
+	sub	sp, #4
+	wrlong	r9, sp
+	sub	sp, #4
+	wrlong	r10, sp
+	sub	sp, #4
+	wrlong	r11, sp
+	sub	sp, #4
+	wrlong	r12, sp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	sub	sp, #12
+	rdlong	r13, ##_LC63
+	mov	r12, #0
+	mov	r14, #0
+	rdlong	r8, ##_LC65
+	rdlong	r9, ##_LC66
+	rdlong	r10, ##_LC71
+	jmp	#_L199
+_L197
+	add	r14, #1
+	cmps	r14, r10 wcz
+	add	r13, #4
+	IF_E 	jmp	#_L196
+_L199
+	rdlong	r7, r13
+	mov	r5, sp
+	mov	r6, sp
+	cmps	r7, #0 wcz
+	add	r5, #4
+	add	r6, #8
+	IF_E 	jmp	#_L197
+	wrlong	r8, sp
+	wrlong	r14, r5
+	wrlong	r7, r6
+	calld	lr,#_printf
+	mov	r6, r12
+	add	r6, #1
+	rdlong	r7, r9
+	sub	r7, #1
+	cmps	r6, r7 wcz
+	IF_B  mov	r12, r6
+	IF_B 	jmp	#_L197
+	rdlong	r7, ##_LC68
+	wrlong	r7, sp
+	calld	lr,#_printf
+	calld	lr,#_getchar
+	rdlong	r7, ##_LC70
+	mov	r11, r0
+	wrlong	r7, sp
+	calld	lr,#_printf
+	cmps	r11, #3 wcz
+	mov	r6, #0
+	muxz	r6,#1
+	mov	r7, #0
+	cmps	r11, #113 wcz
+	muxz	r7,#1
+	mov	temp, r6
+	or	temp, r7 wz
+	IF_NE	jmp	#_L196
+	cmps	r11, #13 wcz
+	mov	r7, #0
+	add	r14, #1
+	muxz	r7,r12
+	cmps	r14, r10 wcz
+	mov	r12, r7
+	add	r13, #4
+	IF_NE	jmp	#_L199
+_L196
+	add	sp, #12
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	rdlong	r12, sp
+	add	sp, #4
+	rdlong	r11, sp
+	add	sp, #4
+	rdlong	r10, sp
+	add	sp, #4
+	rdlong	r9, sp
+	add	sp, #4
+	rdlong	r8, sp
+	add	sp, #4
+	jmp	lr
+	alignl
+_LC63
+	long	_program
+	alignl
+_LC65
+	long	_LC64
+	alignl
+_LC66
+	long	_numlines
+	alignl
+_LC68
+	long	_LC67
+	alignl
+_LC70
+	long	_LC69
+	alignl
+_LC71
+	long	1000
+	alignl
+_ClearVars
+	mov	r5, #0
+	rdlong	r7, ##_LC73
+	mov	r6, #32
+	rdlong	temp, ##_LC72
+	wrlong	r5, temp
+	'' loop_start register r6 level #1
+_L203
+	neg	r5, #1
+	wrlong	r5, r7
+	add	r7, #4
+	djnz	r6,#_L203
+	jmp	lr
+	alignl
+_LC72
+	long	_baseaddr
+	alignl
+_LC73
+	long	_vars
+	alignl
+_New
+	mov	r5, #0
+	rdlong	r7, ##_LC75
+	mov	r6, #32
+	rdlong	temp, ##_LC74
+	wrlong	r5, temp
+	'' loop_start register r6 level #1
+_L206
+	neg	r5, #1
+	wrlong	r5, r7
+	add	r7, #4
+	djnz	r6,#_L206
+	rdlong	r7, ##_LC76
+	rdlong	r6, ##_LC78
+	'' loop_start register r6 level #1
+_L208
+	rdlong	r5, r7
+	cmps	r5, #0 wcz
+	IF_NE mov	r5, #0
+	IF_NE wrlong	r5, r7
+	add	r7, #4
+	djnz	r6,#_L208
+	jmp	lr
+	alignl
+_LC74
+	long	_baseaddr
+	alignl
+_LC75
+	long	_vars
+	alignl
+_LC76
+	long	_program
+	alignl
+_LC78
+	long	1000
+	alignl
+_LC79
+	byte "Commands are help, run, list, new, bye or statement", 0
+	alignl
+_Help
+	sub	sp, #4
+	wrlong	lr, sp
+	rdlong	r0, ##_LC80
+	calld	lr,#_puts
+	rdlong	lr, sp
+	add	sp, #4
+	jmp	lr
+	alignl
+_LC80
+	long	_LC79
+	alignl
+_LC82
+	byte "%c: %d", 10, 0
+	alignl
+_Dump
+	sub	sp, #4
+	wrlong	r9, sp
+	sub	sp, #4
+	wrlong	r10, sp
+	sub	sp, #4
+	wrlong	r11, sp
+	sub	sp, #4
+	wrlong	r12, sp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	sub	sp, #12
+	rdlong	r14, ##_LC81
+	mov	r12, r14
+	mov	r10, sp
+	mov	r11, sp
+	add	r12, #128
+	mov	r13, #64
+	rdlong	r9, ##_LC83
+	add	r10, #4
+	add	r11, #8
+_L214
+	rdlong	r7, r14
+	cmps	r7, #0 wcz
+	add	r14, #4
+	IF_AE wrlong	r9, sp
+	IF_AE wrlong	r13, r10
+	add	r13, #1
+	IF_AE wrlong	r7, r11
+	IF_AE calld	lr,#_printf
+	cmps	r14, r12 wcz
+	IF_NE	jmp	#_L214
+	add	sp, #12
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	rdlong	r12, sp
+	add	sp, #4
+	rdlong	r11, sp
+	add	sp, #4
+	rdlong	r10, sp
+	add	sp, #4
+	rdlong	r9, sp
+	add	sp, #4
+	jmp	lr
+	alignl
+_LC81
+	long	_vars
+	alignl
+_LC83
+	long	_LC82
+	alignl
+_LC88
+	byte "Ok", 0
+	alignl
+_GetLine
+	sub	sp, #4
+	wrlong	r8, sp
+	sub	sp, #4
+	wrlong	r9, sp
+	sub	sp, #4
+	wrlong	r10, sp
+	sub	sp, #4
+	wrlong	r11, sp
+	sub	sp, #4
+	wrlong	r12, sp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	rdlong	r13, ##_LC85
+	rdlong	r14, ##_LC86
+	rdlong	r12, ##_LC91
+	rdlong	r10, ##_LC92
+	rdlong	r11, ##_LC87
+	rdlong	r8, ##_LC89
+	rdlong	r9, ##_LC90
+_L228
+	rdlong	r7, r13
+	cmps	r7, #0 wcz
+	IF_E 	jmp	#_L218
+_L231
+	rdlong	r6, r14
+	mov	r7, r6
+	shl	r7, #2
+	add	r7, r11
+	rdlong	r0, r7
+	cmps	r0, #0 wcz
+	IF_NE	jmp	#_L220
+	add	r6, #1
+	mov	r7, r6
+	shl	r7, #2
+	add	r7, r11
+	jmp	#_L222
+_L230
+	add	r6, #1
+_L222
+	add	r7, #4
+	mov	r5, r7
+	sub	r5, #4
+	rdlong	r0, r5
+	cmps	r0, #0 wcz
+	IF_E 	jmp	#_L230
+	wrlong	r6, r14
+_L220
+	calld	lr,#_Tokenize
+	rdlong	r7, r10
+	cmps	r7, #0 wcz
+	IF_E 	jmp	#_L223
+	rdlong	r6, r12
+_L221
+	cmps	r6, r7 wcz
+	IF_AE	jmp	#_L228
+	mov	r7, #0
+	rdlong	temp, ##_LC93
+	wrlong	r7, temp
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	rdlong	r12, sp
+	add	sp, #4
+	rdlong	r11, sp
+	add	sp, #4
+	rdlong	r10, sp
+	add	sp, #4
+	rdlong	r9, sp
+	add	sp, #4
+	rdlong	r8, sp
+	add	sp, #4
+	jmp	lr
+_L223
+	rdlong	r7, r14
+	add	r7, #1
+	mov	r6, #0
+	wrlong	r7, r14
+	rdlong	r7, r13
+	cmps	r7, #0 wcz
+	wrlong	r6, r12
+	IF_NE	jmp	#_L231
+_L218
+	mov	r0, r8
+	calld	lr,#_puts
+	mov	r0, r9
+	calld	lr,#_gets
+	mov	r0, r9
+	calld	lr,#_Tokenize
+	mov	r6, #0
+	wrlong	r6, r12
+	wrlong	r6, r14
+	rdlong	r7, r10
+	jmp	#_L221
+	alignl
+_LC85
+	long	_runmode
+	alignl
+_LC86
+	long	_linenum
+	alignl
+_LC87
+	long	_program
+	alignl
+_LC89
+	long	_LC88
+	alignl
+_LC90
+	long	_buff
+	alignl
+_LC91
+	long	_tokenum
+	alignl
+_LC92
+	long	_numtokens
+	alignl
+_LC93
+	long	_needline
+	alignl
+_SetInterpMode
+	mov	r7, #0
+	rdlong	temp, ##_LC94
+	wrlong	r7, temp
+	mov	r7, #1
+	rdlong	temp, ##_LC95
+	wrlong	r7, temp
+	jmp	lr
+	alignl
+_LC94
+	long	_runmode
+	alignl
+_LC95
+	long	_needline
+	alignl
+_LC98
+	byte "malloc failed.  size = %d", 10, 0
+	alignl
+_malloc
+	sub	sp, #4
+	wrlong	lr, sp
+	sub	sp, #8
+	mov	r7, r0
+	rdlong	r6, ##_LC96
+	add	r7, #3
+	shr	r7, #2
+	rdlong	r5, r6
+	add	r7, r5
+	rdlong	temp, ##_LC97
+	cmps	temp, r7 wcz
+	IF_B 	jmp	#_L236
+	mov	r0, r5
+	shl	r0, #2
+	rdlong	temp, ##_LC100
+	add	r0, temp
+	wrlong	r7, r6
+_L235
+	add	sp, #8
+	rdlong	lr, sp
+	add	sp, #4
+	jmp	lr
+_L236
+	mov	r7, sp
+	add	r7, #4
+	rdlong	temp, ##_LC99
+	wrlong	temp, sp
+	wrlong	r0, r7
+	calld	lr,#_printf
+	mov	r0, #0
+	jmp	#_L235
+	alignl
+_LC96
+	long	_index_2013
+	alignl
+_LC97
+	long	1000
+	alignl
+_LC99
+	long	_LC98
+	alignl
+_LC100
+	long	_heap_2012
+	alignl
+_AddLine
+	sub	sp, #4
+	wrlong	r12, sp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	rdlong	r13, ##_LC101
+	rdlong	r0, r13
+	calld	lr,#_atol
+	mov	r7, r0
+	sub	r7, #1
+	rdlong	temp, ##_LC102
+	cmp	temp, r7 wcz
+	IF_B 	jmp	#_L237
+	mov	r14, r0
+	shl	r14, #2
+	rdlong	temp, ##_LC103
+	add	r14, temp
+	mov	r7, #0
+	rdlong	temp, ##_LC104
+	rdlong	r12, temp
+	cmps	r12, #2 wcz
+	wrlong	r7, r14
+	IF_E 	jmp	#_L240
+_L239
+	rdlong	temp, ##_LC105
+	wrlong	r12, temp
+_L237
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	rdlong	r12, sp
+	add	sp, #4
+	jmp	lr
+_L240
+	add	r13, #4
+	rdlong	r13, r13
+	mov	r0, r13
+	calld	lr,#_strlen
+	add	r0, #1
+	calld	lr,#_malloc
+	wrlong	r0, r14
+	mov	r1, r13
+	calld	lr,#_strcpy
+	jmp	#_L239
+	alignl
+_LC101
+	long	_tokens
+	alignl
+_LC102
+	long	998
+	alignl
+_LC103
+	long	_program
+	alignl
+_LC104
+	long	_numtokens
+	alignl
+_LC105
+	long	_tokenum
+	alignl
+_LC119
+	byte "then", 0
+	alignl
+_LC121
+	byte "Invalid statement in line %d", 10, 0
+	alignl
+_LC123
+	byte "to", 0
+	alignl
+_LC128
+	byte "Variable already defined in line %d", 10, 0
+	alignl
+_LC131
+	byte "let", 0
+	alignl
+_Execute
+	sub	sp, #4
+	wrlong	r10, sp
+	sub	sp, #4
+	wrlong	r11, sp
+	sub	sp, #4
+	wrlong	r12, sp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	sub	sp, #28
+	cmps	r0, #10 wcz
+	IF_E 	jmp	#_L250
+	cmps	r0, #10 wcz
+	IF_BE	jmp	#_L292
+	cmps	r0, #15 wcz
+	IF_E 	jmp	#_L255
+	cmps	r0, #15 wcz
+	IF_BE	jmp	#_L293
+	cmps	r0, #17 wcz
+	IF_E 	jmp	#_L257
+	cmps	r0, #17 wcz
+	IF_B 	jmp	#_L256
+	cmps	r0, #18 wcz
+	IF_E 	jmp	#_L258
+	cmps	r0, #19 wcz
+	IF_NE	jmp	#_L242
+	rdlong	r14, ##_LC106
+	rdlong	r13, ##_LC116
+	rdlong	r7, r14
+	add	r7, #1
+	mov	r6, r7
+	shl	r6, #2
+	add	r6, r13
+	rdlong	r0, r6
+	wrlong	r7, r14
+	calld	lr,#_CheckVar
+	cmps	r0, #0 wcz
+	IF_NE	jmp	#_L286
+	rdlong	r6, r14
+	mov	r7, r6
+	shl	r7, #2
+	add	r7, r13
+	rdlong	r5, ##_LC111
+	mov	r4, r5
+	add	r6, #1
+	rdlong	r7, r7
+	rdbyte	r7, r7
+	and	r7, #31
+	shl	r7, #2
+	add	r4, r7
+	rdlong	r4, r4
+	cmps	r4, #0 wcz
+	wrlong	r6, r14
+	IF_AE	jmp	#_L294
+	rdlong	r14, ##_LC110
+	shl	r6, #2
+	add	r5, r7
+	add	r6, r13
+	rdlong	r7, r14
+	wrlong	r7, r5
+	rdlong	r6, r6
+	rdbyte	r6, r6
+	cmps	r6, #40 wcz
+	IF_NE add	r7, #1
+	IF_NE wrlong	r7, r14
+	IF_NE mov	r0, #1
+	IF_NE	jmp	#_L249
+	rdlong	r0, ##_LC130
+	calld	lr,#_Expression
+	mov	r7, r0
+	mov	r0, #1
+	rdlong	r6, r14
+	add	r7, r6
+	wrlong	r7, r14
+	jmp	#_L249
+_L292
+	cmps	r0, #3 wcz
+	IF_E 	jmp	#_L246
+	cmps	r0, #3 wcz
+	IF_A 	jmp	#_L261
+	cmps	r0, #1 wcz
+	IF_E 	jmp	#_L244
+	cmps	r0, #1 wcz
+	IF_BE	jmp	#_L295
+	calld	lr,#_New
+	mov	r0, #0
+_L249
+	add	sp, #28
+	rdlong	lr, sp
+	add	sp, #4
+	rdlong	r14, sp
+	add	sp, #4
+	rdlong	r13, sp
+	add	sp, #4
+	rdlong	r12, sp
+	add	sp, #4
+	rdlong	r11, sp
+	add	sp, #4
+	rdlong	r10, sp
+	add	sp, #4
+	jmp	lr
+_L293
+	cmps	r0, #12 wcz
+	IF_E 	jmp	#_L252
+	cmps	r0, #12 wcz
+	IF_B 	jmp	#_L251
+	cmps	r0, #13 wcz
+	IF_E 	jmp	#_L253
+	cmps	r0, #14 wcz
+	IF_NE	jmp	#_L242
+	rdlong	r6, ##_LC106
+	rdlong	r7, r6
+	add	r7, #1
+	wrlong	r7, r6
+	calld	lr,#_Print
+	mov	r0, #1
+	jmp	#_L249
+_L261
+	cmps	r0, #7 wcz
+	IF_E 	jmp	#_L248
+	cmps	r0, #7 wcz
+	IF_A 	jmp	#_L286
+	cmps	r0, #6 wcz
+	IF_E 	jmp	#_L296
+_L242
+	rdlong	r14, ##_LC106
+	rdlong	r13, ##_LC116
+	rdlong	r12, r14
+	mov	r7, r12
+	shl	r7, #2
+	add	r7, r13
+	rdlong	r0, r7
+	rdbyte	r7, r0
+	fle	r7, #128
+	rdlong	temp, ##_LC117
+	add	r7, temp
+	rdbyte	r7, r7
+	test	r7,#$2 wz
+	IF_NE	jmp	#_L297
+	rdlong	r1, ##_LC132
+	calld	lr,#_strcmp
+	cmps	r0, #0 wcz
+	IF_E  mov	r7, r12
+	IF_E  add	r7, #1
+	IF_E  wrlong	r7, r14
+	calld	lr,#_GetIndex
+	cmps	r0, #0 wcz
+	mov	r12, r0
+	IF_B 	jmp	#_L286
+	rdlong	r6, r14
+	mov	r7, r6
+	shl	r7, #2
+	add	r7, r13
+	add	r6, #1
+	rdlong	r7, r7
+	rdbyte	r7, r7
+	cmps	r7, #61 wcz
+	wrlong	r6, r14
+	IF_NE	jmp	#_L291
+	mov	r0, #0
+	shl	r12, #2
+	calld	lr,#_Expression
+	mov	r7, r0
+	rdlong	temp, ##_LC118
+	add	r12, temp
+	mov	r0, #1
+	wrlong	r7, r12
+	jmp	#_L249
+_L252
+	rdlong	r14, ##_LC106
+	rdlong	r13, ##_LC116
+	rdlong	r5, r14
+	mov	r6, r5
+	add	r6, #1
+	mov	r7, r6
+	shl	r7, #2
+	add	r7, r13
+	wrlong	r6, r14
+	rdlong	r0, r7
+	rdbyte	r7, r0
+	cmps	r7, #34 wcz
+	IF_NE	jmp	#_L264
+	add	r5, #2
+	wrlong	r5, r14
+	calld	lr,#_PrintString
+	rdlong	r6, r14
+	mov	r7, r6
+	shl	r7, #2
+	add	r7, r13
+	rdlong	r7, r7
+	rdbyte	r7, r7
+	cmps	r7, #44 wcz
+	IF_E  add	r6, #1
+	IF_E  wrlong	r6, r14
+_L264
+	calld	lr,#_GetIndex
+	cmps	r0, #0 wcz
+	mov	r14, r0
+	IF_AE	jmp	#_L298
+_L286
+	mov	r0, #0
+	jmp	#_L249
+_L256
+	rdlong	r14, ##_LC106
+	mov	r0, #0
+	rdlong	r7, r14
+	add	r7, #1
+	wrlong	r7, r14
+	calld	lr,#_Expression
+	rdlong	r13, ##_LC108
+	mov	r12, r0
+	rdlong	r7, r13
+	cmps	r7, #0 wcz
+	IF_NE	jmp	#_L289
+	rdlong	r7, ##_LC107
+_L269
+	mov	r6, #1
+	mov	r5, #0
+	mov	r0, #1
+	wrlong	r5, r14
+	rdlong	temp, ##_LC109
+	wrlong	r6, temp
+	wrlong	r6, r13
+	wrlong	r12, r7
+	jmp	#_L249
+_L251
+	rdlong	temp, ##_LC108
+	rdlong	r7, temp
+	cmps	r7, #0 wcz
+	IF_E 	jmp	#_L284
+	rdlong	r6, ##_LC113
+	mov	r7, #1
+	mov	r0, #1
+	rdlong	temp, ##_LC109
+	wrlong	r7, temp
+	rdlong	r7, r6
+	sub	r7, #1
+	mov	r5, r7
+	shl	r5, #2
+	mov	r4, r5
+	rdlong	temp, ##_LC114
+	add	r4, temp
+	rdlong	temp, ##_LC115
+	add	r5, temp
+	rdlong	r4, r4
+	rdlong	r5, r5
+	rdlong	temp, ##_LC107
+	wrlong	r4, temp
+	rdlong	temp, ##_LC106
+	wrlong	r5, temp
+	wrlong	r7, r6
+	jmp	#_L249
+_L295
+	cmps	r0, #0 wcz
+	IF_NE	jmp	#_L242
+	mov	r3, #1
+	mov	r2, #0
+	rdlong	r7, ##_LC111
+	mov	r6, #32
+	rdlong	temp, ##_LC106
+	wrlong	r2, temp
+	rdlong	temp, ##_LC107
+	wrlong	r3, temp
+	rdlong	temp, ##_LC108
+	wrlong	r3, temp
+	rdlong	temp, ##_LC109
+	wrlong	r3, temp
+	rdlong	temp, ##_LC110
+	wrlong	r2, temp
+	'' loop_start register r6 level #1
+_L263
+	neg	r5, #1
+	wrlong	r5, r7
+	add	r7, #4
+	djnz	r6,#_L263
+_L284
+	mov	r0, #1
+	jmp	#_L249
+_L255
+	rdlong	r14, ##_LC106
+	mov	r0, #0
+	rdlong	r7, r14
+	add	r7, #1
+	wrlong	r7, r14
+	calld	lr,#_Expression
+	rdlong	r7, ##_LC107
+	mov	r5, #0
+	rdlong	r6, r7
+	cmps	r0, r6 wcz
+	IF_NE mov	r3, #1
+	mov	r6, #1
+	IF_NE wrlong	r0, r7
+	mov	r0, #1
+	IF_NE rdlong	temp, ##_LC109
+	IF_NE wrlong	r3, temp
+	wrlong	r5, r14
+	rdlong	temp, ##_LC108
+	wrlong	r6, temp
+	jmp	#_L249
+_L244
+	calld	lr,#_List
+_L290
+	rdlong	r6, ##_LC106
+	mov	r0, #1
+	rdlong	r7, r6
+	add	r7, #1
+	wrlong	r7, r6
+	jmp	#_L249
+_L248
+	calld	lr,#_Dump
+	jmp	#_L290
+_L257
+	rdlong	r14, ##_LC106
+	rdlong	r13, ##_LC116
+	rdlong	r7, r14
+	add	r7, #1
+	mov	r6, r7
+	shl	r6, #2
+	add	r6, r13
+	wrlong	r7, r14
+	rdlong	r7, r6
+	rdbyte	r11, r7
+	calld	lr,#_GetIndex
+	cmps	r0, #0 wcz
+	mov	r12, r0
+	IF_B 	jmp	#_L286
+	rdlong	r6, r14
+	mov	r7, r6
+	shl	r7, #2
+	add	r7, r13
+	add	r6, #1
+	rdlong	r7, r7
+	rdbyte	r7, r7
+	cmps	r7, #61 wcz
+	wrlong	r6, r14
+	IF_E 	jmp	#_L270
+_L291
+	rdlong	temp, ##_LC122
+	wrlong	temp, sp
+	mov	r7, sp
+	add	r7, #4
+	rdlong	temp, ##_LC107
+	rdlong	r2, temp
+	wrlong	r2, r7
+	calld	lr,#_printf
+	mov	r0, #0
+	jmp	#_L249
+_L246
+	calld	lr,#_New
+	mov	r0, #0
+	calld	lr,#_exit
+_L250
+	rdlong	temp, ##_LC112
+	rdlong	r6, temp
+	mov	r0, #1
+	rdlong	temp, ##_LC106
+	wrlong	r6, temp
+	jmp	#_L249
+_L298
+	mov	r13, sp
+	add	r13, #8
+	mov	r0, r13
+	calld	lr,#_gets
+	rdbyte	r0, r13
+	mov	r6, r0
+	fle	r6, #128
+	rdlong	temp, ##_LC117
+	add	r6, temp
+	rdbyte	r7, r6
+	test	r7,#$2 wz
+	IF_E  mov	r6, r0
+	IF_NE	jmp	#_L299
+_L266
+	mov	r7, r14
+	shl	r7, #2
+	rdlong	temp, ##_LC118
+	add	r7, temp
+	mov	r0, #1
+	wrlong	r6, r7
+	jmp	#_L249
+_L289
+	calld	lr,#_CheckLine
+	rdlong	r6, ##_LC113
+	rdlong	r7, ##_LC107
+	rdlong	r4, r6
+	mov	r5, r4
+	shl	r5, #2
+	mov	r3, r5
+	rdlong	temp, ##_LC114
+	add	r3, temp
+	rdlong	temp, ##_LC115
+	add	r5, temp
+	add	r4, #1
+	rdlong	r2, r7
+	wrlong	r2, r3
+	rdlong	r3, r14
+	wrlong	r3, r5
+	wrlong	r4, r6
+	jmp	#_L269
+_L253
+	rdlong	r14, ##_LC106
+	mov	r0, #0
+	rdlong	r7, r14
+	add	r7, #1
+	wrlong	r7, r14
+	calld	lr,#_Expression
+	cmps	r0, #0 wcz
+	IF_E 	jmp	#_L267
+	rdlong	r13, r14
+	mov	r7, r13
+	shl	r7, #2
+	rdlong	temp, ##_LC116
+	add	r7, temp
+	rdlong	r1, ##_LC120
+	rdlong	r0, r7
+	calld	lr,#_strcmp
+	cmps	r0, #0 wcz
+	IF_NE	jmp	#_L284
+	mov	r7, r13
+	add	r7, #1
+	mov	r0, #1
+	wrlong	r7, r14
+	jmp	#_L249
+_L258
+	rdlong	r14, ##_LC106
+	rdlong	r7, r14
+	add	r7, #1
+	mov	r6, r7
+	shl	r6, #2
+	rdlong	temp, ##_LC116
+	add	r6, temp
+	wrlong	r7, r14
+	rdlong	r7, r6
+	rdbyte	r13, r7
+	calld	lr,#_GetIndex
+	cmps	r0, #0 wcz
+	IF_B 	jmp	#_L286
+	rdlong	temp, ##_LC108
+	rdlong	r7, temp
+	cmps	r7, #0 wcz
+	IF_E 	jmp	#_L272
+	mov	r7, r13
+	and	r7, #31
+	shl	r0, #2
+	shl	r7, #2
+	rdlong	temp, ##_LC118
+	add	r0, temp
+	mov	r5, r7
+	rdlong	temp, ##_LC125
+	add	r5, temp
+	rdlong	r6, r0
+	add	r6, #1
+	rdlong	r5, r5
+	cmps	r6, r5 wcz
+	wrlong	r6, r0
+	IF_A 	jmp	#_L272
+	mov	r5, r7
+	rdlong	temp, ##_LC127
+	add	r7, temp
+	rdlong	temp, ##_LC126
+	add	r5, temp
+	rdlong	r6, ##_LC107
+	rdlong	r7, r7
+	wrlong	r7, r14
+	rdlong	r7, r5
+	rdlong	r5, r6
+	cmps	r7, r5 wcz
+	IF_E 	jmp	#_L284
+	mov	r5, #1
+	mov	r0, #1
+	wrlong	r7, r6
+	rdlong	temp, ##_LC109
+	wrlong	r5, temp
+	jmp	#_L249
+_L296
+	calld	lr,#_Help
+	jmp	#_L290
+_L272
+	rdlong	r7, r14
+	add	r7, #1
+	mov	r0, #1
+	wrlong	r7, r14
+	jmp	#_L249
+_L267
+	rdlong	temp, ##_LC112
+	rdlong	r2, temp
+	mov	r0, #1
+	wrlong	r2, r14
+	jmp	#_L249
+_L270
+	mov	r0, #0
+	shl	r12, #2
+	calld	lr,#_Expression
+	rdlong	r10, r14
+	mov	r7, r10
+	shl	r7, #2
+	add	r7, r13
+	mov	r6, r0
+	rdlong	temp, ##_LC118
+	add	r12, temp
+	rdlong	r1, ##_LC124
+	mov	r13, r11
+	and	r13, #31
+	shl	r13, #2
+	rdlong	r0, r7
+	wrlong	r6, r12
+	calld	lr,#_strcmp
+	cmps	r0, #0 wcz
+	IF_E  mov	r7, r10
+	IF_E  add	r7, #1
+	mov	r0, #0
+	IF_E  wrlong	r7, r14
+	calld	lr,#_Expression
+	mov	r7, r13
+	rdlong	temp, ##_LC125
+	add	r7, temp
+	wrlong	r0, r7
+	calld	lr,#_CheckLine
+	mov	r6, r13
+	mov	r7, r0
+	rdlong	temp, ##_LC126
+	add	r6, temp
+	rdlong	temp, ##_LC127
+	add	r13, temp
+	mov	r0, #1
+	rdlong	temp, ##_LC107
+	rdlong	r3, temp
+	rdlong	r14, r14
+	wrlong	r3, r6
+	wrlong	r14, r13
+	rdlong	temp, ##_LC109
+	wrlong	r7, temp
+	jmp	#_L249
+_L294
+	rdlong	temp, ##_LC129
+	wrlong	temp, sp
+	mov	r7, sp
+	add	r7, #4
+	rdlong	temp, ##_LC107
+	rdlong	r6, temp
+	wrlong	r6, r7
+	calld	lr,#_printf
+	mov	r0, #0
+	jmp	#_L249
+_L297
+	calld	lr,#_AddLine
+	mov	r0, #1
+	jmp	#_L249
+_L299
+	mov	r0, r13
+	calld	lr,#_atol
+	mov	r6, r0
+	jmp	#_L266
+	alignl
+_LC106
+	long	_tokenum
+	alignl
+_LC107
+	long	_linenum
+	alignl
+_LC108
+	long	_runmode
+	alignl
+_LC109
+	long	_needline
+	alignl
+_LC110
+	long	_baseaddr
+	alignl
+_LC111
+	long	_vars
+	alignl
+_LC112
+	long	_numtokens
+	alignl
+_LC113
+	long	_gosub_index
+	alignl
+_LC114
+	long	_gosub_linenum
+	alignl
+_LC115
+	long	_gosub_tokenum
+	alignl
+_LC116
+	long	_tokens
+	alignl
+_LC117
+	long	___ctype
+	alignl
+_LC118
+	long	_var_buf
+	alignl
+_LC120
+	long	_LC119
+	alignl
+_LC122
+	long	_LC121
+	alignl
+_LC124
+	long	_LC123
+	alignl
+_LC125
+	long	_var_limit
+	alignl
+_LC126
+	long	_var_linenum
+	alignl
+_LC127
+	long	_var_tokenum
+	alignl
+_LC129
+	long	_LC128
+	alignl
+_LC130
+	long	999
+	alignl
+_LC132
+	long	_LC131
+	alignl
+_LC135
+	byte "end", 0
+	alignl
+_main
+	sub	sp, #4
+	wrlong	r10, sp
+	sub	sp, #4
+	wrlong	r11, sp
+	sub	sp, #4
+	wrlong	r12, sp
+	sub	sp, #4
+	wrlong	r13, sp
+	sub	sp, #4
+	wrlong	r14, sp
+	sub	sp, #4
+	wrlong	lr, sp
+	rdlong	r14, ##_LC133
+	mov	r7, r14
+	rdlong	r6, ##_LC142
+	'' loop_start register r6 level #1
+_L301
+	mov	r5, #0
+	wrlong	r5, r7
+	add	r7, #4
+	djnz	r6,#_L301
+	calld	lr,#_New
+	mov	r6, r14
+	mov	r7, #0
+	rdlong	temp, ##_LC134
+	add	r6, temp
+	rdlong	r10, ##_LC137
+	rdlong	r14, ##_LC138
+	mov	r5, #1
+	rdlong	r11, ##_LC139
+	rdlong	r12, ##_LC140
+	rdlong	r13, ##_LC141
+	wrlong	r7, r10
+	mov	r7, #1
+	wrlong	r5, r14
+	rdlong	temp, ##_LC136
+	wrlong	temp, r6
+_L305
+	cmps	r7, #0 wcz
+	IF_NE calld	lr,#_GetLine
+	rdlong	r7, r13
+	shl	r7, #2
+	add	r7, r12
+	rdlong	r1, r7
+	mov	r0, r11
+	calld	lr,#_SearchList
+	calld	lr,#_Execute
+	cmps	r0, #0 wcz
+	IF_E  mov	r7, #0
+	IF_E  wrlong	r7, r10
+	IF_E  mov	r7, #1
+	IF_E 	jmp	#_L304
+	rdlong	r7, r14
+	cmps	r7, #0 wcz
+	IF_NE mov	r7, #1
+	IF_NE	jmp	#_L304
+	calld	lr,#_CheckLine
+	cmps	r0, #0 wcz
+	mov	r7, #0
+	muxnz	r7,#1
+_L304
+	wrlong	r7, r14
+	jmp	#_L305
+	alignl
+_LC133
+	long	_program
+	alignl
+_LC134
+	long	4000
+	alignl
+_LC136
+	long	_LC135
+	alignl
+_LC137
+	long	_runmode
+	alignl
+_LC138
+	long	_needline
+	alignl
+_LC139
+	long	_commands
+	alignl
+_LC140
+	long	_tokens
+	alignl
+_LC141
+	long	_tokenum
+	alignl
+_LC142
+	long	1000
+	alignl
+_free
+	jmp	lr
+_tokenbuf
+	long	0[100]
+_tokens
+	long	0[100]
+_numtokens
+	long	0
+_var_tokenum
+	long	0[32]
+_var_linenum
+	long	0[32]
+_var_limit
+	long	0[32]
+_vars
+	long	0[32]
+_program
+	long	0[1001]
+_var_buf
+	long	0[200]
+_buff
+	long	0[50]
+	alignl
+_numlines
+	long	24
+_needline
+	long	0
+_tokenum
+	long	0
+_linenum
+	long	0
+_runmode
+	long	0
+_gosub_linenum
+	long	0[20]
+_gosub_tokenum
+	long	0[20]
+	alignl
+_gosub_index
+	long	0
+	alignl
+_baseaddr
+	long	0
+	alignl
+_LC143
+	byte "run", 0
+	alignl
+_LC144
+	byte "list", 0
+	alignl
+_LC145
+	byte "new", 0
+	alignl
+_LC146
+	byte "bye", 0
+	alignl
+_LC147
+	byte "save", 0
+	alignl
+_LC148
+	byte "old", 0
+	alignl
+_LC149
+	byte "help", 0
+	alignl
+_LC150
+	byte "dump", 0
+	alignl
+_LC151
+	byte "stop", 0
+	alignl
+_LC152
+	byte "rem", 0
+	alignl
+_LC153
+	byte "return", 0
+	alignl
+_LC154
+	byte "input", 0
+	alignl
+_LC155
+	byte "if", 0
+	alignl
+_LC156
+	byte "print", 0
+	alignl
+_LC157
+	byte "goto", 0
+	alignl
+_LC158
+	byte "gosub", 0
+	alignl
+_LC159
+	byte "for", 0
+	alignl
+_LC160
+	byte "next", 0
+	alignl
+_LC161
+	byte "dim", 0
+	alignl
+_commands
+	long	_LC143
+	long	_LC144
+	long	_LC145
+	long	_LC146
+	long	_LC147
+	long	_LC148
+	long	_LC149
+	long	_LC150
+	long	_LC135
+	long	_LC151
+	long	_LC152
+	long	_LC153
+	long	_LC154
+	long	_LC155
+	long	_LC156
+	long	_LC157
+	long	_LC158
+	long	_LC159
+	long	_LC160
+	long	_LC161
+	long	0
+	alignl
+_LC162
+	byte "=", 0
+	alignl
+_LC163
+	byte "<>", 0
+	alignl
+_LC164
+	byte "<", 0
+	alignl
+_LC165
+	byte ">", 0
+	alignl
+_LC166
+	byte "<=", 0
+	alignl
+_LC167
+	byte ">=", 0
+	alignl
+_LC168
+	byte "+", 0
+	alignl
+_LC169
+	byte "-", 0
+	alignl
+_LC170
+	byte "*", 0
+	alignl
+_LC171
+	byte "/", 0
+	alignl
+_oplist
+	long	_LC162
+	long	_LC163
+	long	_LC164
+	long	_LC165
+	long	_LC166
+	long	_LC167
+	long	_LC168
+	long	_LC169
+	long	_LC170
+	long	_LC171
+	long	0
+	alignl
+_opprec
+	byte	1
+	byte	1
+	byte	2
+	byte	2
+	byte	2
+	byte	2
+	byte	3
+	byte	3
+	byte	4
+	byte	4
+	alignl
+_ops
+	long	_LC163
+	long	_LC166
+	long	_LC167
+	long	0
+	alignl
+_LC172
+	byte ";':(),=+-*/<>", 34," ", 9,"#@", 0
+	alignl
+_delim
+	long	_LC172
+_index_2013
+	long	0
+_heap_2012
+	long	0[1000]

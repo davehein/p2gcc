@@ -1,0 +1,33 @@
+                   CON
+                   	rx_pin	=	63
+                   
+                   	waita	=	30+15-6			'1.5 bits periods @2Mbaud
+                   	waitb	=	30-6			'1 bit period
+                   
+00000 000          DAT		org
+                   
+00000 000 fd64fe00 begin		hubset	#$7F			'switch to 60MHz
+00004 001 fc8c0000 		wrfast	#0,#0			'ready to write entire memory
+00008 002 fd657e20 		setse1	#%010_000000 | 63	'select negative edge on p63
+                   
+0000c 003 fd600824 .loop		pollse1				'clear edge detector
+00010 004 fd602824 		waitse1				'wait for start bit
+00014 005 fd644e1f 		waitx	#waita			'wait for middle of 1st data bit
+                   
+00018 006 fcdc0608 		rep	@.r,#8			'get 8 bits
+0001c 007 fd747e40 		testp	#rx_pin		wc	'sample rx
+00020 008 f0842001 		rcr	x,#1			'rotate bit into byte
+00024 009 fd64301f 		waitx	#waitb			'wait for middle of nth data bit
+00028 00a          .r
+00028 00a f0442018 		shr	x,#32-8			'justify received byte
+0002c 00b fd602015 		wfbyte	x			'write to hub
+                   
+00030 00c fb6c1ff6 		djnz	bytes,#.loop		'loop until all bytes received
+                   
+00034 00d fc7c0000                 rdfast  #0,#0                   'wait for last byte to be written
+                   
+00038 00e fcec0000 		coginit	#0,#0			'launch cog 0 from $00000
+                   
+0003c 00f 000fffc0 bytes		long	$10_0000 - $40		'this value is set by the sender
+                   
+00040 010          x		res	1

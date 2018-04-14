@@ -1,0 +1,134 @@
+                   '*******************************
+                   '*  NTSC 256 x 192 x 8bpp-lut  *
+                   '*******************************
+                   
+                   CON
+                   
+                     f_color	= 3_579_545.0		'colorburst frequency
+                     f_scanline	= f_color / 227.5	'scanline frequency
+                     f_pixel	= f_scanline * 400.0	'pixel frequency for 400 pixels per scanline
+                   
+                     f_clock	= 80_000_000.0		'clock frequency
+                   
+                     f_xfr		= f_pixel / f_clock * float($7FFF_FFFF)
+                     f_csc		= f_color / f_clock * float($7FFF_FFFF) * 2.0
+                   
+                     s		= 90			'scale DAC output (s = 0..128)
+                     r		= s * 1000 / 1646	'precompensate for modulator expansion of 1.646
+                   
+                     mody		= ((+38*s/128) & $FF) << 24 + ((+75*s/128) & $FF) << 16 + ((+15*s/128) & $FF) << 8 + (110*s/128 & $FF)
+                     modi		= ((+76*r/128) & $FF) << 24 + ((-35*r/128) & $FF) << 16 + ((-41*r/128) & $FF) << 8 + (100*s/128 & $FF)
+                     modq		= ((+27*r/128) & $FF) << 24 + ((-67*r/128) & $FF) << 16 + ((+40*r/128) & $FF) << 8 + 128
+                   
+                   
+00000 000          DAT		org
+                   '
+                   '
+                   ' Setup
+                   '
+00000 000 fd65fe00 		hubset	#$FF			'set clock to 80MHz
+                   
+00004 001 ff000006 		rdfast	#0,##$1000-$400		'load .bmp palette into lut
+00008 002 fc7c0000 
+0000c 003 f6048600 		mov	x,#0
+00010 004 fcdc0900 		rep	@.end,#$100
+00014 005 fd608812 		rflong	y
+00018 006 f0648808 		shl	y,#8
+0001c 007 fc308843 		wrlut	y,x
+00020 008 f1048601 		add	x,#1
+00024 009          .end
+00024 009 ff800001 		rdfast	##256*192/64,##$1000	'set rdfast to wrap on bitmap
+00028 00a ff000008 
+0002c 00b fc7e0000 
+                   
+00030 00c ff8508f3 		setxfrq ##round(f_xfr)		'set transfer frequency
+00034 00d fd65c01d 
+00038 00e ff85ba2e 		setcfrq	##round(f_csc)		'set colorspace converter frequency
+0003c 00f fd66003b 
+                   
+00040 010 ff8d1a05 		setcy	##mody			'set colorspace converter coefficients
+00044 011 fd649a38 
+00048 012 ff907977 		setci	##modi
+0004c 013 fd668c39 
+00050 014 ff85f208 		setcq	##modq
+00054 015 fd65003a 
+                   
+00058 016 fd64e03c 		setcmod	#%11_1_0000		'set colorspace converter to YIQ mode (composite)
+                   
+0005c 017 fc046c01 		wrpin	dacmode,#1		'enable dac mode in pin 1
+                   '
+                   '
+                   ' Field loop
+                   '
+00060 018 f6048623 field           mov	x,#35			'top blanks
+00064 019 fdb00050 		call	#blank
+                   
+00068 01a f60486c0                 mov     x,#192			'set visible lines
+0006c 01b fdb00058 line	        call	#hsync			'do horizontal sync
+00070 01c fcc47a00 		xcont	m_rf,#0			'visible line
+00074 01d fcc47801 		xcont	m_av,#1			'after visible spacer
+00078 01e fb6c87fc 		djnz    x,#line           	'another line?
+                   
+0007c 01f f604861b                 mov     x,#27			'bottom blanks
+00080 020 fdb00034 		call	#blank
+                   
+00084 021 f6048606 		mov	x,#6			'high vertical syncs
+00088 022 fcc47c02 .vlow		xcont	m_hl,#2
+0008c 023 fcc47e01 		xcont	m_hh,#1
+00090 024 fb6c87fd 		djnz	x,#.vlow
+                   
+00094 025 f6048606 		mov	x,#6			'low vertical syncs
+00098 026 fcc48002 .vhigh		xcont	m_ll,#2
+0009c 027 fcc48201 		xcont	m_lh,#1
+000a0 028 fb6c87fd 		djnz	x,#.vhigh
+                   
+000a4 029 f6048606 		mov	x,#6			'high vertical syncs
+000a8 02a fcc47c02 .vlow2		xcont	m_hl,#2
+000ac 02b fcc47e01 		xcont	m_hh,#1
+000b0 02c fb6c87fd 		djnz	x,#.vlow2
+                   
+000b4 02d fd9fffa8                 jmp     #field                  'loop
+                   '
+                   '
+                   ' Subroutines
+                   '
+000b8 02e fdb0000c blank		call	#hsync			'blank lines
+000bc 02f fcc47600 		xcont	m_vi,#0
+000c0 030 fcc47801 		xcont	m_av,#1
+000c4 031 0b6c87fc 	_ret_	djnz	x,#blank
+                   
+000c8 032 fcc46e02 hsync		xcont	m_sn,#2			'horizontal sync
+000cc 033 fcc47001 		xcont	m_bc,#1
+000d0 034 fcc07242 		xcont	m_cb,c_cb
+000d4 035 0cc47401 	_ret_	xcont	m_ac,#1
+                   '
+                   '
+                   ' Initialized data
+                   '
+000d8 036 00140040 dacmode		long	%0000_0000_000_1010000000000_01_00000_0
+                   
+000dc 037 cf00001d m_sn		long	$CF000000+29		'sync
+000e0 038 cf000007 m_bc		long	$CF000000+7		'before colorburst
+000e4 039 cf000012 m_cb		long	$CF000000+18		'colorburst
+000e8 03a cf000028 m_ac		long	$CF000000+40		'after colorburst
+000ec 03b cf000100 m_vi		long	$CF000000+256		'visible
+000f0 03c cf000032 m_av		long	$CF000000+50		'after visible (400 total)
+                   
+000f4 03d 7f000100 m_rf		long	$7F000000+256		'visible rflong 8bpp lut
+                   
+000f8 03e cf00000f m_hl		long	$CF000000+15		'vertical sync high low 
+000fc 03f cf0000b9 m_hh		long	$CF000000+185		'vertical sync high high (200 total)
+                   
+00100 040 cf0000ab m_ll		long	$CF000000+171		'vertical sync low low
+00104 041 cf00001d m_lh		long	$CF000000+29		'vertical sync low high (200 total)
+                   
+00108 042 50700001 c_cb		long	$507000_01		'colorburst reference color
+                   
+0010c 043          x		res	1
+0010c 044          y		res	1
+                   '
+                   '
+                   ' Bitmap
+                   '
+00bca              		orgh	$1000 - $436	'justify pixels at $1000, pallete at $1000-$400
+00bca 000          		file	"bitmap.bmp"

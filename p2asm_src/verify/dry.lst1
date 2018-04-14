@@ -1,0 +1,2408 @@
+                   con
+                   	rx_pin = 63
+                   	tx_pin = 62
+                   	clock_freq = 80_000_000
+                   	baud_rate = 115_200
+                   	lr = $1f6
+                   	hub_ram_kb = 32
+                   
+                   dat
+00000              	orgh	0
+                   
+                   '*******************************************************************************
+                   '  COG Code
+                   '*******************************************************************************
+00000 000          	org
+                   
+00000 000 ff00003f start	mov	sp, ##hub_ram_kb*1024 - 64
+00004 001 f6042dc0 
+00008 002 fd647c59 	drvh    #tx_pin
+0000c 003 f607ec05 	mov	lr, #start1
+00010 004 fd8016c8 	jmp	#_main
+00014 005 fd600e01 start1	cogid	r0
+00018 006 fd600e03 	cogstop	r0
+                   
+0001c 007 00000000 r0	long	0
+00020 008 00000000 r1	long	0
+00024 009 00000000 r2	long	0
+00028 00a 00000000 r3	long	0
+0002c 00b 00000000 r4	long	0
+00030 00c 00000000 r5	long	0
+00034 00d 00000000 r6	long	0
+00038 00e 00000000 r7	long	0
+0003c 00f 00000000 r8	long	0
+00040 010 00000000 r9	long	0
+00044 011 00000000 r10	long	0
+00048 012 00000000 r11	long	0
+0004c 013 00000000 r12	long	0
+00050 014 00000000 r13	long	0
+00054 015 00000000 r14	long	0
+00058 016 00000000 sp	long	0
+                   
+0005c 017 f600702c getch	mov     temp, bitcycles
+00060 018 f0447001 	shr     temp, #1
+00064 019 f604720a 	mov     temp1, #10
+00068 01a f6046e00 	mov	parm, #0
+0006c 01b ff400000 getch0	testb   inb, ##1 << (rx_pin & 31) wc
+00070 01c f417fe00 
+00074 01d cd9ffff4   if_c  jmp     #getch0
+00078 01e fd60741a 	getct   temp2
+0007c 01f fa607438 	addct1  temp2, temp
+00080 020 fd602224 	waitct1
+00084 021 f60071ff getch1	mov     temp, inb
+00088 022 f500702b 	and     temp, inbit
+0008c 023 f0046e01 	ror     parm, #1
+00090 024 f5406e38 	or      parm, temp
+00094 025 fa60742c 	addct1  temp2, bitcycles
+00098 026 fd602224 	waitct1
+0009c 027 fb6c73f9 	djnz    temp1, #getch1
+000a0 028 f0046e17 	ror     parm, #31 - 8
+000a4 029 f5046eff 	and     parm, #255
+000a8 02a fd64002d 	ret
+                   
+000ac 02b 80000000 inbit	long    1 << (rx_pin & 31)
+000b0 02c 000002b6 bitcycles long    clock_freq / baud_rate
+                   
+000b4 02d f5446f00 putch	or      parm, #$100
+000b8 02e f0646e01 	shl     parm, #1
+000bc 02f f604720a 	mov     temp1, #10
+000c0 030 fd60741a 	getct   temp2
+000c4 031 f0546e01 putch1	shr     parm, #1               wc
+000c8 032 fd647c5a 	drvc    #tx_pin
+000cc 033 fa60742c 	addct1  temp2, bitcycles
+000d0 034 fd602224 	waitct1
+000d4 035 fb6c73fb 	djnz    temp1, #putch1
+000d8 036 fd64002d 	ret
+                   
+000dc 037 00000000 parm	long    0
+000e0 038 00000000 temp	long    0
+000e4 039 00000000 temp1	long    0
+000e8 03a 00000000 temp2	long    0
+                   
+000ec 03b          putnl
+000ec 03b f6046e0d 	mov	parm, #13
+000f0 03c fdbfffc0 	call	#putch
+                   '	mov	parm, #10
+                   '	call	#putch
+000f4 03d fd64002d 	ret
+                   
+000f8 03e fd000e08 __MULSI	qmul	r0, r1
+000fc 03f fd600e18 	getqx	r0
+00100 040 fd601019 	getqy	r1
+00104 041 fd64002d 	ret
+                   
+00108 042 f6047000 __DIVSI	mov	temp, #0
+0010c 043 f6500e07 	abs	r0, r0 wc
+00110 044 c6047001  if_c	mov	temp, #1
+00114 045 f6501008 	abs	r1, r1 wc
+00118 046 c5647001  if_c	xor	temp, #1
+0011c 047 fdb0000c 	call	#__UDIVSI
+00120 048 f20c7000 	cmp	temp, #0 wz
+00124 049 56600e07  if_nz	neg	r0, r0
+00128 04a fd64002d 	ret
+                   
+0012c 04b fd100e08 __UDIVSI qdiv	r0, r1
+00130 04c fd600e18 	getqx	r0
+00134 04d fd601019 	getqy	r1
+00138 04e fd64002d 	ret
+                   
+                   '*******************************************************************************
+                   '  HUB Code
+                   '*******************************************************************************
+00400              	orgh	$400
+                   
+00400     04c4b400 __clkfreq long clock_freq
+                   
+00404     fd600e1a _clock	getct	r0
+00408     fd63ec2c 	jmp	lr
+                   
+0040c              ___muldi3
+0040c     fda0003e 	call	#__MULSI
+00410     fd63ec2c 	jmp	lr
+                   
+00414              ___divdi3
+00414     fda00042 	call	#__DIVSI
+00418     fd63ec2c 	jmp	lr
+                   
+0041c              _atol
+0041c              _atoi
+0041c     f6001c07 	mov	r7, r0
+00420     f6040e00 	mov	r0, #0
+00424     fd900014 	jmp	#_atoi2
+00428              _atoi1
+00428     f604100a 	mov	r1, #10
+0042c     f1041c01 	add	r7, #1
+00430     fda0003e 	call	#__MULSI
+00434     f1000e0d 	add	r0, r6
+00438     f1840e30 	sub	r0, #48
+0043c              _atoi2
+0043c     fac01a0e 	rdbyte	r6, r7
+00440     f600180d 	mov	r5, r6
+00444     f1841830 	sub	r5, #48
+00448     f21c1809 	cmp	r5, #9 wcz
+0044c     ed9fffd8  IF_BE	jmp	#_atoi1
+00450     fd63ec2c 	jmp	lr
+                   
+00454              ___ctype
+00454     01010101 	byte	1, 1, 1, 1, 1, 1, 1, 1, 1, -111, 17, 17, 17, 17, 1, 1, 1, 1, 1
+00467     01010101 	byte	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -112, 32, 32, 32, 32
+00479     20202020 	byte	32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 66, 66, 66, 66, 66
+00489     42424242 	byte	66, 66, 66, 66, 66, 32, 32, 32, 32, 32, 32, 32, 68, 68, 68, 68
+00499     04044444 	byte	68, 68, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4
+004ae     20202004 	byte	4, 32, 32, 32, 32, 32, 32, 72, 72, 72, 72, 72, 72, 8, 8, 8, 8, 8
+004c0     08080808 	byte	8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 32, 32, 32, 32, 1, 0
+                   
+004d5              _toupper
+004d5     f6001c07 	mov	r7, r0
+004d9     f1841c61 	sub	r7, #97
+004dd     f21c1c19 	cmp	r7, #25 wcz
+004e1     e1840e20  IF_BE	sub	r0, #32
+004e5     fd63ec2c 	jmp	lr
+                   
+004e9              _tolower
+004e9     f6001c07 	mov	r7, r0
+004ed     f1841c41 	sub	r7, #65
+004f1     f21c1c19 	cmp	r7, #25 wcz
+004f5     e1040e20  IF_BE	add	r0, #32
+004f9     fd63ec2c 	jmp	lr
+                   
+004fd     fd600e1a _rand	getct	r0
+00501     fd63ec2c 	jmp	lr
+                   
+00505     fd63ec2c _srand	jmp	lr
+                   
+00509     fd800005 _exit	jmp	#start1
+                   
+0050d     ff02625a _sleep	mov	r1, ##clock_freq
+00511     f6041000 
+00515     fda0003e 	call	#__MULSI
+00519     fd600e1f 	waitx	r0
+0051d     fd63ec2c 	jmp	lr
+                   
+00521              _memset
+00521     f1041201 	add	r2, #1
+00525     fd900008 	jmp	#_memset2
+00529              _memset1
+00529     fc401007 	wrbyte	r1, r0
+0052d     f1040e01 	add	r0, #1
+00531              _memset2
+00531     fb6c13fd 	djnz	r2,#_memset1
+00535     fd63ec2c 	jmp	lr
+                   
+00539     f20c1200 _memcpy	cmp	r2, #0 wz
+0053d     ad63ec2c  if_z	jmp	lr
+00541     fac07008 	rdbyte	temp, r1
+00545     fc407007 	wrbyte	temp, r0
+00549     f1041001 	add	r1, #1
+0054d     f1040e01 	add	r0, #1
+00551     f1841201 	sub	r2, #1
+00555     fd9fffe0 	jmp	#_memcpy
+                   
+00559              _strcmp
+00559     fac01a07 	rdbyte	r6, r0
+0055d     f25c1a00 	cmps	r6, #0 wcz
+00561     f1040e01 	add	r0, #1
+00565     fac01c08 	rdbyte	r7, r1
+00569     f1041001 	add	r1, #1
+0056d     5d900008  if_ne	jmp	#_strcmp1
+00571     f6600e0e 	neg	r0, r7
+00575     fd63ec2c 	jmp	lr
+00579              _strcmp1
+00579     f2581a0e 	cmps	r6, r7 wcz
+0057d     ad9fffd8  if_e 	jmp	#_strcmp
+00581     f6000e0d 	mov	r0, r6
+00585     f1800e0e 	sub	r0, r7
+00589     fd63ec2c 	jmp	lr
+                   
+0058d              _strncmp
+0058d     f1041201 	add	r2, #1
+00591     fd900024 	jmp	#_strncmp2
+00595              _strncmp1
+00595     fac01a07 	rdbyte	r6, r0
+00599     f1040e01 	add	r0, #1
+0059d     fac01c08 	rdbyte	r7, r1
+005a1     f2581a0e 	cmps	r6, r7 wcz
+005a5     f1041001 	add	r1, #1
+005a9     ad90000c  IF_E 	jmp	#_strncmp2
+005ad     f6000e0d 	mov	r0, r6
+005b1     f1800e0e 	sub	r0, r7
+005b5     fd63ec2c 	jmp	lr
+005b9              _strncmp2
+005b9     fb6c13f6 	djnz	r2,#_strncmp1
+005bd     f6040e00 	mov	r0, #0
+005c1     fd63ec2c 	jmp	lr
+                   
+005c5     fac01a08 _strcpy	rdbyte	r6, r1
+005c9     f24c1a00 	cmps	r6, #0 wz
+005cd     f1041001 	add	r1, #1
+005d1     fc401a07 	wrbyte	r6, r0
+005d5     f1040e01 	add	r0, #1
+005d9     5d9fffe8  if_nz	jmp	#_strcpy
+005dd     fd63ec2c 	jmp	lr
+                   
+005e1     f6001c07 _strlen	mov	r7, r0
+005e5     fd900004 	jmp	#_strle1
+005e9     f1040e01 _strle0	add	r0, #1
+005ed     fac01a07 _strle1	rdbyte	r6, r0
+005f1     f24c1a00 	cmps	r6, #0 wz
+005f5     5d9ffff0  if_nz	jmp	#_strle0
+005f9     f1800e0e 	sub	r0, r7
+005fd     fd63ec2c         jmp	lr
+                   
+00601              _getchar
+00601     fda00017 	call	#getch
+00605     f6000e37 	mov	r0, parm
+00609     fd63ec2c 	jmp	lr
+                   
+0060d     f6001c07 _gets	mov	r7, r0
+00611     fda00017 _gets2	call	#getch
+00615     f6001a37 	mov	r6, parm
+00619     f20c1a08 	cmp	r6, #8 wz
+0061d     5d900028  if_nz	jmp	#_gets0
+00621     f2180e0e 	cmp	r0, r7 wcz
+00625     ed9fffe8  if_be	jmp	#_gets2
+00629     f6046e08 	mov	parm, #8
+0062d     fda0002d 	call	#putch
+00631     f6046e20 	mov	parm, #" "
+00635     fda0002d 	call	#putch
+00639     f6046e08 	mov	parm, #8
+0063d     fda0002d 	call	#putch
+00641     f1840e01 	sub	r0, #1
+00645     fd9fffc8 	jmp	#_gets2
+00649     fda0002d _gets0	call	#putch
+0064d     f20c1a0d 	cmp	r6, #13 wz
+00651     520c1a0a  if_nz	cmp	r6, #10 wz
+00655     ad90000c  if_z	jmp	#_gets1
+00659     fc401a07 	wrbyte	r6, r0
+0065d     f1040e01 	add	r0, #1
+00661     fd9fffac 	jmp	#_gets2
+00665     f6041a00 _gets1	mov	r6, #0
+00669     fc401a07 	wrbyte	r6, r0
+0066d     f6000e0e 	mov	r0, r7
+00671     fd63ec2c 	jmp	lr
+                   
+00675              _putchar
+00675     f20c0e0a 	cmp	r0, #10 wz
+00679     ada0003b  if_z	call	#putnl
+0067d     56006e07  if_nz	mov	parm, r0
+00681     5da0002d  if_nz	call	#putch
+00685     fd63ec2c 	jmp	lr
+                   
+00689     fac86e07 _puts	rdbyte  parm, r0  wz
+0068d     ad90000c  if_z	jmp	#_puts1
+00691     f1040e01 	add     r0, #1
+00695     fda0002d 	call    #putch
+00699     fd9fffec 	jmp     #_puts
+0069d     fda0003b _puts1	call	#putnl
+006a1     fd63ec2c 	jmp	lr
+                   
+006a5              _PUTCW
+006a5     f1842c04 	sub	sp, #4
+006a9     fc602816 	wrlong	r13, sp
+006ad     f1842c04 	sub	sp, #4
+006b1     fc602a16 	wrlong	r14, sp
+006b5     f1842c04 	sub	sp, #4
+006b9     fc63ec16 	wrlong	lr, sp
+006bd     f6002808 	mov	r13, r1
+006c1     f6002a14 	mov	r14, r13
+006c5     fb27edeb 	calld	lr, #_putchar
+006c9     fd900008 	jmp	#_LPF2
+006cd              _LPF3
+006cd     f6040e20 	mov	r0, #32
+006d1     fb27ede8 	calld	lr, #_putchar
+006d5              _LPF2
+006d5     f1842a01 	sub	r14, #1
+006d9     f25c2a00 	cmps	r14, #0 wcz
+006dd     1d9fffec 	IF_A 	jmp	#_LPF3
+006e1     f6000e14 	mov	r0, r13
+006e5     f3440e01 	fges	r0, #1
+006e9     fb03ec16 	rdlong	lr, sp
+006ed     f1042c04 	add	sp, #4
+006f1     fb002a16 	rdlong	r14, sp
+006f5     f1042c04 	add	sp, #4
+006f9     fb002816 	rdlong	r13, sp
+006fd     f1042c04 	add	sp, #4
+00701     fd63ec2c 	jmp	lr
+00705                      alignl
+00708              _printf
+00708     f1842c04 	sub	sp, #4
+0070c     fc601e16 	wrlong	r8, sp
+00710     f1842c04 	sub	sp, #4
+00714     fc602016 	wrlong	r9, sp
+00718     f1842c04 	sub	sp, #4
+0071c     fc602216 	wrlong	r10, sp
+00720     f1842c04 	sub	sp, #4
+00724     fc602416 	wrlong	r11, sp
+00728     f1842c04 	sub	sp, #4
+0072c     fc602616 	wrlong	r12, sp
+00730     f1842c04 	sub	sp, #4
+00734     fc602816 	wrlong	r13, sp
+00738     f1842c04 	sub	sp, #4
+0073c     fc602a16 	wrlong	r14, sp
+00740     f1842c04 	sub	sp, #4
+00744     fc63ec16 	wrlong	lr, sp
+00748     f1842c20 	sub	sp, #32
+0074c     f6001c16 	mov	r7, sp
+00750     f1041c40 	add	r7, #64
+00754     f6002416 	mov	r11, sp
+00758     f1042444 	add	r11, #68
+0075c     f6042800 	mov	r13, #0
+00760     ff000005 	mov	r8, ##_LPFC3
+00764     f6041e5c 
+00768     fb00260e 	rdlong	r12, r7
+0076c     fd900298 	jmp	#_LPF38
+00770              _LPF31
+00770     f6001c13 	mov	r7, r12
+00774     f25c0e25 	cmps	r0, #37 wcz
+00778     f1041c01 	add	r7, #1
+0077c     5600260e 	IF_NE mov	r12, r7
+00780     56041001 	IF_NE mov	r1, #1
+00784     5d9000e4 	IF_NE	jmp	#_LPF39
+00788     fac01c0e 	rdbyte	r7, r7
+0078c     f25c1c30 	cmps	r7, #48 wcz
+00790     f6041a1c 	mov	r6, #28
+00794     a6041830 	IF_E  mov	r5,#48
+00798     56041820 	IF_NE mov	r5,#32
+0079c     f1001a16 	add	r6, sp
+007a0     f1042602 	add	r12, #2
+007a4     f6042a00 	mov	r14, #0
+007a8     fc60180d 	wrlong	r5, r6
+007ac     fd900020 	jmp	#_LPF9
+007b0              _LPF11
+007b0     f6000e15 	mov	r0, r14
+007b4     f604100a 	mov	r1, #10
+007b8     f1841c30 	sub	r7, #48
+007bc     fda0003e 	call	#__MULSI
+007c0     f6002a07 	mov	r14, r0
+007c4     f1002a0e 	add	r14, r7
+007c8     fac01c13 	rdbyte	r7, r12
+007cc     f1042601 	add	r12, #1
+007d0              _LPF9
+007d0     f25c1c00 	cmps	r7, #0 wcz
+007d4     ad900020 	IF_E 	jmp	#_LPF37
+007d8     f6001a0e 	mov	r6, r7
+007dc     f25c1c30 	cmps	r7, #"0" wcz
+007e0     cd900014  IF_B   jmp	#_LPF37
+007e4     f25c1c39 	cmps	r7, #"9" wcz
+007e8     1d90000c  IF_A   jmp	#_LPF37
+007ec     fd9fffc0 	jmp	#_LPF11
+007f0              _LPF13
+007f0     fac01c13 	rdbyte	r7, r12
+007f4     f1042601 	add	r12, #1
+007f8              _LPF37
+007f8     f25c1c4c 	cmps	r7, #76 wcz
+007fc     f6041800 	mov	r5, #0
+00800     f5c41801 	muxz	r5,#1
+00804     f6041a00 	mov	r6, #0
+00808     f25c1c6c 	cmps	r7, #108 wcz
+0080c     f5c41a01 	muxz	r6,#1
+00810     f600700c 	mov	temp, r5
+00814     f548700d 	or	temp, r6 wz
+00818     5d9fffd4 	IF_NE	jmp	#_LPF13
+0081c     f25c1c00 	cmps	r7, #0 wcz
+00820     ad9001ec 	IF_E 	jmp	#_LPF14
+00824     f25c1c73 	cmps	r7, #115 wcz
+00828     ad90006c 	IF_E 	jmp	#_LPF18
+0082c     f21c1c73 	cmp	r7, #115 wcz
+00830     1d90001c 	IF_A 	jmp	#_LPF19
+00834     f25c1c63 	cmps	r7, #99 wcz
+00838     ad90003c 	IF_E 	jmp	#_LPF16
+0083c     f25c1c64 	cmps	r7, #100 wcz
+00840     ad9000cc 	IF_E 	jmp	#_LPF17
+00844     f25c1c25 	cmps	r7, #37 wcz
+00848     5d9001bc 	IF_NE	jmp	#_LPF38
+0084c     fd900014 	jmp	#_LPF40
+00850              _LPF19
+00850     f25c1c75 	cmps	r7, #117 wcz
+00854     ad9000b8 	IF_E 	jmp	#_LPF17
+00858     f25c1c78 	cmps	r7, #120 wcz
+0085c     5d9001a8 	IF_NE	jmp	#_LPF38
+00860     fd9000b8 	jmp	#_LPF35
+00864              _LPF40
+00864     f6040e25 	mov	r0, #37
+00868     f6001015 	mov	r1, r14
+0086c              _LPF39
+0086c     fe1ffe35 	calld	lr, #_PUTCW
+00870     f1002807 	add	r13, r0
+00874     fd900190 	jmp	#_LPF38
+00878              _LPF16
+00878     f6002212 	mov	r10, r11
+0087c     f6001015 	mov	r1, r14
+00880     f1042204 	add	r10, #4
+00884     fb000e12 	rdlong	r0, r11
+00888     f6002411 	mov	r11, r10
+0088c     fe1ffe15 	calld	lr, #_PUTCW
+00890     f1002807 	add	r13, r0
+00894     fd900170 	jmp	#_LPF38
+00898              _LPF18
+00898     f6001a12 	mov	r6, r11
+0089c     f6041c18 	mov	r7, #24
+008a0     f1041a04 	add	r6, #4
+008a4     f1001c16 	add	r7, sp
+008a8     fb002212 	rdlong	r10, r11
+008ac     f6042400 	mov	r11, #0
+008b0     fc601a0e 	wrlong	r6, r7
+008b4     fd90000c 	jmp	#_LPF20
+008b8              _LPF21
+008b8     f1042201 	add	r10, #1
+008bc     f1042401 	add	r11, #1
+008c0     fe1ffdb1 	calld	lr, #_putchar
+008c4              _LPF20
+008c4     f6002015 	mov	r9, r14
+008c8     f1802012 	sub	r9, r11
+008cc     fac80e11 	rdbyte	r0, r10 wz
+008d0     5d9fffe4 	IF_NE	jmp	#_LPF21
+008d4     f6002a10 	mov	r14, r9
+008d8     fd90000c 	jmp	#_LPF22
+008dc              _LPF23
+008dc     f6040e20 	mov	r0, #32
+008e0     f1842a01 	sub	r14, #1
+008e4     fe1ffd8d 	calld	lr, #_putchar
+008e8              _LPF22
+008e8     f25c2a00 	cmps	r14, #0 wcz
+008ec     1d9fffec 	IF_A 	jmp	#_LPF23
+008f0     f6001c10 	mov	r7, r9
+008f4     f3441c00 	fges	r7, #0
+008f8     f6041818 	mov	r5, #24
+008fc     f1001c12 	add	r7, r11
+00900     f1001816 	add	r5, sp
+00904     f100280e 	add	r13, r7
+00908     fb00240c 	rdlong	r11, r5
+0090c     fd9000f8 	jmp	#_LPF38
+00910              _LPF17
+00910     f25c1c78 	cmps	r7, #120 wcz
+00914     5604200a 	IF_NE mov	r9, #10
+00918     5d900004 	IF_NE	jmp	#_LPF24
+0091c              _LPF35
+0091c     f6042010 	mov	r9, #16
+00920              _LPF24
+00920     f6001a12 	mov	r6, r11
+00924     f6041818 	mov	r5, #24
+00928     f1041a04 	add	r6, #4
+0092c     f1001816 	add	r5, sp
+00930     f25c1c64 	cmps	r7, #100 wcz
+00934     fc601a0c 	wrlong	r6, r5
+00938     fb002412 	rdlong	r11, r11
+0093c     5d900020 	IF_NE	jmp	#_LPF25
+00940     f25c2400 	cmps	r11, #0 wcz
+00944     3d900018 	IF_AE	jmp	#_LPF25
+00948     f6040e2d 	mov	r0, #45
+0094c     f6041001 	mov	r1, #1
+00950     f1842a01 	sub	r14, #1
+00954     f6602412 	neg	r11, r11
+00958     fe1ffd49 	calld	lr, #_PUTCW
+0095c     f1002807 	add	r13, r0
+00960              _LPF25
+00960     f6002216 	mov	r10, sp
+00964              _LPF26
+00964     f6000e12 	mov	r0, r11
+00968     f6001010 	mov	r1, r9
+0096c     f1842a01 	sub	r14, #1
+00970     fda0004b 	call	#__UDIVSI
+00974     f6001c08 	mov	r7, r1
+00978     f6000e12 	mov	r0, r11
+0097c     f1001c0f 	add	r7, r8
+00980     f6001010 	mov	r1, r9
+00984     fda0004b 	call	#__UDIVSI
+00988     fac01c0e 	rdbyte	r7, r7
+0098c     f25c0e00 	cmps	r0, #0 wcz
+00990     f6002407 	mov	r11, r0
+00994     fc401c11 	wrbyte	r7, r10
+00998     f1042201 	add	r10, #1
+0099c     5d9fffc4 	IF_NE	jmp	#_LPF26
+009a0     f6002415 	mov	r11, r14
+009a4     fd900014 	jmp	#_LPF27
+009a8              _LPF28
+009a8     f6041a1c 	mov	r6, #28
+009ac     f1001a16 	add	r6, sp
+009b0     f1842401 	sub	r11, #1
+009b4     fb000e0d 	rdlong	r0, r6
+009b8     fe1ffcb9 	calld	lr, #_putchar
+009bc              _LPF27
+009bc     f25c2400 	cmps	r11, #0 wcz
+009c0     1d9fffe4 	IF_A 	jmp	#_LPF28
+009c4     f3442a00 	fges	r14, #0
+009c8     f6001c11 	mov	r7, r10
+009cc     f6002016 	mov	r9, sp
+009d0     fd900014 	jmp	#_LPF29
+009d4              _LPF30
+009d4     f600240e 	mov	r11, r7
+009d8     f1842401 	sub	r11, #1
+009dc     fac00e12 	rdbyte	r0, r11
+009e0     fe1ffc91 	calld	lr, #_putchar
+009e4     f6001c12 	mov	r7, r11
+009e8              _LPF29
+009e8     f2581c10 	cmps	r7, r9 wcz
+009ec     5d9fffe4 	IF_NE	jmp	#_LPF30
+009f0     f180220e 	sub	r10, r7
+009f4     f6041c18 	mov	r7, #24
+009f8     f1002215 	add	r10, r14
+009fc     f1001c16 	add	r7, sp
+00a00     f1002811 	add	r13, r10
+00a04     fb00240e 	rdlong	r11, r7
+00a08              _LPF38
+00a08     fac80e13 	rdbyte	r0, r12 wz
+00a0c     5d9ffd60 	IF_NE	jmp	#_LPF31
+00a10              _LPF14
+00a10     f6000e14 	mov	r0, r13
+00a14     f1042c20 	add	sp, #32
+00a18     fb03ec16 	rdlong	lr, sp
+00a1c     f1042c04 	add	sp, #4
+00a20     fb002a16 	rdlong	r14, sp
+00a24     f1042c04 	add	sp, #4
+00a28     fb002816 	rdlong	r13, sp
+00a2c     f1042c04 	add	sp, #4
+00a30     fb002616 	rdlong	r12, sp
+00a34     f1042c04 	add	sp, #4
+00a38     fb002416 	rdlong	r11, sp
+00a3c     f1042c04 	add	sp, #4
+00a40     fb002216 	rdlong	r10, sp
+00a44     f1042c04 	add	sp, #4
+00a48     fb002016 	rdlong	r9, sp
+00a4c     f1042c04 	add	sp, #4
+00a50     fb001e16 	rdlong	r8, sp
+00a54     f1042c04 	add	sp, #4
+00a58     fd63ec2c 	jmp	lr
+                   
+00a5c     33323130 _LPFC3	byte "0123456789ABCDEF", 0
+00a6d                      alignl
+                   
+                   '*******************************************************************************
+                   '  Program Code
+                   '*******************************************************************************
+                   
+00a70              	alignl
+00a70              _Proc_2
+00a70     ff000005 	rdlong	temp, ##_LC0
+00a74     fb0470a0 
+00a78     fac01a38 	rdbyte	r6, temp
+00a7c     f25c1a41 	cmps	r6, #65 wcz
+00a80     fb001c07 	rdlong	r7, r0
+00a84     a1041c09 	IF_E  add	r7, #9
+00a88     af000005 	IF_E  rdlong	temp, ##_LC1
+00a8c     ab0470a4 
+00a90     ab001a38 	IF_E  rdlong	r6, temp
+00a94     a1801c0d 	IF_E  sub	r7, r6
+00a98     ac601c07 	IF_E  wrlong	r7, r0
+00a9c     fd63ec2c 	jmp	lr
+00aa0              	alignl
+00aa0              _LC0
+00aa0     0000506c 	long	_Ch_1_Glob
+00aa4              	alignl
+00aa4              _LC1
+00aa4     00005074 	long	_Int_Glob
+00aa8              	alignl
+00aa8              _Proc_3
+00aa8     ff000005 	rdlong	r7, ##_LC2
+00aac     fb041ce4 
+00ab0     fb001a0e 	rdlong	r6, r7
+00ab4     f25c1a00 	cmps	r6, #0 wcz
+00ab8     a6041a00 	IF_E  mov	r6, #0
+00abc     5b001a0d 	IF_NE rdlong	r6, r6
+00ac0     5c601a07 	IF_NE wrlong	r6, r0
+00ac4     5b001a0e 	IF_NE rdlong	r6, r7
+00ac8     f1041a0c 	add	r6, #12
+00acc     ff000005 	rdlong	temp, ##_LC3
+00ad0     fb0470e8 
+00ad4     fb001c38 	rdlong	r7, temp
+00ad8     f1041c0c 	add	r7, #12
+00adc     fc601c0d 	wrlong	r7, r6
+00ae0     fd63ec2c 	jmp	lr
+00ae4              	alignl
+00ae4              _LC2
+00ae4     0000507c 	long	_Ptr_Glob
+00ae8              	alignl
+00ae8              _LC3
+00ae8     00005074 	long	_Int_Glob
+00aec              	alignl
+00aec              _Proc_4
+00aec     ff000005 	rdlong	temp, ##_LC5
+00af0     fb047130 
+00af4     fac01c38 	rdbyte	r7, temp
+00af8     ff000005 	rdlong	r6, ##_LC4
+00afc     fb041b2c 
+00b00     f25c1c41 	cmps	r7, #65 wcz
+00b04     f6041c00 	mov	r7, #0
+00b08     f5c41c01 	muxz	r7,#1
+00b0c     fb00180d 	rdlong	r5, r6
+00b10     f5401c0c 	or	r7, r5
+00b14     fc601c0d 	wrlong	r7, r6
+00b18     f6041c42 	mov	r7, #66
+00b1c     ff000005 	rdlong	temp, ##_LC6
+00b20     fb047134 
+00b24     fc401c38 	wrbyte	r7, temp
+00b28     fd63ec2c 	jmp	lr
+00b2c              	alignl
+00b2c              _LC4
+00b2c     00005070 	long	_Bool_Glob
+00b30              	alignl
+00b30              _LC5
+00b30     0000506c 	long	_Ch_1_Glob
+00b34              	alignl
+00b34              _LC6
+00b34     00005068 	long	_Ch_2_Glob
+00b38              	alignl
+00b38              _Proc_5
+00b38     f6041c41 	mov	r7, #65
+00b3c     ff000005 	rdlong	temp, ##_LC7
+00b40     fb04715c 
+00b44     fc401c38 	wrbyte	r7, temp
+00b48     f6041c00 	mov	r7, #0
+00b4c     ff000005 	rdlong	temp, ##_LC8
+00b50     fb047160 
+00b54     fc601c38 	wrlong	r7, temp
+00b58     fd63ec2c 	jmp	lr
+00b5c              	alignl
+00b5c              _LC7
+00b5c     0000506c 	long	_Ch_1_Glob
+00b60              	alignl
+00b60              _LC8
+00b60     00005070 	long	_Bool_Glob
+00b64              	alignl
+00b64              _Proc_6
+00b64     fc600e08 	wrlong	r0, r1
+00b68     f25c0e02 	cmps	r0, #2 wcz
+00b6c     ad900040 	IF_E 	jmp	#_L10
+00b70     f6041c03 	mov	r7, #3
+00b74     f25c0e01 	cmps	r0, #1 wcz
+00b78     fc601c08 	wrlong	r7, r1
+00b7c     ad90003c 	IF_E 	jmp	#_L13
+00b80     f21c0e01 	cmp	r0, #1 wcz
+00b84     3d90000c 	IF_AE	jmp	#_L18
+00b88     f6041c00 	mov	r7, #0
+00b8c     fc601c08 	wrlong	r7, r1
+00b90     fd63ec2c 	jmp	lr
+00b94              _L18
+00b94     f25c0e02 	cmps	r0, #2 wcz
+00b98     ad900014 	IF_E 	jmp	#_L10
+00b9c     f25c0e04 	cmps	r0, #4 wcz
+00ba0     5d900008 	IF_NE	jmp	#_L15
+00ba4     f6041c02 	mov	r7, #2
+00ba8     fc601c08 	wrlong	r7, r1
+00bac              _L15
+00bac     fd63ec2c 	jmp	lr
+00bb0              _L10
+00bb0     f6041c01 	mov	r7, #1
+00bb4     fc601c08 	wrlong	r7, r1
+00bb8     fd63ec2c 	jmp	lr
+00bbc              _L13
+00bbc     ff000005 	rdlong	temp, ##_LC9
+00bc0     fb0471dc 
+00bc4     fb001c38 	rdlong	r7, temp
+00bc8     f25c1c64 	cmps	r7, #100 wcz
+00bcc     ed9fffdc 	IF_BE	jmp	#_L15
+00bd0     f6041c00 	mov	r7, #0
+00bd4     fc601c08 	wrlong	r7, r1
+00bd8     fd63ec2c 	jmp	lr
+00bdc              	alignl
+00bdc              _LC9
+00bdc     00005074 	long	_Int_Glob
+00be0              	alignl
+00be0              _Proc_1
+00be0     f1842c04 	sub	sp, #4
+00be4     fc602616 	wrlong	r12, sp
+00be8     f1842c04 	sub	sp, #4
+00bec     fc602816 	wrlong	r13, sp
+00bf0     f1842c04 	sub	sp, #4
+00bf4     fc602a16 	wrlong	r14, sp
+00bf8     f1842c04 	sub	sp, #4
+00bfc     fc63ec16 	wrlong	lr, sp
+00c00     ff000007 	rdlong	r13, ##_LC10
+00c04     fb04288c 
+00c08     f6001607 	mov	r4, r0
+00c0c     fb001c14 	rdlong	r7, r13
+00c10     f600140e 	mov	r3, r7
+00c14     f1041410 	add	r3, #16
+00c18     fb002a07 	rdlong	r14, r0
+00c1c     f6001815 	mov	r5, r14
+00c20     f1041804 	add	r5, #4
+00c24     fb001a0e 	rdlong	r6, r7
+00c28     f6001015 	mov	r1, r14
+00c2c     f1041008 	add	r1, #8
+00c30     fc601a15 	wrlong	r6, r14
+00c34     f6001a0e 	mov	r6, r7
+00c38     f1041a04 	add	r6, #4
+00c3c     fb001a0d 	rdlong	r6, r6
+00c40     f6002615 	mov	r12, r14
+00c44     f104260c 	add	r12, #12
+00c48     fc601a0c 	wrlong	r6, r5
+00c4c     f6001a0e 	mov	r6, r7
+00c50     f1041a08 	add	r6, #8
+00c54     fb001a0d 	rdlong	r6, r6
+00c58     f104160c 	add	r4, #12
+00c5c     fc601a08 	wrlong	r6, r1
+00c60     f6001a0e 	mov	r6, r7
+00c64     f1041a0c 	add	r6, #12
+00c68     fb001a0d 	rdlong	r6, r6
+00c6c     fc601a13 	wrlong	r6, r12
+00c70     f6001a15 	mov	r6, r14
+00c74     f1041a10 	add	r6, #16
+00c78     fb00140a 	rdlong	r3, r3
+00c7c     fc60140d 	wrlong	r3, r6
+00c80     f600140e 	mov	r3, r7
+00c84     f1041414 	add	r3, #20
+00c88     fb00140a 	rdlong	r3, r3
+00c8c     f1041a04 	add	r6, #4
+00c90     fc60140d 	wrlong	r3, r6
+00c94     f600140e 	mov	r3, r7
+00c98     f1041418 	add	r3, #24
+00c9c     fb00140a 	rdlong	r3, r3
+00ca0     f1041a04 	add	r6, #4
+00ca4     fc60140d 	wrlong	r3, r6
+00ca8     f600140e 	mov	r3, r7
+00cac     f104141c 	add	r3, #28
+00cb0     fb00140a 	rdlong	r3, r3
+00cb4     f1041a04 	add	r6, #4
+00cb8     fc60140d 	wrlong	r3, r6
+00cbc     f600140e 	mov	r3, r7
+00cc0     f1041420 	add	r3, #32
+00cc4     fb00140a 	rdlong	r3, r3
+00cc8     f1041a04 	add	r6, #4
+00ccc     fc60140d 	wrlong	r3, r6
+00cd0     f600140e 	mov	r3, r7
+00cd4     f1041424 	add	r3, #36
+00cd8     fb00140a 	rdlong	r3, r3
+00cdc     f1041a04 	add	r6, #4
+00ce0     fc60140d 	wrlong	r3, r6
+00ce4     f600140e 	mov	r3, r7
+00ce8     f1041428 	add	r3, #40
+00cec     fb00140a 	rdlong	r3, r3
+00cf0     f1041a04 	add	r6, #4
+00cf4     fc60140d 	wrlong	r3, r6
+00cf8     f600140e 	mov	r3, r7
+00cfc     f104142c 	add	r3, #44
+00d00     fb00140a 	rdlong	r3, r3
+00d04     f1041a04 	add	r6, #4
+00d08     fc60140d 	wrlong	r3, r6
+00d0c     f6041a05 	mov	r6, #5
+00d10     fc601a0b 	wrlong	r6, r4
+00d14     fc601a13 	wrlong	r6, r12
+00d18     fb001a07 	rdlong	r6, r0
+00d1c     fc601a15 	wrlong	r6, r14
+00d20     fb001c0e 	rdlong	r7, r7
+00d24     fc601c15 	wrlong	r7, r14
+00d28     fb001c14 	rdlong	r7, r13
+00d2c     f1041c0c 	add	r7, #12
+00d30     ff000007 	rdlong	temp, ##_LC11
+00d34     fb047090 
+00d38     fb001a38 	rdlong	r6, temp
+00d3c     f1041a0c 	add	r6, #12
+00d40     fc601a0e 	wrlong	r6, r7
+00d44     fb001c0c 	rdlong	r7, r5
+00d48     f25c1c00 	cmps	r7, #0 wcz
+00d4c     ad90010c 	IF_E 	jmp	#_L23
+00d50     fb001c07 	rdlong	r7, r0
+00d54     f600180e 	mov	r5, r7
+00d58     f1041804 	add	r5, #4
+00d5c     fb001a0e 	rdlong	r6, r7
+00d60     fc601a07 	wrlong	r6, r0
+00d64     f6001a07 	mov	r6, r0
+00d68     f1041a04 	add	r6, #4
+00d6c     fb00180c 	rdlong	r5, r5
+00d70     fc60180d 	wrlong	r5, r6
+00d74     f600180e 	mov	r5, r7
+00d78     f1041808 	add	r5, #8
+00d7c     fb00180c 	rdlong	r5, r5
+00d80     f1041a04 	add	r6, #4
+00d84     fc60180d 	wrlong	r5, r6
+00d88     f6001a0e 	mov	r6, r7
+00d8c     f1041a0c 	add	r6, #12
+00d90     fb001a0d 	rdlong	r6, r6
+00d94     f600180e 	mov	r5, r7
+00d98     f1041810 	add	r5, #16
+00d9c     fc601a0b 	wrlong	r6, r4
+00da0     f6001a07 	mov	r6, r0
+00da4     f1041a10 	add	r6, #16
+00da8     fb00180c 	rdlong	r5, r5
+00dac     f1040e2c 	add	r0, #44
+00db0     fc60180d 	wrlong	r5, r6
+00db4     f600180e 	mov	r5, r7
+00db8     f1041814 	add	r5, #20
+00dbc     fb00180c 	rdlong	r5, r5
+00dc0     f1041a04 	add	r6, #4
+00dc4     fc60180d 	wrlong	r5, r6
+00dc8     f600180e 	mov	r5, r7
+00dcc     f1041818 	add	r5, #24
+00dd0     fb00180c 	rdlong	r5, r5
+00dd4     f1041a04 	add	r6, #4
+00dd8     fc60180d 	wrlong	r5, r6
+00ddc     f600180e 	mov	r5, r7
+00de0     f104181c 	add	r5, #28
+00de4     fb00180c 	rdlong	r5, r5
+00de8     f1041a04 	add	r6, #4
+00dec     fc60180d 	wrlong	r5, r6
+00df0     f600180e 	mov	r5, r7
+00df4     f1041820 	add	r5, #32
+00df8     fb00180c 	rdlong	r5, r5
+00dfc     f1041a04 	add	r6, #4
+00e00     fc60180d 	wrlong	r5, r6
+00e04     f600180e 	mov	r5, r7
+00e08     f1041824 	add	r5, #36
+00e0c     fb00180c 	rdlong	r5, r5
+00e10     f1041a04 	add	r6, #4
+00e14     fc60180d 	wrlong	r5, r6
+00e18     f600180e 	mov	r5, r7
+00e1c     f1041828 	add	r5, #40
+00e20     fb00180c 	rdlong	r5, r5
+00e24     f1041a04 	add	r6, #4
+00e28     f1041c2c 	add	r7, #44
+00e2c     fc60180d 	wrlong	r5, r6
+00e30     fb001c0e 	rdlong	r7, r7
+00e34     fc601c07 	wrlong	r7, r0
+00e38              _L22
+00e38     fb03ec16 	rdlong	lr, sp
+00e3c     f1042c04 	add	sp, #4
+00e40     fb002a16 	rdlong	r14, sp
+00e44     f1042c04 	add	sp, #4
+00e48     fb002816 	rdlong	r13, sp
+00e4c     f1042c04 	add	sp, #4
+00e50     fb002616 	rdlong	r12, sp
+00e54     f1042c04 	add	sp, #4
+00e58     fd63ec2c 	jmp	lr
+00e5c              _L23
+00e5c     f6041c06 	mov	r7, #6
+00e60     f1040e08 	add	r0, #8
+00e64     fc601c13 	wrlong	r7, r12
+00e68     fb000e07 	rdlong	r0, r0
+00e6c     fb27ed3d 	calld	lr,#_Proc_6
+00e70     fb001a14 	rdlong	r6, r13
+00e74     fb001c13 	rdlong	r7, r12
+00e78     f1041c0c 	add	r7, #12
+00e7c     fb001a0d 	rdlong	r6, r6
+00e80     fc601a15 	wrlong	r6, r14
+00e84     fc601c13 	wrlong	r7, r12
+00e88     fd9fffac 	jmp	#_L22
+00e8c              	alignl
+00e8c              _LC10
+00e8c     0000507c 	long	_Ptr_Glob
+00e90              	alignl
+00e90              _LC11
+00e90     00005074 	long	_Int_Glob
+00e94              	alignl
+00e94              _Proc_7
+00e94     f1040e02 	add	r0, #2
+00e98     f1001007 	add	r1, r0
+00e9c     fc601009 	wrlong	r1, r2
+00ea0     fd63ec2c 	jmp	lr
+00ea4              	alignl
+00ea4              _Proc_8
+00ea4     f1842c04 	sub	sp, #4
+00ea8     fc602616 	wrlong	r12, sp
+00eac     f1842c04 	sub	sp, #4
+00eb0     fc602816 	wrlong	r13, sp
+00eb4     f1842c04 	sub	sp, #4
+00eb8     fc602a16 	wrlong	r14, sp
+00ebc     f1842c04 	sub	sp, #4
+00ec0     fc63ec16 	wrlong	lr, sp
+00ec4     f6001c09 	mov	r7, r2
+00ec8     f1041c05 	add	r7, #5
+00ecc     f600160e 	mov	r4, r7
+00ed0     f6001a0e 	mov	r6, r7
+00ed4     f0641a05 	shl	r6, #5
+00ed8     f0641603 	shl	r4, #3
+00edc     f100160d 	add	r4, r6
+00ee0     f603ec0e 	mov	lr, r7
+00ee4     f6001809 	mov	r5, r2
+00ee8     f6002a0b 	mov	r14, r4
+00eec     f067ec02 	shl	lr, #2
+00ef0     f6002807 	mov	r13, r0
+00ef4     f6001a09 	mov	r6, r2
+00ef8     f1041806 	add	r5, #6
+00efc     f0642a02 	shl	r14, #2
+00f00     f10029f6 	add	r13, lr
+00f04     f6002607 	mov	r12, r0
+00f08     f1002a0b 	add	r14, r4
+00f0c     f0641802 	shl	r5, #2
+00f10     f1041a23 	add	r6, #35
+00f14     f1001015 	add	r1, r14
+00f18     f100260c 	add	r12, r5
+00f1c     f0641a02 	shl	r6, #2
+00f20     f1001a07 	add	r6, r0
+00f24     f6001608 	mov	r4, r1
+00f28     f10017f6 	add	r4, lr
+00f2c     f1041204 	add	r2, #4
+00f30     f1001808 	add	r5, r1
+00f34     f0641202 	shl	r2, #2
+00f38     f1001208 	add	r2, r1
+00f3c     ff000007 	rdlong	temp, ##_LC12
+00f40     fb0471a8 
+00f44     f1001038 	add	r1, temp
+00f48     f10011f6 	add	r1, lr
+00f4c     fc601414 	wrlong	r3, r13
+00f50     fc601413 	wrlong	r3, r12
+00f54     fc601c0d 	wrlong	r7, r6
+00f58     fc601c0b 	wrlong	r7, r4
+00f5c     fc601c0c 	wrlong	r7, r5
+00f60     fb001c09 	rdlong	r7, r2
+00f64     f1041c01 	add	r7, #1
+00f68     fc601c09 	wrlong	r7, r2
+00f6c     f6041c05 	mov	r7, #5
+00f70     fb002814 	rdlong	r13, r13
+00f74     fc602808 	wrlong	r13, r1
+00f78     ff000007 	rdlong	temp, ##_LC13
+00f7c     fb0471ac 
+00f80     fc601c38 	wrlong	r7, temp
+00f84     fb03ec16 	rdlong	lr, sp
+00f88     f1042c04 	add	sp, #4
+00f8c     fb002a16 	rdlong	r14, sp
+00f90     f1042c04 	add	sp, #4
+00f94     fb002816 	rdlong	r13, sp
+00f98     f1042c04 	add	sp, #4
+00f9c     fb002616 	rdlong	r12, sp
+00fa0     f1042c04 	add	sp, #4
+00fa4     fd63ec2c 	jmp	lr
+00fa8              	alignl
+00fa8              _LC12
+00fa8     00000fa0 	long	4000
+00fac              	alignl
+00fac              _LC13
+00fac     00005074 	long	_Int_Glob
+00fb0              	alignl
+00fb0              _Func_1
+00fb0     f5040eff 	and	r0,#255
+00fb4     f50410ff 	and	r1,#255
+00fb8     f2580e08 	cmps	r0, r1 wcz
+00fbc     56040e00 	IF_NE mov	r0, #0
+00fc0     af000007 	IF_E  rdlong	temp, ##_LC14
+00fc4     ab0471d4 
+00fc8     ac400e38 	IF_E  wrbyte	r0, temp
+00fcc     a6040e01 	IF_E  mov	r0, #1
+00fd0     fd63ec2c 	jmp	lr
+00fd4              	alignl
+00fd4              _LC14
+00fd4     0000506c 	long	_Ch_1_Glob
+00fd8              	alignl
+00fd8              _Func_2
+00fd8     f1842c04 	sub	sp, #4
+00fdc     fc63ec16 	wrlong	lr, sp
+00fe0     f6001808 	mov	r5, r1
+00fe4     f6001a07 	mov	r6, r0
+00fe8     f1041803 	add	r5, #3
+00fec     f1041a02 	add	r6, #2
+00ff0     ff000008 	rdlong	r7, ##_LC15
+00ff4     fb041c44 
+00ff8     fac0160c 	rdbyte	r4, r5
+00ffc     fac0180d 	rdbyte	r5, r6
+01000     f258160c 	cmps	r4, r5 wcz
+01004     fac01a0e 	rdbyte	r6, r7
+01008     ad900034 	IF_E 	jmp	#_L34
+0100c     fc401a0e 	wrbyte	r6, r7
+01010     fe1ff545 	calld	lr,#_strcmp
+01014     f25c0e00 	cmps	r0, #0 wcz
+01018     e6040e00 	IF_BE mov	r0, #0
+0101c     ed900014 	IF_BE	jmp	#_L33
+01020     f6041c0a 	mov	r7, #10
+01024     f6040e01 	mov	r0, #1
+01028     ff000008 	rdlong	temp, ##_LC16
+0102c     fb047048 
+01030     fc601c38 	wrlong	r7, temp
+01034              _L33
+01034     fb03ec16 	rdlong	lr, sp
+01038     f1042c04 	add	sp, #4
+0103c     fd63ec2c 	jmp	lr
+01040              _L34
+01040              _L31
+01040     fd9ffffc 	jmp	#_L31
+01044              	alignl
+01044              _LC15
+01044     0000506c 	long	_Ch_1_Glob
+01048              	alignl
+01048              _LC16
+01048     00005074 	long	_Int_Glob
+0104c              	alignl
+0104c              _Func_3
+0104c     f25c0e02 	cmps	r0, #2 wcz
+01050     f6040e00 	mov	r0, #0
+01054     f5c40e01 	muxz	r0,#1
+01058     fd63ec2c 	jmp	lr
+0105c              	alignl
+0105c              _LC17
+0105c     6c6c616d 	byte "malloc %d bytes", 10, 0
+0106d              	alignl
+01070              _malloc
+01070     f1842c04 	sub	sp, #4
+01074     fc602a16 	wrlong	r14, sp
+01078     f1842c04 	sub	sp, #4
+0107c     fc63ec16 	wrlong	lr, sp
+01080     f1842c08 	sub	sp, #8
+01084     f6001c16 	mov	r7, sp
+01088     f1041c04 	add	r7, #4
+0108c     f6002a07 	mov	r14, r0
+01090     ff000008 	rdlong	temp, ##_LC18
+01094     fb0470f0 
+01098     fc607016 	wrlong	temp, sp
+0109c     fc600e0e 	wrlong	r0, r7
+010a0     fe1ff664 	calld	lr,#_printf
+010a4     ff000008 	rdlong	r6, ##_LC19
+010a8     fb041af4 
+010ac     f6001c15 	mov	r7, r14
+010b0     f1041c03 	add	r7, #3
+010b4     f0441c02 	shr	r7, #2
+010b8     fb00180d 	rdlong	r5, r6
+010bc     f6000e0c 	mov	r0, r5
+010c0     f1001c0c 	add	r7, r5
+010c4     f0640e02 	shl	r0, #2
+010c8     ff000008 	rdlong	temp, ##_LC20
+010cc     fb0470f8 
+010d0     f1000e38 	add	r0, temp
+010d4     fc601c0d 	wrlong	r7, r6
+010d8     f1042c08 	add	sp, #8
+010dc     fb03ec16 	rdlong	lr, sp
+010e0     f1042c04 	add	sp, #4
+010e4     fb002a16 	rdlong	r14, sp
+010e8     f1042c04 	add	sp, #4
+010ec     fd63ec2c 	jmp	lr
+010f0              	alignl
+010f0              _LC18
+010f0     0000105c 	long	_LC17
+010f4              	alignl
+010f4              _LC19
+010f4     00002870 	long	_heapindex
+010f8              	alignl
+010f8              _LC20
+010f8     000026e0 	long	_heap
+010fc              	alignl
+010fc              _LC24
+010fc     59524844 	byte "DHRYSTONE PROGRAM, SOME STRING", 0
+0111b              	alignl
+0111c              _LC26
+0111c     59524844 	byte "DHRYSTONE PROGRAM, 1'ST STRING", 0
+0113b              	alignl
+0113c              _LC30
+0113c     79726844 	byte "Dhrystone Benchmark, Version %s", 10, 0
+0115d              	alignl
+01160              _LC32
+01160     56202c43 	byte "C, Version 2.2", 0
+0116f              	alignl
+01170              _LC35
+01170     676f7250 	byte "Program compiled with 'register' attribute", 0
+0119b              	alignl
+0119c              _LC37
+0119c     676f7250 	byte "Program compiled without 'register' attribute", 0
+011ca              	alignl
+011cc              _LC39
+011cc     6e697355 	byte "Using %s, HZ=%d", 10, 0
+011dd              	alignl
+011e0              _LC41
+011e0     43445453 	byte "STDC clock()", 0
+011ed              	alignl
+011f0              _LC45
+011f0     69797254 	byte "Trying %d runs through Dhrystone:", 10, 0
+01213              	alignl
+01214              _LC51
+01214     59524844 	byte "DHRYSTONE PROGRAM, 2'ND STRING", 0
+01233              	alignl
+01234              _LC54
+01234     59524844 	byte "DHRYSTONE PROGRAM, 3'RD STRING", 0
+01253              	alignl
+01254              _LC59
+01254     72657355 	byte "User_Time = %d - %d = %d", 10, 0
+0126e              	alignl
+01270              _LC61
+01270     5f6f6f54 	byte "Too_Small_Time = %d", 10, 0
+01285              	alignl
+01288              _LC63
+01288     7361654d 	byte "Measured time too small to obtain meaningful results", 0
+012bd              	alignl
+012c0              _LC65
+012c0     616e6946 	byte "Final values of the variables used in the benchmark:", 0
+012f5              	alignl
+012f8              _LC67
+012f8     5f746e49 	byte "Int_Glob:            %d", 10, 0
+01311              	alignl
+01314              _LC69
+01314     20202020 	byte "        should be:   %d", 10, 0
+0132d              	alignl
+01330              _LC71
+01330     6c6f6f42 	byte "Bool_Glob:           %d", 10, 0
+01349              	alignl
+0134c              _LC73
+0134c     315f6843 	byte "Ch_1_Glob:           %c", 10, 0
+01365              	alignl
+01368              _LC75
+01368     20202020 	byte "        should be:   %c", 10, 0
+01381              	alignl
+01384              _LC77
+01384     325f6843 	byte "Ch_2_Glob:           %c", 10, 0
+0139d              	alignl
+013a0              _LC79
+013a0     5f727241 	byte "Arr_1_Glob[8]:       %d", 10, 0
+013b9              	alignl
+013bc              _LC81
+013bc     5f727241 	byte "Arr_2_Glob[8][7]:    %d", 10, 0
+013d5              	alignl
+013d8              _LC83
+013d8     20202020 	byte "        should be:   Number_Of_Runs + 10", 0
+01401              	alignl
+01404              _LC85
+01404     5f727450 	byte "Ptr_Glob->", 0
+0140f              	alignl
+01410              _LC87
+01410     74502020 	byte "  Ptr_Comp:          %d", 10, 0
+01429              	alignl
+0142c              _LC89
+0142c     20202020 	byte "        should be:   (implementation-dependent)", 0
+0145c              	alignl
+0145c              _LC91
+0145c     69442020 	byte "  Discr:             %d", 10, 0
+01475              	alignl
+01478              _LC93
+01478     6e452020 	byte "  Enum_Comp:         %d", 10, 0
+01491              	alignl
+01494              _LC95
+01494     6e492020 	byte "  Int_Comp:          %d", 10, 0
+014ad              	alignl
+014b0              _LC97
+014b0     74532020 	byte "  Str_Comp:          %s", 10, 0
+014c9              	alignl
+014cc              _LC99
+014cc     20202020 	byte "        should be:   DHRYSTONE PROGRAM, SOME STRING", 0
+01500              	alignl
+01500              _LC101
+01500     7478654e 	byte "Next_Ptr_Glob->", 0
+01510              	alignl
+01510              _LC103
+01510     20202020 	byte "        should be:   (implementation-dependent), same as above", 0
+0154f              	alignl
+01550              _LC105
+01550     5f746e49 	byte "Int_1_Loc:           %d", 10, 0
+01569              	alignl
+0156c              _LC107
+0156c     5f746e49 	byte "Int_2_Loc:           %d", 10, 0
+01585              	alignl
+01588              _LC109
+01588     5f746e49 	byte "Int_3_Loc:           %d", 10, 0
+015a1              	alignl
+015a4              _LC111
+015a4     6d756e45 	byte "Enum_Loc:            %d", 10, 0
+015bd              	alignl
+015c0              _LC113
+015c0     5f727453 	byte "Str_1_Loc:           %s", 10, 0
+015d9              	alignl
+015dc              _LC115
+015dc     20202020 	byte "        should be:   DHRYSTONE PROGRAM, 1'ST STRING", 0
+01610              	alignl
+01610              _LC117
+01610     5f727453 	byte "Str_2_Loc:           %s", 10, 0
+01629              	alignl
+0162c              _LC119
+0162c     20202020 	byte "        should be:   DHRYSTONE PROGRAM, 2'ND STRING", 0
+01660              	alignl
+01660              _LC124
+01660     7263694d 	byte "Microseconds for one run through Dhrystone: ", 0
+0168d              	alignl
+01690              _LC126
+01690     0a207525 	byte "%u ", 10, 0
+01695              	alignl
+01698              _LC128
+01698     79726844 	byte "Dhrystones per Second:                      ", 0
+016c5              	alignl
+016c8              _main
+016c8     f1842c04 	sub	sp, #4
+016cc     fc601e16 	wrlong	r8, sp
+016d0     f1842c04 	sub	sp, #4
+016d4     fc602016 	wrlong	r9, sp
+016d8     f1842c04 	sub	sp, #4
+016dc     fc602216 	wrlong	r10, sp
+016e0     f1842c04 	sub	sp, #4
+016e4     fc602416 	wrlong	r11, sp
+016e8     f1842c04 	sub	sp, #4
+016ec     fc602616 	wrlong	r12, sp
+016f0     f1842c04 	sub	sp, #4
+016f4     fc602816 	wrlong	r13, sp
+016f8     f1842c04 	sub	sp, #4
+016fc     fc602a16 	wrlong	r14, sp
+01700     f1842c04 	sub	sp, #4
+01704     fc63ec16 	wrlong	lr, sp
+01708     f1842c60 	sub	sp, #96
+0170c     f6041254 	mov	r2, #84
+01710     f6001016 	mov	r1, sp
+01714     f1041004 	add	r1, #4
+01718     f1001216 	add	r2, sp
+0171c     f6040e30 	mov	r0, #48
+01720     fc601009 	wrlong	r1, r2
+01724     fe1ff948 	calld	lr,#_malloc
+01728     f6002a07 	mov	r14, r0
+0172c     ff000012 	rdlong	r4, ##_LC22
+01730     fb0417dc 
+01734     f6040e30 	mov	r0, #48
+01738     fc602a0b 	wrlong	r14, r4
+0173c     fe1ff930 	calld	lr,#_malloc
+01740     ff000012 	rdlong	r5, ##_LC25
+01744     fb0419e4 
+01748     f6001a07 	mov	r6, r0
+0174c     f1041a10 	add	r6, #16
+01750     f600160c 	mov	r4, r5
+01754     f1041604 	add	r4, #4
+01758     f600140c 	mov	r3, r5
+0175c     f1041418 	add	r3, #24
+01760     f6002807 	mov	r13, r0
+01764     f1042804 	add	r13, #4
+01768     f603ec07 	mov	lr, r0
+0176c     f107ec08 	add	lr, #8
+01770     f6001c07 	mov	r7, r0
+01774     f600100e 	mov	r1, r7
+01778     f104102e 	add	r1, #46
+0177c     fb00260c 	rdlong	r12, r5
+01780     fc60260d 	wrlong	r12, r6
+01784     f1041a04 	add	r6, #4
+01788     f6042600 	mov	r12, #0
+0178c     fb00160b 	rdlong	r4, r4
+01790     fc60160d 	wrlong	r4, r6
+01794     f600160c 	mov	r4, r5
+01798     f1041608 	add	r4, #8
+0179c     fb00160b 	rdlong	r4, r4
+017a0     f1041a04 	add	r6, #4
+017a4     fc60160d 	wrlong	r4, r6
+017a8     f600160c 	mov	r4, r5
+017ac     f104160c 	add	r4, #12
+017b0     fb00160b 	rdlong	r4, r4
+017b4     f1041a04 	add	r6, #4
+017b8     fc60160d 	wrlong	r4, r6
+017bc     f600160c 	mov	r4, r5
+017c0     f1041610 	add	r4, #16
+017c4     fb00160b 	rdlong	r4, r4
+017c8     f1041a04 	add	r6, #4
+017cc     fc60160d 	wrlong	r4, r6
+017d0     f600160c 	mov	r4, r5
+017d4     f1041614 	add	r4, #20
+017d8     fb00160b 	rdlong	r4, r4
+017dc     f1041a04 	add	r6, #4
+017e0     fc60160d 	wrlong	r4, r6
+017e4     f6001607 	mov	r4, r0
+017e8     f1041628 	add	r4, #40
+017ec     fb00140a 	rdlong	r3, r3
+017f0     f1040e0c 	add	r0, #12
+017f4     ff000012 	rdlong	r6, ##_LC27
+017f8     fb041be8 
+017fc     fc60140b 	wrlong	r3, r4
+01800     f600140c 	mov	r3, r5
+01804     f104141c 	add	r3, #28
+01808     fae0140a 	rdword	r3, r3
+0180c     f1041604 	add	r4, #4
+01810     f104181e 	add	r5, #30
+01814     fc602614 	wrlong	r12, r13
+01818     f6042802 	mov	r13, #2
+0181c     f600120d 	mov	r2, r6
+01820     fc6029f6 	wrlong	r13, lr
+01824     f607ec28 	mov	lr, #40
+01828     f1041204 	add	r2, #4
+0182c     fc50140b 	wrword	r3, r4
+01830     f600140d 	mov	r3, r6
+01834     f600160d 	mov	r4, r6
+01838     fc63ec07 	wrlong	lr, r0
+0183c     f1041408 	add	r3, #8
+01840     f104160c 	add	r4, #12
+01844     fac0180c 	rdbyte	r5, r5
+01848     ff000012 	rdlong	r12, ##_LC23
+0184c     fb0427e0 
+01850     f603ec0d 	mov	lr, r6
+01854     fc401808 	wrbyte	r5, r1
+01858     f6041834 	mov	r5, #52
+0185c     f1001816 	add	r5, sp
+01860     fb00100d 	rdlong	r1, r6
+01864     f107ec14 	add	lr, #20
+01868     f6040e0a 	mov	r0, #10
+0186c     fc60100c 	wrlong	r1, r5
+01870     f6001816 	mov	r5, sp
+01874     f1041838 	add	r5, #56
+01878     fb001209 	rdlong	r2, r2
+0187c     fc60120c 	wrlong	r2, r5
+01880     f1041804 	add	r5, #4
+01884     f600120d 	mov	r2, r6
+01888     fb00140a 	rdlong	r3, r3
+0188c     f1041218 	add	r2, #24
+01890     fc60140c 	wrlong	r3, r5
+01894     f1041804 	add	r5, #4
+01898     f600140d 	mov	r3, r6
+0189c     fb00160b 	rdlong	r4, r4
+018a0     f104141c 	add	r3, #28
+018a4     fc60160c 	wrlong	r4, r5
+018a8     f600180d 	mov	r5, r6
+018ac     f1041810 	add	r5, #16
+018b0     fc601c13 	wrlong	r7, r12
+018b4     f6001616 	mov	r4, sp
+018b8     f1041648 	add	r4, #72
+018bc     fc602a0e 	wrlong	r14, r7
+018c0     f6001c16 	mov	r7, sp
+018c4     f1041c44 	add	r7, #68
+018c8     fb00180c 	rdlong	r5, r5
+018cc     f1041a1e 	add	r6, #30
+018d0     f6042a54 	mov	r14, #84
+018d4     fc60180e 	wrlong	r5, r7
+018d8     ff000012 	rdlong	r5, ##_LC28
+018dc     fb0419ec 
+018e0     ff000012 	rdlong	temp, ##_LC29
+018e4     fb0471f0 
+018e8     f1001838 	add	r5, temp
+018ec     fb03edf6 	rdlong	lr, lr
+018f0     f1002a16 	add	r14, sp
+018f4     fc63ec0b 	wrlong	lr, r4
+018f8     f1041604 	add	r4, #4
+018fc     fb001209 	rdlong	r2, r2
+01900     fc60120b 	wrlong	r2, r4
+01904     f1041604 	add	r4, #4
+01908     fae0140a 	rdword	r3, r3
+0190c     fc50140b 	wrword	r3, r4
+01910     f1041602 	add	r4, #2
+01914     fac01a0d 	rdbyte	r6, r6
+01918     fc401a0b 	wrbyte	r6, r4
+0191c     fc600e0c 	wrlong	r0, r5
+01920     fe1fed51 	calld	lr,#_putchar
+01924     ff000012 	rdlong	temp, ##_LC31
+01928     fb0471f4 
+0192c     fc607016 	wrlong	temp, sp
+01930     fb002a15 	rdlong	r14, r14
+01934     ff000012 	rdlong	temp, ##_LC33
+01938     fb0471f8 
+0193c     fc607015 	wrlong	temp, r14
+01940     fe1fedc4 	calld	lr,#_printf
+01944     ff000012 	rdlong	temp, ##_LC34
+01948     fb0471fc 
+0194c     fb001a38 	rdlong	r6, temp
+01950     f25c1a00 	cmps	r6, #0 wcz
+01954     5f000013 	IF_NE rdlong	r0, ##_LC36
+01958     5b040e00 
+0195c     af000013 	IF_E  rdlong	r0, ##_LC38
+01960     ab040e04 
+01964     fe1fed21 	calld	lr,#_puts
+01968     f603ec16 	mov	lr, sp
+0196c     f6041058 	mov	r1, #88
+01970     f6041254 	mov	r2, #84
+01974     f107ec08 	add	lr, #8
+01978     f1001016 	add	r1, sp
+0197c     f1001216 	add	r2, sp
+01980     ff000013 	rdlong	r3, ##_LC43
+01984     fb041410 
+01988     ff000013 	rdlong	temp, ##_LC40
+0198c     fb047008 
+01990     fc607016 	wrlong	temp, sp
+01994     fc63ec08 	wrlong	lr, r1
+01998     fb001209 	rdlong	r2, r2
+0199c     ff000013 	rdlong	temp, ##_LC42
+019a0     fb04700c 
+019a4     fc607009 	wrlong	temp, r2
+019a8     fb00140a 	rdlong	r3, r3
+019ac     fc6015f6 	wrlong	r3, lr
+019b0     fe1fed54 	calld	lr,#_printf
+019b4     f6040e0a 	mov	r0, #10
+019b8     fe1fecb9 	calld	lr,#_putchar
+019bc     f6001a16 	mov	r6, sp
+019c0     f6041c5c 	mov	r7, #92
+019c4     f6041600 	mov	r4, #0
+019c8     ff000013 	rdlong	r5, ##_LC44
+019cc     fb041814 
+019d0     f1041a0c 	add	r6, #12
+019d4     f1001c16 	add	r7, sp
+019d8     ff000012 	rdlong	r9, ##_LC21
+019dc     fb0421d8 
+019e0     ff000013 	rdlong	r8, ##_LC50
+019e4     fb041e28 
+019e8     fc60160c 	wrlong	r4, r5
+019ec     fc601a0e 	wrlong	r6, r7
+019f0              _L48
+019f0     ff000013 	rdlong	r12, ##_LC46
+019f4     fb042618 
+019f8     f6042854 	mov	r13, #84
+019fc     f1002816 	add	r13, sp
+01a00     ff000013 	rdlong	r10, ##_LC55
+01a04     fb042234 
+01a08     f6042401 	mov	r11, #1
+01a0c     f1042204 	add	r10, #4
+01a10     fc602616 	wrlong	r12, sp
+01a14     fb002814 	rdlong	r13, r13
+01a18     fc602014 	wrlong	r9, r13
+01a1c     fe1fece8 	calld	lr,#_printf
+01a20     fe1fe9e0 	calld	lr,#_clock
+01a24     ff000013 	rdlong	r14, ##_LC47
+01a28     fb042a1c 
+01a2c     fc600e15 	wrlong	r0, r14
+01a30              _L46
+01a30     ff000013 	rdlong	r13, ##_LC48
+01a34     fb042820 
+01a38     f6042641 	mov	r12, #65
+01a3c     f6042a01 	mov	r14, #1
+01a40     f6001016 	mov	r1, sp
+01a44     f1041014 	add	r1, #20
+01a48     ff000013 	rdlong	lr, ##_LC52
+01a4c     fb07ec2c 
+01a50     ff000013 	rdlong	r2, ##_LC52
+01a54     fb04122c 
+01a58     f107ec08 	add	lr, #8
+01a5c     ff000013 	rdlong	r3, ##_LC52
+01a60     fb04142c 
+01a64     f104120c 	add	r2, #12
+01a68     ff000013 	rdlong	r4, ##_LC52
+01a6c     fb04162c 
+01a70     f1041410 	add	r3, #16
+01a74     ff000013 	rdlong	r5, ##_LC52
+01a78     fb04182c 
+01a7c     f1041614 	add	r4, #20
+01a80     ff000013 	rdlong	r6, ##_LC52
+01a84     fb041a2c 
+01a88     f1041818 	add	r5, #24
+01a8c     ff000013 	rdlong	r7, ##_LC52
+01a90     fb041c2c 
+01a94     f1041a1c 	add	r6, #28
+01a98     f1041c1e 	add	r7, #30
+01a9c     f6000e16 	mov	r0, sp
+01aa0     f1040e34 	add	r0, #52
+01aa4     fc402614 	wrbyte	r12, r13
+01aa8     ff000013 	rdlong	r12, ##_LC49
+01aac     fb042624 
+01ab0     f6042842 	mov	r13, #66
+01ab4     fc602a13 	wrlong	r14, r12
+01ab8     ff000013 	rdlong	r14, ##_LC52
+01abc     fb042a2c 
+01ac0     ff000013 	rdlong	r12, ##_LC151
+01ac4     fb0426dc 
+01ac8     fb002a15 	rdlong	r14, r14
+01acc     fc40280f 	wrbyte	r13, r8
+01ad0     f6042818 	mov	r13, #24
+01ad4     f1002816 	add	r13, sp
+01ad8     fc602a08 	wrlong	r14, r1
+01adc     f6042a20 	mov	r14, #32
+01ae0     f1002a16 	add	r14, sp
+01ae4     fb002613 	rdlong	r12, r12
+01ae8     fc602614 	wrlong	r12, r13
+01aec     f604281c 	mov	r13, #28
+01af0     f1002816 	add	r13, sp
+01af4     fb03edf6 	rdlong	lr, lr
+01af8     fc63ec14 	wrlong	lr, r13
+01afc     f607ec24 	mov	lr, #36
+01b00     f103ec16 	add	lr, sp
+01b04     fb001209 	rdlong	r2, r2
+01b08     fc601215 	wrlong	r2, r14
+01b0c     f6041228 	mov	r2, #40
+01b10     f1001216 	add	r2, sp
+01b14     fb00140a 	rdlong	r3, r3
+01b18     fc6015f6 	wrlong	r3, lr
+01b1c     f604142c 	mov	r3, #44
+01b20     f1001416 	add	r3, sp
+01b24     fb00160b 	rdlong	r4, r4
+01b28     fc601609 	wrlong	r4, r2
+01b2c     f6041630 	mov	r4, #48
+01b30     f1001616 	add	r4, sp
+01b34     fb00180c 	rdlong	r5, r5
+01b38     fc60180a 	wrlong	r5, r3
+01b3c     f6041832 	mov	r5, #50
+01b40     f1001816 	add	r5, sp
+01b44     fae01a0d 	rdword	r6, r6
+01b48     fc501a0b 	wrword	r6, r4
+01b4c     f6041a01 	mov	r6, #1
+01b50     fac01c0e 	rdbyte	r7, r7
+01b54     fc401c0c 	wrbyte	r7, r5
+01b58     f6041c10 	mov	r7, #16
+01b5c     f1001c16 	add	r7, sp
+01b60     fc601a0e 	wrlong	r6, r7
+01b64     fe1ff470 	calld	lr,#_Func_2
+01b68     f25c0e00 	cmps	r0, #0 wcz
+01b6c     f6041c00 	mov	r7, #0
+01b70     f5c41c01 	muxz	r7,#1
+01b74     ff000013 	rdlong	r12, ##_LC49
+01b78     fb042624 
+01b7c     ff000012 	rdlong	r1, ##_LC28
+01b80     fb0411ec 
+01b84     f6041203 	mov	r2, #3
+01b88     f6041407 	mov	r3, #7
+01b8c     ff000013 	rdlong	r0, ##_LC53
+01b90     fb040e30 
+01b94     fc601c13 	wrlong	r7, r12
+01b98     fe1ff308 	calld	lr,#_Proc_8
+01b9c     ff000012 	rdlong	r13, ##_LC23
+01ba0     fb0429e0 
+01ba4     fb000e14 	rdlong	r0, r13
+01ba8     fe1ff034 	calld	lr,#_Proc_1
+01bac     fac01c0f 	rdbyte	r7, r8
+01bb0     f21c1c40 	cmp	r7, #64 wcz
+01bb4     e604260d 	IF_BE mov	r12, #13
+01bb8     e6040e01 	IF_BE mov	r0, #1
+01bbc     ed9001b0 	IF_BE	jmp	#_L41
+01bc0     ff000013 	rdlong	r12, ##_LC55
+01bc4     fb042634 
+01bc8     ff000013 	rdlong	r13, ##_LC55
+01bcc     fb042834 
+01bd0     f6042a41 	mov	r14, #65
+01bd4     f6041603 	mov	r4, #3
+01bd8     f6041800 	mov	r5, #0
+01bdc     f104260c 	add	r12, #12
+01be0     f1042810 	add	r13, #16
+01be4              _L54
+01be4     f6041a10 	mov	r6, #16
+01be8     f1001a16 	add	r6, sp
+01bec     fb001c0d 	rdlong	r7, r6
+01bf0     f2581c0c 	cmps	r7, r5 wcz
+01bf4     ad900048 	IF_E 	jmp	#_L55
+01bf8              _L43
+01bf8     f1042a01 	add	r14, #1
+01bfc     f5042aff 	and	r14,#255
+01c00     f6041800 	mov	r5, #0
+01c04     fac01c0f 	rdbyte	r7, r8
+01c08     f2181c15 	cmp	r7, r14 wcz
+01c0c     cd900134 	IF_B 	jmp	#_L56
+01c10              _L44
+01c10     f25c2a43 	cmps	r14, #67 wcz
+01c14     5d9fffcc 	IF_NE	jmp	#_L54
+01c18     f6041a10 	mov	r6, #16
+01c1c     ff000013 	rdlong	r5, ##_LC48
+01c20     fb041820 
+01c24     f607ec43 	mov	lr, #67
+01c28     f1001a16 	add	r6, sp
+01c2c     fc43ec0c 	wrbyte	lr, r5
+01c30     f6041801 	mov	r5, #1
+01c34     fb001c0d 	rdlong	r7, r6
+01c38     f2581c0c 	cmps	r7, r5 wcz
+01c3c     5d9fffb8 	IF_NE	jmp	#_L43
+01c40              _L55
+01c40     f600100d 	mov	r1, r6
+01c44     f6040e00 	mov	r0, #0
+01c48     f1042a01 	add	r14, #1
+01c4c     f5042aff 	and	r14,#255
+01c50     fe1fef10 	calld	lr,#_Proc_6
+01c54     ff000013 	rdlong	lr, ##_LC55
+01c58     fb07ec34 
+01c5c     f6041014 	mov	r1, #20
+01c60     f1001016 	add	r1, sp
+01c64     f6041218 	mov	r2, #24
+01c68     f1001216 	add	r2, sp
+01c6c     ff000013 	rdlong	r3, ##_LC130
+01c70     fb0414d8 
+01c74     ff000013 	rdlong	r4, ##_LC55
+01c78     fb041634 
+01c7c     f1041614 	add	r4, #20
+01c80     ff000013 	rdlong	r5, ##_LC55
+01c84     fb041834 
+01c88     f1041818 	add	r5, #24
+01c8c     ff000013 	rdlong	r6, ##_LC55
+01c90     fb041a34 
+01c94     f1041a1c 	add	r6, #28
+01c98     ff000013 	rdlong	r7, ##_LC55
+01c9c     fb041c34 
+01ca0     f1041c1e 	add	r7, #30
+01ca4     fb03edf6 	rdlong	lr, lr
+01ca8     fc63ec08 	wrlong	lr, r1
+01cac     f607ec1c 	mov	lr, #28
+01cb0     f103ec16 	add	lr, sp
+01cb4     fb001011 	rdlong	r1, r10
+01cb8     fc601009 	wrlong	r1, r2
+01cbc     f6041020 	mov	r1, #32
+01cc0     f1001016 	add	r1, sp
+01cc4     fb00140a 	rdlong	r3, r3
+01cc8     fc6015f6 	wrlong	r3, lr
+01ccc     f6041424 	mov	r3, #36
+01cd0     f1001416 	add	r3, sp
+01cd4     fb03ec13 	rdlong	lr, r12
+01cd8     fc63ec08 	wrlong	lr, r1
+01cdc     f607ec28 	mov	lr, #40
+01ce0     f103ec16 	add	lr, sp
+01ce4     fb001214 	rdlong	r2, r13
+01ce8     f604102c 	mov	r1, #44
+01cec     f1001016 	add	r1, sp
+01cf0     fc60120a 	wrlong	r2, r3
+01cf4     f6041230 	mov	r2, #48
+01cf8     f1001216 	add	r2, sp
+01cfc     fb00160b 	rdlong	r4, r4
+01d00     f6041432 	mov	r3, #50
+01d04     f1001416 	add	r3, sp
+01d08     fc6017f6 	wrlong	r4, lr
+01d0c     f6001612 	mov	r4, r11
+01d10     fb00180c 	rdlong	r5, r5
+01d14     fc601808 	wrlong	r5, r1
+01d18     ff000013 	rdlong	r5, ##_LC56
+01d1c     fb041838 
+01d20     fae01a0d 	rdword	r6, r6
+01d24     fac01c0e 	rdbyte	r7, r7
+01d28     fc501a09 	wrword	r6, r2
+01d2c     fc401c0a 	wrbyte	r7, r3
+01d30     fac01c0f 	rdbyte	r7, r8
+01d34     f2181c15 	cmp	r7, r14 wcz
+01d38     fc60240c 	wrlong	r11, r5
+01d3c     f6041800 	mov	r5, #0
+01d40     3d9ffecc 	IF_AE	jmp	#_L44
+01d44              _L56
+01d44     f6000e0b 	mov	r0, r4
+01d48     f0640e01 	shl	r0, #1
+01d4c     f1000e0b 	add	r0, r4
+01d50     f6001c07 	mov	r7, r0
+01d54     f1841c07 	sub	r7, #7
+01d58     f600260e 	mov	r12, r7
+01d5c     f6041007 	mov	r1, #7
+01d60     f0642603 	shl	r12, #3
+01d64     f180260e 	sub	r12, r7
+01d68     fda00042 	call	#__DIVSI
+01d6c     f1802607 	sub	r12, r0
+01d70              _L41
+01d70     ff000013 	rdlong	r6, ##_LC48
+01d74     fb041a20 
+01d78     f1042401 	add	r11, #1
+01d7c     fac01c0d 	rdbyte	r7, r6
+01d80     f25c1c41 	cmps	r7, #65 wcz
+01d84     af000013 	IF_E  rdlong	r13, ##_LC56
+01d88     ab042838 
+01d8c     a1040e09 	IF_E  add	r0, #9
+01d90     ab001c14 	IF_E  rdlong	r7, r13
+01d94     a1800e0e 	IF_E  sub	r0, r7
+01d98     f2582410 	cmps	r11, r9 wcz
+01d9c     ed9ffc90 	IF_BE	jmp	#_L46
+01da0     f6002a07 	mov	r14, r0
+01da4     f6042858 	mov	r13, #88
+01da8     f1002816 	add	r13, sp
+01dac     fe1fe654 	calld	lr,#_clock
+01db0     f6041854 	mov	r5, #84
+01db4     f1001816 	add	r5, sp
+01db8     ff000013 	rdlong	r4, ##_LC47
+01dbc     fb04161c 
+01dc0     f6001a07 	mov	r6, r0
+01dc4     ff000013 	rdlong	temp, ##_LC60
+01dc8     fb047044 
+01dcc     fc607016 	wrlong	temp, sp
+01dd0     fb00180c 	rdlong	r5, r5
+01dd4     fb001c0b 	rdlong	r7, r4
+01dd8     f1801a0e 	sub	r6, r7
+01ddc     ff000013 	rdlong	r4, ##_LC57
+01de0     fb04163c 
+01de4     fc600e0c 	wrlong	r0, r5
+01de8     ff000013 	rdlong	r5, ##_LC58
+01dec     fb041840 
+01df0     fb002814 	rdlong	r13, r13
+01df4     fc601c14 	wrlong	r7, r13
+01df8     f6041c5c 	mov	r7, #92
+01dfc     f1001c16 	add	r7, sp
+01e00     fc600e0b 	wrlong	r0, r4
+01e04     fc601a0c 	wrlong	r6, r5
+01e08     fb001c0e 	rdlong	r7, r7
+01e0c     fc601a0e 	wrlong	r6, r7
+01e10     fe1fe8f4 	calld	lr,#_printf
+01e14     f607ec54 	mov	lr, #84
+01e18     ff000013 	rdlong	r13, ##_LC43
+01e1c     fb042810 
+01e20     f103ec16 	add	lr, sp
+01e24     fb001c14 	rdlong	r7, r13
+01e28     f0641c01 	shl	r7, #1
+01e2c     ff000013 	rdlong	temp, ##_LC62
+01e30     fb047048 
+01e34     fc607016 	wrlong	temp, sp
+01e38     fb03edf6 	rdlong	lr, lr
+01e3c     fc601df6 	wrlong	r7, lr
+01e40     fe1fe8c4 	calld	lr,#_printf
+01e44     fb001c14 	rdlong	r7, r13
+01e48     ff000013 	rdlong	r4, ##_LC58
+01e4c     fb041640 
+01e50     f0641c01 	shl	r7, #1
+01e54     fb001a0b 	rdlong	r6, r4
+01e58     f2181a0e 	cmp	r6, r7 wcz
+01e5c     cd90073c 	IF_B 	jmp	#_L57
+01e60     f6041a01 	mov	r6, #1
+01e64     ff000013 	rdlong	r7, ##_LC44
+01e68     fb041c14 
+01e6c     fc601a0e 	wrlong	r6, r7
+01e70              _L49
+01e70     ff000013 	rdlong	r0, ##_LC66
+01e74     fb040e50 
+01e78     fe1fe80d 	calld	lr,#_puts
+01e7c     f6040e0a 	mov	r0, #10
+01e80     fe1fe7f1 	calld	lr,#_putchar
+01e84     f607ec54 	mov	lr, #84
+01e88     ff000013 	rdlong	r13, ##_LC56
+01e8c     fb042838 
+01e90     f103ec16 	add	lr, sp
+01e94     ff000013 	rdlong	temp, ##_LC68
+01e98     fb047054 
+01e9c     fc607016 	wrlong	temp, sp
+01ea0     fb002814 	rdlong	r13, r13
+01ea4     fb03edf6 	rdlong	lr, lr
+01ea8     fc6029f6 	wrlong	r13, lr
+01eac     f6042841 	mov	r13, #65
+01eb0     fe1fe854 	calld	lr,#_printf
+01eb4     f6041054 	mov	r1, #84
+01eb8     f1001016 	add	r1, sp
+01ebc     f607ec05 	mov	lr, #5
+01ec0     ff000013 	rdlong	temp, ##_LC70
+01ec4     fb047058 
+01ec8     fc607016 	wrlong	temp, sp
+01ecc     fb001008 	rdlong	r1, r1
+01ed0     fc63ec08 	wrlong	lr, r1
+01ed4     fe1fe830 	calld	lr,#_printf
+01ed8     f6041454 	mov	r3, #84
+01edc     ff000013 	rdlong	r2, ##_LC49
+01ee0     fb041224 
+01ee4     f1001416 	add	r3, sp
+01ee8     ff000013 	rdlong	temp, ##_LC72
+01eec     fb04705c 
+01ef0     fc607016 	wrlong	temp, sp
+01ef4     fb001209 	rdlong	r2, r2
+01ef8     fb00140a 	rdlong	r3, r3
+01efc     fc60120a 	wrlong	r2, r3
+01f00     fe1fe804 	calld	lr,#_printf
+01f04     f6041654 	mov	r4, #84
+01f08     f1001616 	add	r4, sp
+01f0c     f6041401 	mov	r3, #1
+01f10     ff000013 	rdlong	temp, ##_LC70
+01f14     fb047058 
+01f18     fc607016 	wrlong	temp, sp
+01f1c     fb00160b 	rdlong	r4, r4
+01f20     fc60140b 	wrlong	r3, r4
+01f24     fe1fe7e0 	calld	lr,#_printf
+01f28     f6041c54 	mov	r7, #84
+01f2c     ff000013 	rdlong	r6, ##_LC48
+01f30     fb041a20 
+01f34     f1001c16 	add	r7, sp
+01f38     ff000013 	rdlong	temp, ##_LC74
+01f3c     fb047060 
+01f40     fc607016 	wrlong	temp, sp
+01f44     fb001c0e 	rdlong	r7, r7
+01f48     fac0180d 	rdbyte	r5, r6
+01f4c     fc60180e 	wrlong	r5, r7
+01f50     fe1fe7b4 	calld	lr,#_printf
+01f54     f607ec54 	mov	lr, #84
+01f58     f103ec16 	add	lr, sp
+01f5c     ff000013 	rdlong	temp, ##_LC76
+01f60     fb047064 
+01f64     fc607016 	wrlong	temp, sp
+01f68     fb03edf6 	rdlong	lr, lr
+01f6c     fc6029f6 	wrlong	r13, lr
+01f70     f6042854 	mov	r13, #84
+01f74     f1002816 	add	r13, sp
+01f78     fe1fe78c 	calld	lr,#_printf
+01f7c     f6041054 	mov	r1, #84
+01f80     f1001016 	add	r1, sp
+01f84     ff000013 	rdlong	temp, ##_LC78
+01f88     fb047068 
+01f8c     fc607016 	wrlong	temp, sp
+01f90     fb001008 	rdlong	r1, r1
+01f94     fac0180f 	rdbyte	r5, r8
+01f98     fc601808 	wrlong	r5, r1
+01f9c     fe1fe768 	calld	lr,#_printf
+01fa0     f6041454 	mov	r3, #84
+01fa4     f1001416 	add	r3, sp
+01fa8     f6041242 	mov	r2, #66
+01fac     ff000013 	rdlong	temp, ##_LC76
+01fb0     fb047064 
+01fb4     fc607016 	wrlong	temp, sp
+01fb8     fb00140a 	rdlong	r3, r3
+01fbc     fc60120a 	wrlong	r2, r3
+01fc0     fe1fe744 	calld	lr,#_printf
+01fc4     ff000013 	rdlong	r6, ##_LC53
+01fc8     fb041a30 
+01fcc     f6041654 	mov	r4, #84
+01fd0     f1001616 	add	r4, sp
+01fd4     f1041a20 	add	r6, #32
+01fd8     ff000013 	rdlong	temp, ##_LC80
+01fdc     fb04706c 
+01fe0     fc607016 	wrlong	temp, sp
+01fe4     fb00160b 	rdlong	r4, r4
+01fe8     fb001a0d 	rdlong	r6, r6
+01fec     fc601a0b 	wrlong	r6, r4
+01ff0     fe1fe714 	calld	lr,#_printf
+01ff4     f6041a54 	mov	r6, #84
+01ff8     f1001a16 	add	r6, sp
+01ffc     f6041807 	mov	r5, #7
+02000     ff000013 	rdlong	temp, ##_LC70
+02004     fb047058 
+02008     fc607016 	wrlong	temp, sp
+0200c     fb001a0d 	rdlong	r6, r6
+02010     fc60180d 	wrlong	r5, r6
+02014     fe1fe6f0 	calld	lr,#_printf
+02018     ff000012 	rdlong	r7, ##_LC28
+0201c     fb041dec 
+02020     f607ec54 	mov	lr, #84
+02024     ff000012 	rdlong	temp, ##_LC29
+02028     fb0471f0 
+0202c     f1001c38 	add	r7, temp
+02030     f103ec16 	add	lr, sp
+02034     ff000013 	rdlong	temp, ##_LC82
+02038     fb047070 
+0203c     fc607016 	wrlong	temp, sp
+02040     fb03edf6 	rdlong	lr, lr
+02044     fb001c0e 	rdlong	r7, r7
+02048     fc601df6 	wrlong	r7, lr
+0204c     fe1fe6b8 	calld	lr,#_printf
+02050     ff000013 	rdlong	r0, ##_LC84
+02054     fb040e74 
+02058     fe1fe62d 	calld	lr,#_puts
+0205c     ff000013 	rdlong	r0, ##_LC86
+02060     fb040e78 
+02064     fe1fe621 	calld	lr,#_puts
+02068     ff000012 	rdlong	r4, ##_LC23
+0206c     fb0417e0 
+02070     f6041854 	mov	r5, #84
+02074     f1001816 	add	r5, sp
+02078     ff000013 	rdlong	temp, ##_LC88
+0207c     fb04707c 
+02080     fc607016 	wrlong	temp, sp
+02084     fb001c0b 	rdlong	r7, r4
+02088     fb00180c 	rdlong	r5, r5
+0208c     fb001c0e 	rdlong	r7, r7
+02090     fc601c0c 	wrlong	r7, r5
+02094     fe1fe670 	calld	lr,#_printf
+02098     ff000013 	rdlong	r0, ##_LC90
+0209c     fb040e80 
+020a0     fe1fe5e5 	calld	lr,#_puts
+020a4     ff000012 	rdlong	r6, ##_LC23
+020a8     fb041be0 
+020ac     fb001c0d 	rdlong	r7, r6
+020b0     f1041c04 	add	r7, #4
+020b4     ff000013 	rdlong	temp, ##_LC92
+020b8     fb047084 
+020bc     fc607016 	wrlong	temp, sp
+020c0     fb002814 	rdlong	r13, r13
+020c4     fb001c0e 	rdlong	r7, r7
+020c8     fc601c14 	wrlong	r7, r13
+020cc     fe1fe638 	calld	lr,#_printf
+020d0     f607ec00 	mov	lr, #0
+020d4     ff000013 	rdlong	temp, ##_LC70
+020d8     fb047058 
+020dc     fc607016 	wrlong	temp, sp
+020e0     fc63ec14 	wrlong	lr, r13
+020e4     fe1fe620 	calld	lr,#_printf
+020e8     ff000012 	rdlong	r4, ##_LC23
+020ec     fb0417e0 
+020f0     fb001c0b 	rdlong	r7, r4
+020f4     f1041c08 	add	r7, #8
+020f8     ff000013 	rdlong	temp, ##_LC94
+020fc     fb047088 
+02100     fc607016 	wrlong	temp, sp
+02104     fb001c0e 	rdlong	r7, r7
+02108     fc601c14 	wrlong	r7, r13
+0210c     fe1fe5f8 	calld	lr,#_printf
+02110     f6041a02 	mov	r6, #2
+02114     ff000013 	rdlong	temp, ##_LC70
+02118     fb047058 
+0211c     fc607016 	wrlong	temp, sp
+02120     fc601a14 	wrlong	r6, r13
+02124     fe1fe5e0 	calld	lr,#_printf
+02128     ff000012 	rdlong	r13, ##_LC23
+0212c     fb0429e0 
+02130     f607ec54 	mov	lr, #84
+02134     f103ec16 	add	lr, sp
+02138     fb001c14 	rdlong	r7, r13
+0213c     f1041c0c 	add	r7, #12
+02140     ff000013 	rdlong	temp, ##_LC96
+02144     fb04708c 
+02148     fc607016 	wrlong	temp, sp
+0214c     fb03edf6 	rdlong	lr, lr
+02150     fb001c0e 	rdlong	r7, r7
+02154     fc601df6 	wrlong	r7, lr
+02158     fe1fe5ac 	calld	lr,#_printf
+0215c     f6041254 	mov	r2, #84
+02160     f1001216 	add	r2, sp
+02164     f6041011 	mov	r1, #17
+02168     ff000013 	rdlong	temp, ##_LC70
+0216c     fb047058 
+02170     fc607016 	wrlong	temp, sp
+02174     fb001209 	rdlong	r2, r2
+02178     fc601009 	wrlong	r1, r2
+0217c     fe1fe588 	calld	lr,#_printf
+02180     f6041454 	mov	r3, #84
+02184     f1001416 	add	r3, sp
+02188     fb001c14 	rdlong	r7, r13
+0218c     f1041c10 	add	r7, #16
+02190     ff000013 	rdlong	temp, ##_LC98
+02194     fb047090 
+02198     fc607016 	wrlong	temp, sp
+0219c     fb00140a 	rdlong	r3, r3
+021a0     fc601c0a 	wrlong	r7, r3
+021a4     fe1fe560 	calld	lr,#_printf
+021a8     ff000013 	rdlong	r13, ##_LC100
+021ac     fb042894 
+021b0     f6000e14 	mov	r0, r13
+021b4     fe1fe4d1 	calld	lr,#_puts
+021b8     ff000013 	rdlong	r0, ##_LC102
+021bc     fb040e98 
+021c0     fe1fe4c5 	calld	lr,#_puts
+021c4     ff000012 	rdlong	r4, ##_LC22
+021c8     fb0417dc 
+021cc     f6041854 	mov	r5, #84
+021d0     f1001816 	add	r5, sp
+021d4     ff000013 	rdlong	temp, ##_LC88
+021d8     fb04707c 
+021dc     fc607016 	wrlong	temp, sp
+021e0     fb001c0b 	rdlong	r7, r4
+021e4     fb00180c 	rdlong	r5, r5
+021e8     fb001c0e 	rdlong	r7, r7
+021ec     fc601c0c 	wrlong	r7, r5
+021f0     fe1fe514 	calld	lr,#_printf
+021f4     ff000013 	rdlong	r0, ##_LC104
+021f8     fb040e9c 
+021fc     fe1fe489 	calld	lr,#_puts
+02200     ff000012 	rdlong	r6, ##_LC22
+02204     fb041bdc 
+02208     f607ec54 	mov	lr, #84
+0220c     f103ec16 	add	lr, sp
+02210     fb001c0d 	rdlong	r7, r6
+02214     f1041c04 	add	r7, #4
+02218     ff000013 	rdlong	temp, ##_LC92
+0221c     fb047084 
+02220     fc607016 	wrlong	temp, sp
+02224     fb03edf6 	rdlong	lr, lr
+02228     fb001c0e 	rdlong	r7, r7
+0222c     fc601df6 	wrlong	r7, lr
+02230     fe1fe4d4 	calld	lr,#_printf
+02234     f6041254 	mov	r2, #84
+02238     f1001216 	add	r2, sp
+0223c     f6041000 	mov	r1, #0
+02240     ff000013 	rdlong	temp, ##_LC70
+02244     fb047058 
+02248     fc607016 	wrlong	temp, sp
+0224c     fb001209 	rdlong	r2, r2
+02250     fc601009 	wrlong	r1, r2
+02254     fe1fe4b0 	calld	lr,#_printf
+02258     ff000012 	rdlong	r4, ##_LC22
+0225c     fb0417dc 
+02260     f6041854 	mov	r5, #84
+02264     f1001816 	add	r5, sp
+02268     fb001c0b 	rdlong	r7, r4
+0226c     f1041c08 	add	r7, #8
+02270     ff000013 	rdlong	temp, ##_LC94
+02274     fb047088 
+02278     fc607016 	wrlong	temp, sp
+0227c     fb00180c 	rdlong	r5, r5
+02280     fb001c0e 	rdlong	r7, r7
+02284     fc601c0c 	wrlong	r7, r5
+02288     fe1fe47c 	calld	lr,#_printf
+0228c     f6041c54 	mov	r7, #84
+02290     f1001c16 	add	r7, sp
+02294     f6041a01 	mov	r6, #1
+02298     ff000013 	rdlong	temp, ##_LC70
+0229c     fb047058 
+022a0     fc607016 	wrlong	temp, sp
+022a4     fb001c0e 	rdlong	r7, r7
+022a8     fc601a0e 	wrlong	r6, r7
+022ac     fe1fe458 	calld	lr,#_printf
+022b0     ff000012 	rdlong	r4, ##_LC22
+022b4     fb0417dc 
+022b8     f6041854 	mov	r5, #84
+022bc     f1001816 	add	r5, sp
+022c0     fb001c0b 	rdlong	r7, r4
+022c4     f1041c0c 	add	r7, #12
+022c8     ff000013 	rdlong	temp, ##_LC96
+022cc     fb04708c 
+022d0     fc607016 	wrlong	temp, sp
+022d4     fb00180c 	rdlong	r5, r5
+022d8     fb001c0e 	rdlong	r7, r7
+022dc     fc601c0c 	wrlong	r7, r5
+022e0     fe1fe424 	calld	lr,#_printf
+022e4     f6041c54 	mov	r7, #84
+022e8     f1001c16 	add	r7, sp
+022ec     f6041a12 	mov	r6, #18
+022f0     ff000013 	rdlong	temp, ##_LC70
+022f4     fb047058 
+022f8     fc607016 	wrlong	temp, sp
+022fc     fb001c0e 	rdlong	r7, r7
+02300     fc601a0e 	wrlong	r6, r7
+02304     fe1fe400 	calld	lr,#_printf
+02308     ff000012 	rdlong	r4, ##_LC22
+0230c     fb0417dc 
+02310     f6041854 	mov	r5, #84
+02314     f1001816 	add	r5, sp
+02318     fb001c0b 	rdlong	r7, r4
+0231c     f1041c10 	add	r7, #16
+02320     ff000013 	rdlong	temp, ##_LC98
+02324     fb047090 
+02328     fc607016 	wrlong	temp, sp
+0232c     fb00180c 	rdlong	r5, r5
+02330     fc601c0c 	wrlong	r7, r5
+02334     fe1fe3d0 	calld	lr,#_printf
+02338     f6000e14 	mov	r0, r13
+0233c     f6042854 	mov	r13, #84
+02340     f1002816 	add	r13, sp
+02344     fe1fe341 	calld	lr,#_puts
+02348     f6041a54 	mov	r6, #84
+0234c     f1001a16 	add	r6, sp
+02350     ff000013 	rdlong	temp, ##_LC106
+02354     fb0470a0 
+02358     fc607016 	wrlong	temp, sp
+0235c     fb001a0d 	rdlong	r6, r6
+02360     fc602a0d 	wrlong	r14, r6
+02364     f6042a34 	mov	r14, #52
+02368     f1002a16 	add	r14, sp
+0236c     fe1fe398 	calld	lr,#_printf
+02370     ff000013 	rdlong	temp, ##_LC70
+02374     fb047058 
+02378     fc607016 	wrlong	temp, sp
+0237c     f6041c05 	mov	r7, #5
+02380     fb002814 	rdlong	r13, r13
+02384     fc601c14 	wrlong	r7, r13
+02388     fe1fe37c 	calld	lr,#_printf
+0238c     ff000013 	rdlong	temp, ##_LC108
+02390     fb0470a4 
+02394     fc607016 	wrlong	temp, sp
+02398     fc602614 	wrlong	r12, r13
+0239c     fe1fe368 	calld	lr,#_printf
+023a0     f607ec0d 	mov	lr, #13
+023a4     ff000013 	rdlong	temp, ##_LC70
+023a8     fb047058 
+023ac     fc607016 	wrlong	temp, sp
+023b0     fc63ec14 	wrlong	lr, r13
+023b4     fe1fe350 	calld	lr,#_printf
+023b8     f6041207 	mov	r2, #7
+023bc     ff000013 	rdlong	temp, ##_LC110
+023c0     fb0470a8 
+023c4     fc607016 	wrlong	temp, sp
+023c8     fc601214 	wrlong	r2, r13
+023cc     fe1fe338 	calld	lr,#_printf
+023d0     f6041607 	mov	r4, #7
+023d4     ff000013 	rdlong	temp, ##_LC70
+023d8     fb047058 
+023dc     fc607016 	wrlong	temp, sp
+023e0     fc601614 	wrlong	r4, r13
+023e4     fe1fe320 	calld	lr,#_printf
+023e8     f6041a10 	mov	r6, #16
+023ec     f1001a16 	add	r6, sp
+023f0     ff000013 	rdlong	temp, ##_LC112
+023f4     fb0470ac 
+023f8     fc607016 	wrlong	temp, sp
+023fc     fb001a0d 	rdlong	r6, r6
+02400     fc601a14 	wrlong	r6, r13
+02404     fe1fe300 	calld	lr,#_printf
+02408     f6041c01 	mov	r7, #1
+0240c     ff000013 	rdlong	temp, ##_LC70
+02410     fb047058 
+02414     fc607016 	wrlong	temp, sp
+02418     fc601c14 	wrlong	r7, r13
+0241c     fe1fe2e8 	calld	lr,#_printf
+02420     ff000013 	rdlong	temp, ##_LC114
+02424     fb0470b0 
+02428     fc607016 	wrlong	temp, sp
+0242c     fc602a14 	wrlong	r14, r13
+02430     fe1fe2d4 	calld	lr,#_printf
+02434     ff000013 	rdlong	r0, ##_LC116
+02438     fb040eb4 
+0243c     fe1fe249 	calld	lr,#_puts
+02440     f6041014 	mov	r1, #20
+02444     f1001016 	add	r1, sp
+02448     ff000013 	rdlong	temp, ##_LC118
+0244c     fb0470b8 
+02450     fc607016 	wrlong	temp, sp
+02454     fc601014 	wrlong	r1, r13
+02458     fe1fe2ac 	calld	lr,#_printf
+0245c     ff000013 	rdlong	r0, ##_LC120
+02460     fb040ebc 
+02464     fe1fe221 	calld	lr,#_puts
+02468     f6040e0a 	mov	r0, #10
+0246c     fe1fe205 	calld	lr,#_putchar
+02470     ff000013 	rdlong	r4, ##_LC43
+02474     fb041610 
+02478     ff000013 	rdlong	r1, ##_LC122
+0247c     fb0410c4 
+02480     ff000013 	rdlong	r5, ##_LC58
+02484     fb041840 
+02488     ff000013 	rdlong	r13, ##_LC121
+0248c     fb0428c0 
+02490     ff000013 	rdlong	r14, ##_LC123
+02494     fb042ac8 
+02498     fb001c0b 	rdlong	r7, r4
+0249c     f6000e0e 	mov	r0, r7
+024a0     fda0004b 	call	#__UDIVSI
+024a4     f6001007 	mov	r1, r0
+024a8     f6000e10 	mov	r0, r9
+024ac     fda0003e 	call	#__MULSI
+024b0     fb001a0c 	rdlong	r6, r5
+024b4     f6001007 	mov	r1, r0
+024b8     f6000e0d 	mov	r0, r6
+024bc     fda0004b 	call	#__UDIVSI
+024c0     f6001807 	mov	r5, r0
+024c4     f6001010 	mov	r1, r9
+024c8     f6000e0d 	mov	r0, r6
+024cc     fda00042 	call	#__DIVSI
+024d0     f6001007 	mov	r1, r0
+024d4     f6000e0e 	mov	r0, r7
+024d8     fda0004b 	call	#__UDIVSI
+024dc     fc601814 	wrlong	r5, r13
+024e0     fc600e15 	wrlong	r0, r14
+024e4     ff000013 	rdlong	temp, ##_LC125
+024e8     fb0470cc 
+024ec     fc607016 	wrlong	temp, sp
+024f0     fe1fe214 	calld	lr,#_printf
+024f4     f6041a54 	mov	r6, #84
+024f8     f1001a16 	add	r6, sp
+024fc     ff000013 	rdlong	temp, ##_LC127
+02500     fb0470d0 
+02504     fc607016 	wrlong	temp, sp
+02508     fb001a0d 	rdlong	r6, r6
+0250c     fb002814 	rdlong	r13, r13
+02510     fc60280d 	wrlong	r13, r6
+02514     fe1fe1f0 	calld	lr,#_printf
+02518     ff000013 	rdlong	temp, ##_LC129
+0251c     fb0470d4 
+02520     fc607016 	wrlong	temp, sp
+02524     fe1fe1e0 	calld	lr,#_printf
+02528     f6041c54 	mov	r7, #84
+0252c     f1001c16 	add	r7, sp
+02530     ff000013 	rdlong	temp, ##_LC127
+02534     fb0470d0 
+02538     fc607016 	wrlong	temp, sp
+0253c     fb001c0e 	rdlong	r7, r7
+02540     fb002a15 	rdlong	r14, r14
+02544     fc602a0e 	wrlong	r14, r7
+02548     fe1fe1bc 	calld	lr,#_printf
+0254c     f6040e0a 	mov	r0, #10
+02550     fe1fe121 	calld	lr,#_putchar
+02554     f1042c60 	add	sp, #96
+02558     fb03ec16 	rdlong	lr, sp
+0255c     f1042c04 	add	sp, #4
+02560     fb002a16 	rdlong	r14, sp
+02564     f1042c04 	add	sp, #4
+02568     fb002816 	rdlong	r13, sp
+0256c     f1042c04 	add	sp, #4
+02570     fb002616 	rdlong	r12, sp
+02574     f1042c04 	add	sp, #4
+02578     fb002416 	rdlong	r11, sp
+0257c     f1042c04 	add	sp, #4
+02580     fb002216 	rdlong	r10, sp
+02584     f1042c04 	add	sp, #4
+02588     fb002016 	rdlong	r9, sp
+0258c     f1042c04 	add	sp, #4
+02590     fb001e16 	rdlong	r8, sp
+02594     f1042c04 	add	sp, #4
+02598     fd63ec2c 	jmp	lr
+0259c              _L57
+0259c     ff000013 	rdlong	r0, ##_LC64
+025a0     fb040e4c 
+025a4     fe1fe0e1 	calld	lr,#_puts
+025a8     f6001c10 	mov	r7, r9
+025ac     f0641c01 	shl	r7, #1
+025b0     f6040e0a 	mov	r0, #10
+025b4     f0642003 	shl	r9, #3
+025b8     f100200e 	add	r9, r7
+025bc     fe1fe0b5 	calld	lr,#_putchar
+025c0     ff000013 	rdlong	r5, ##_LC44
+025c4     fb041814 
+025c8     fb001c0c 	rdlong	r7, r5
+025cc     f25c1c00 	cmps	r7, #0 wcz
+025d0     ad9ff41c 	IF_E 	jmp	#_L48
+025d4     fd9ff898 	jmp	#_L49
+025d8              	alignl
+025d8              _LC21
+025d8     000007d0 	long	2000
+025dc              	alignl
+025dc              _LC22
+025dc     00005078 	long	_Next_Ptr_Glob
+025e0              	alignl
+025e0              _LC23
+025e0     0000507c 	long	_Ptr_Glob
+025e4              	alignl
+025e4              _LC25
+025e4     000010fc 	long	_LC24
+025e8              	alignl
+025e8              _LC27
+025e8     0000111c 	long	_LC26
+025ec              	alignl
+025ec              _LC28
+025ec     00002890 	long	_Arr_2_Glob
+025f0              	alignl
+025f0              _LC29
+025f0     0000065c 	long	1628
+025f4              	alignl
+025f4              _LC31
+025f4     0000113c 	long	_LC30
+025f8              	alignl
+025f8              _LC33
+025f8     00001160 	long	_LC32
+025fc              	alignl
+025fc              _LC34
+025fc     0000288c 	long	_Reg
+02600              	alignl
+02600              _LC36
+02600     00001170 	long	_LC35
+02604              	alignl
+02604              _LC38
+02604     0000119c 	long	_LC37
+02608              	alignl
+02608              _LC40
+02608     000011cc 	long	_LC39
+0260c              	alignl
+0260c              _LC42
+0260c     000011e0 	long	_LC41
+02610              	alignl
+02610              _LC43
+02610     00000400 	long	__clkfreq
+02614              	alignl
+02614              _LC44
+02614     00002888 	long	_Done
+02618              	alignl
+02618              _LC46
+02618     000011f0 	long	_LC45
+0261c              	alignl
+0261c              _LC47
+0261c     00002884 	long	_Begin_Time
+02620              	alignl
+02620              _LC48
+02620     0000506c 	long	_Ch_1_Glob
+02624              	alignl
+02624              _LC49
+02624     00005070 	long	_Bool_Glob
+02628              	alignl
+02628              _LC50
+02628     00005068 	long	_Ch_2_Glob
+0262c              	alignl
+0262c              _LC52
+0262c     00001214 	long	_LC51
+02630              	alignl
+02630              _LC53
+02630     00004fa0 	long	_Arr_1_Glob
+02634              	alignl
+02634              _LC55
+02634     00001234 	long	_LC54
+02638              	alignl
+02638              _LC56
+02638     00005074 	long	_Int_Glob
+0263c              	alignl
+0263c              _LC57
+0263c     00002880 	long	_End_Time
+02640              	alignl
+02640              _LC58
+02640     0000287c 	long	_User_Time
+02644              	alignl
+02644              _LC60
+02644     00001254 	long	_LC59
+02648              	alignl
+02648              _LC62
+02648     00001270 	long	_LC61
+0264c              	alignl
+0264c              _LC64
+0264c     00001288 	long	_LC63
+02650              	alignl
+02650              _LC66
+02650     000012c0 	long	_LC65
+02654              	alignl
+02654              _LC68
+02654     000012f8 	long	_LC67
+02658              	alignl
+02658              _LC70
+02658     00001314 	long	_LC69
+0265c              	alignl
+0265c              _LC72
+0265c     00001330 	long	_LC71
+02660              	alignl
+02660              _LC74
+02660     0000134c 	long	_LC73
+02664              	alignl
+02664              _LC76
+02664     00001368 	long	_LC75
+02668              	alignl
+02668              _LC78
+02668     00001384 	long	_LC77
+0266c              	alignl
+0266c              _LC80
+0266c     000013a0 	long	_LC79
+02670              	alignl
+02670              _LC82
+02670     000013bc 	long	_LC81
+02674              	alignl
+02674              _LC84
+02674     000013d8 	long	_LC83
+02678              	alignl
+02678              _LC86
+02678     00001404 	long	_LC85
+0267c              	alignl
+0267c              _LC88
+0267c     00001410 	long	_LC87
+02680              	alignl
+02680              _LC90
+02680     0000142c 	long	_LC89
+02684              	alignl
+02684              _LC92
+02684     0000145c 	long	_LC91
+02688              	alignl
+02688              _LC94
+02688     00001478 	long	_LC93
+0268c              	alignl
+0268c              _LC96
+0268c     00001494 	long	_LC95
+02690              	alignl
+02690              _LC98
+02690     000014b0 	long	_LC97
+02694              	alignl
+02694              _LC100
+02694     000014cc 	long	_LC99
+02698              	alignl
+02698              _LC102
+02698     00001500 	long	_LC101
+0269c              	alignl
+0269c              _LC104
+0269c     00001510 	long	_LC103
+026a0              	alignl
+026a0              _LC106
+026a0     00001550 	long	_LC105
+026a4              	alignl
+026a4              _LC108
+026a4     0000156c 	long	_LC107
+026a8              	alignl
+026a8              _LC110
+026a8     00001588 	long	_LC109
+026ac              	alignl
+026ac              _LC112
+026ac     000015a4 	long	_LC111
+026b0              	alignl
+026b0              _LC114
+026b0     000015c0 	long	_LC113
+026b4              	alignl
+026b4              _LC116
+026b4     000015dc 	long	_LC115
+026b8              	alignl
+026b8              _LC118
+026b8     00001610 	long	_LC117
+026bc              	alignl
+026bc              _LC120
+026bc     0000162c 	long	_LC119
+026c0              	alignl
+026c0              _LC121
+026c0     00002878 	long	_Microseconds
+026c4              	alignl
+026c4              _LC122
+026c4     000f4240 	long	1000000
+026c8              	alignl
+026c8              _LC123
+026c8     00002874 	long	_Dhrystones_Per_Second
+026cc              	alignl
+026cc              _LC125
+026cc     00001660 	long	_LC124
+026d0              	alignl
+026d0              _LC127
+026d0     00001690 	long	_LC126
+026d4              	alignl
+026d4              _LC129
+026d4     00001698 	long	_LC128
+026d8              	alignl
+026d8              _LC130
+026d8     0000123c 	long	_LC54+8
+026dc              	alignl
+026dc              _LC151
+026dc     00001218 	long	_LC51+4
+026e0              _heap
+026e0     00000000 	long	0[100]
+02870              	alignl
+02870              _heapindex
+02870     00000000 	long	0
+02874              _Dhrystones_Per_Second
+02874     00000000 	long	0
+02878              _Microseconds
+02878     00000000 	long	0
+0287c              _User_Time
+0287c     00000000 	long	0
+02880              _End_Time
+02880     00000000 	long	0
+02884              _Begin_Time
+02884     00000000 	long	0
+02888              _Done
+02888     00000000 	long	0
+0288c              	alignl
+0288c              _Reg
+0288c     00000000 	long	0
+02890              _Arr_2_Glob
+02890     00000000 	long	0[2500]
+04fa0              _Arr_1_Glob
+04fa0     00000000 	long	0[50]
+05068              _Ch_2_Glob
+05068     00000000 	long	0
+0506c              _Ch_1_Glob
+0506c     00000000 	long	0
+05070              _Bool_Glob
+05070     00000000 	long	0
+05074              _Int_Glob
+05074     00000000 	long	0
+05078              _Next_Ptr_Glob
+05078     00000000 	long	0
+0507c              _Ptr_Glob
+0507c     00000000 	long	0

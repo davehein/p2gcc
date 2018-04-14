@@ -1,0 +1,272 @@
+                   con
+                     __clkfreq = 80000000
+                     rx_pin = 63
+                     tx_pin = 62
+                     clock_freq = 80_000_000
+                     baud_rate = 115_200
+                     tx_mask = 1 << (tx_pin - 32)
+                     rx_mask = 1 << (rx_pin - 32)
+                   
+                   dat
+00000              	orgh	0
+00000 000          	org
+                   
+00000 000 ff000040 	mov	sp, ##$8000
+00004 001 f6043c00 
+00008 002 fd647c59 	drvh    #tx_pin
+0000c 003 ff82625a 	waitx   ##clock_freq
+00010 004 fd64001f 
+00014 005 ff82625a 	waitx   ##clock_freq
+00018 006 fd64001f 
+0001c 007 ff82625a 	waitx   ##clock_freq
+00020 008 fd64001f 
+00024 009 f6014ece 	mov     strptr, a_hello
+00028 00a fdb0025c 	call    #putstr
+                   	'calld	lr, #_main
+0002c 00b fdb000cc 	call	#_main
+00030 00c fd601c01 	cogid	r0
+00034 00d fd601c03 	cogstop	r0
+                   
+00038 00e 00000000 r0	long	0
+0003c 00f 00000000 r1	long	0
+00040 010 00000000 r2	long	0
+00044 011 00000000 r3	long	0
+00048 012 00000000 r4	long	0
+0004c 013 00000000 r5	long	0
+00050 014 00000000 r6	long	0
+00054 015 00000000 r7	long	0
+00058 016 00000000 r8	long	0
+0005c 017 00000000 r9	long	0
+00060 018 00000000 r10	long	0
+00064 019 00000000 r11	long	0
+00068 01a 00000000 r12	long	0
+0006c 01b 00000000 r13	long	0
+00070 01c 00000000 r14	long	0
+00074 01d 00000000 lr	long	0
+00078 01e 00000000 sp	long	0
+                   
+0007c 01f          _fibo
+0007c 01f fd603a2b 	pop	lr
+00080 020 f1843c04 	sub	sp, #4
+00084 021 fc60341e 	wrlong	r12, sp
+00088 022 f1843c04 	sub	sp, #4
+0008c 023 fc60361e 	wrlong	r13, sp
+00090 024 f1843c04 	sub	sp, #4
+00094 025 fc60381e 	wrlong	r14, sp
+00098 026 f1843c04 	sub	sp, #4
+0009c 027 fc603a1e 	wrlong	lr, sp
+000a0 028 f6043600 	mov	r13, #0
+000a4 029 f600340e 	mov	r12, r0
+000a8 02a f600380e 	mov	r14, r0
+000ac 02b          _L3
+000ac 02b f21c3801 	cmp	r14, #1 wcz
+000b0 02c ed900018 	IF_BE	jmp	#_L2
+000b4 02d f6001c1c 	mov	r0, r14
+000b8 02e f1841c01 	sub	r0, #1
+000bc 02f f1843802 	sub	r14, #2
+                   	'calld	lr,#_fibo
+000c0 030 fdbfffb8 	call	#_fibo
+000c4 031 f100360e 	add	r13, r0
+000c8 032 fd9fffe0 	jmp	#_L3
+000cc 033          _L2
+000cc 033 f6001c1a 	mov	r0, r12
+000d0 034 f5041c01 	and	r0, #1
+000d4 035 f1001c1b 	add	r0, r13
+000d8 036 fb003a1e 	rdlong	lr, sp
+000dc 037 f1043c04 	add	sp, #4
+000e0 038 fb00381e 	rdlong	r14, sp
+000e4 039 f1043c04 	add	sp, #4
+000e8 03a fb00361e 	rdlong	r13, sp
+000ec 03b f1043c04 	add	sp, #4
+000f0 03c fb00341e 	rdlong	r12, sp
+000f4 03d f1043c04 	add	sp, #4
+000f8 03e fd603a2c 	jmp	lr
+                   
+000fc 03f          _main
+000fc 03f fd603a2b 	pop	lr
+00100 040 f1843c04 	sub	sp, #4
+00104 041 fc602c1e 	wrlong	r8, sp
+00108 042 f1843c04 	sub	sp, #4
+0010c 043 fc602e1e 	wrlong	r9, sp
+00110 044 f1843c04 	sub	sp, #4
+00114 045 fc60301e 	wrlong	r10, sp
+00118 046 f1843c04 	sub	sp, #4
+0011c 047 fc60321e 	wrlong	r11, sp
+00120 048 f1843c04 	sub	sp, #4
+00124 049 fc60341e 	wrlong	r12, sp
+00128 04a f1843c04 	sub	sp, #4
+0012c 04b fc60361e 	wrlong	r13, sp
+00130 04c f1843c04 	sub	sp, #4
+00134 04d fc60381e 	wrlong	r14, sp
+00138 04e f1843c04 	sub	sp, #4
+0013c 04f fc603a1e 	wrlong	lr, sp
+00140 050 f1843c14 	sub	sp, #20
+00144 051 f6001c9d 	mov	r0, _LC1
+00148 052 f600361e 	mov	r13, sp
+0014c 053 f600341e 	mov	r12, sp
+00150 054 f6043800 	mov	r14, #0
+00154 055 f1043604 	add	r13, #4
+                   	'calld	lr,#_puts
+00158 056 fdb000e0 	call	#_puts
+0015c 057 f1043408 	add	r12, #8
+00160 058 f6002e9e 	mov	r9, _LC3
+00164 059 f600309f 	mov	r10, _LC5
+00168 05a f60032a1 	mov	r11, _LC7
+0016c 05b          _L5
+0016c 05b fc602e1e 	wrlong	r9, sp
+00170 05c fc60381b 	wrlong	r14, r13
+                   	'calld	lr,#_printf
+00174 05d fdb000d8 	call	#_printf
+                   	'calld	lr,#_clock
+00178 05e fdb000ec 	call	#_clock
+0017c 05f f6042610 	mov	r5, #16
+00180 060 f600280e 	mov	r6, r0
+00184 061 f100261e 	add	r5, sp
+00188 062 f6001c1c 	mov	r0, r14
+0018c 063 f1043801 	add	r14, #1
+00190 064 fc602813 	wrlong	r6, r5
+00194 065 f6001c0e 	mov	r0, r0
+                   	'calld	lr, #_fibo
+00198 066 fdbffee0 	call	#_fibo
+0019c 067 f6002c0e 	mov	r8, r0
+                   	'calld	lr,#_clock
+001a0 068 fdb000c4 	call	#_clock
+001a4 069 f6042610 	mov	r5, #16
+001a8 06a f100261e 	add	r5, sp
+001ac 06b f6002a0e 	mov	r7, r0
+001b0 06c f6001e19 	mov	r1, r11
+001b4 06d fb002813 	rdlong	r6, r5
+001b8 06e f1802a14 	sub	r7, r6
+001bc 06f f600281e 	mov	r6, sp
+001c0 070 fc60301e 	wrlong	r10, sp
+001c4 071 f104280c 	add	r6, #12
+001c8 072 fc602c1b 	wrlong	r8, r13
+001cc 073 fb001ca0 	rdlong	r0, _LC6
+001d0 074 fdb0008c 	call	#__UDIVSI
+001d4 075 f6001e0e 	mov	r1, r0
+001d8 076 f6001c15 	mov	r0, r7
+001dc 077 fdb00080 	call	#__UDIVSI
+001e0 078 fc601c1a 	wrlong	r0, r12
+001e4 079 fc602a14 	wrlong	r7, r6
+                   	'calld	lr,#_printf
+001e8 07a fdb00064 	call	#_printf
+001ec 07b f25c381b 	cmps	r14, #27 wcz
+001f0 07c 5d9fff78 	IF_NE	jmp	#_L5
+001f4 07d f1043c14 	add	sp, #20
+001f8 07e fb003a1e 	rdlong	lr, sp
+001fc 07f f1043c04 	add	sp, #4
+00200 080 fb00381e 	rdlong	r14, sp
+00204 081 f1043c04 	add	sp, #4
+00208 082 fb00361e 	rdlong	r13, sp
+0020c 083 f1043c04 	add	sp, #4
+00210 084 fb00341e 	rdlong	r12, sp
+00214 085 f1043c04 	add	sp, #4
+00218 086 fb00321e 	rdlong	r11, sp
+0021c 087 f1043c04 	add	sp, #4
+00220 088 fb00301e 	rdlong	r10, sp
+00224 089 f1043c04 	add	sp, #4
+00228 08a fb002e1e 	rdlong	r9, sp
+0022c 08b f1043c04 	add	sp, #4
+00230 08c fb002c1e 	rdlong	r8, sp
+00234 08d f1043c04 	add	sp, #4
+00238 08e fd603a2c 	jmp	lr
+                   
+0023c 08f fd603a2b _puts	pop	lr
+00240 090 f6014e0e 	mov	strptr, r0
+00244 091 f6014e9d 	mov	strptr, _LC1
+00248 092 fdb0003c 	call	#putstr
+0024c 093 fd603a2c 	jmp	lr
+                   
+00250 094 fd603a2b _printf	pop	lr
+00254 095 fb014e1e 	rdlong	strptr, sp
+00258 096 fdb0002c 	call	#putstr
+0025c 097 fd603a2c 	jmp	lr
+                   
+00260 098 fd603a2b __UDIVSI pop	lr
+00264 099 fd603a2c 	jmp	lr
+                   
+00268 09a fd603a2b _clock	pop	lr
+0026c 09b fd601c1a 	getct	r0
+00270 09c fd603a2c 	jmp	lr
+                   
+                   	'alignl
+00274 09d          _LC1
+00274 09d 00000349 	long	@_LC0
+00278 09e          _LC3
+00278 09e 00000358 	long	@_LC2
+0027c 09f          _LC5
+0027c 09f 00000366 	long	@_LC4
+00280 0a0          _LC6
+00280 0a0 04c4b400 	long	__clkfreq
+00284 0a1          _LC7
+00284 0a1 000003e8 	long	1000
+                   
+00288 0a2 fac992a7 putstr                  rdbyte  parm, strptr  wz
+0028c 0a3 ad64002d         if_z            ret
+00290 0a4 f1054e01                         add     strptr, #1
+00294 0a5 fdb0005c                         call    #putch
+00298 0a6 fd9fffec                         jmp     #putstr
+0029c 0a7 00000000 strptr                  long    0
+                   
+                   '*******************************************************************************
+                   ' Get one character from the input port.
+                   ' Input none
+                   ' Changes parm, temp, temp1, temp2
+                   ' Output parm
+                   '*******************************************************************************
+002a0 0a8 f60194bc getch                   mov     temp, bitcycles
+002a4 0a9 f0459401                         shr     temp, #1
+002a8 0aa f605960a                         mov     temp1, #10
+002ac 0ab ff400000 getch0                  testb   inb, ##1 << (rx_pin & 31) wc
+002b0 0ac f417fe00 
+002b4 0ad cd9ffff4         if_c            jmp     #getch0
+002b8 0ae fd61981a                         getct   temp2
+002bc 0af fa6198ca                         addct1  temp2, temp
+002c0 0b0 fd602224                         waitct1
+002c4 0b1 f60195ff getch1                  mov     temp, inb
+002c8 0b2 f50194bb                         and     temp, inbit
+002cc 0b3 f0059201                         ror     parm, #1
+002d0 0b4 f54192ca                         or      parm, temp
+002d4 0b5 fa6198bc                         addct1  temp2, bitcycles
+002d8 0b6 fd602224                         waitct1
+002dc 0b7 fb6d97f9                         djnz    temp1, #getch1
+002e0 0b8 f0059217                         ror     parm, #31 - 8
+002e4 0b9 f50592ff                         and     parm, #255
+002e8 0ba fd64002d getch_ret               ret
+                   
+002ec 0bb 80000000 inbit                   long    1 << (rx_pin & 31)
+002f0 0bc 000002b6 bitcycles               long    clock_freq / baud_rate
+                   
+                   '*******************************************************************************
+                   ' Send one character to the output port.
+                   ' Input parm
+                   ' Changes parm, temp1, temp2
+                   ' Output none             
+                   '*******************************************************************************
+002f4 0bd f5459300 putch                   or      parm, #$100
+002f8 0be f0659201                         shl     parm, #1
+002fc 0bf f605960a                         mov     temp1, #10
+00300 0c0 fd61981a                         getct   temp2
+00304 0c1 f0559201 putch1                  shr     parm, #1               wc
+00308 0c2 fd647c5a                         drvc    #tx_pin
+0030c 0c3 fa6198bc                         addct1  temp2, bitcycles
+00310 0c4 fd602224                         waitct1
+00314 0c5 fb6d97fb                         djnz    temp1, #putch1
+00318 0c6 fd64002d putch_ret               ret
+                   
+0031c 0c7 40000000 txmask                  long    tx_mask
+00320 0c8 80000000 rxmask                  long    rx_mask
+00324 0c9 00000000 parm                    long    0
+00328 0ca 00000000 temp                    long    0
+0032c 0cb 00000000 temp1                   long    0
+00330 0cc 00000000 temp2                   long    0
+00334 0cd 00000001 a_verbose               long    1
+00338 0ce 0000033c a_hello                 long    @hello
+0033c              	orgh
+0033c     6c6c6548 hello                   byte    "Hello World", 13, 0
+00349              _LC0
+00349     6c6c6568 	byte "hello, world!", 13, 0
+00358              _LC2
+00358     6f626966 	byte "fibo(%02d) = ", 0
+00366              _LC4
+00366     64363025 	byte "%06d (%05ums) (%u ticks)", 13, 0

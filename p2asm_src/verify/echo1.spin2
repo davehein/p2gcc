@@ -1,0 +1,85 @@
+CON
+  rx_pin = 63
+  tx_pin = 62
+  clock_freq = 80_000_000
+  baud_rate = 115_200
+  tx_mask = 1 << (tx_pin - 32)
+  rx_mask = 1 << (rx_pin - 32)
+
+DAT
+                        orgh    0
+                        org
+start                   mov     dirb, ##tx_mask
+                        mov     outb, ##tx_mask
+                        waitx   clk_freq
+                        waitx   clk_freq
+                        waitx   clk_freq
+                        mov     strptr, a_hello
+                        call    #putstr
+.loop                   call    #getch
+                        call    #putch
+                        jmp     #.loop
+clk_freq                long    clock_freq
+
+putstr                  rdbyte  parm, strptr  wz
+        if_z            ret
+                        add     strptr, #1
+                        call    #putch
+                        jmp     #putstr
+strptr                  long    0
+
+'*******************************************************************************
+' Get one character from the input port.
+' Input none
+' Changes parm, temp, temp1, temp2
+' Output parm
+'*******************************************************************************
+getch                   mov     temp, bitcycles
+                        shr     temp, #1
+                        mov     temp1, #10
+getch0                  testb   inb, ##rx_mask wc
+        if_c            jmp     #getch0
+                        getct   temp2
+                        addct1  temp2, temp
+                        waitct1
+getch1                  mov     temp, inb
+                        and     temp, inbit
+                        ror     parm, #1
+                        or      parm, temp
+                        addct1  temp2, bitcycles
+                        waitct1
+                        djnz    temp1, #getch1
+                        ror     parm, #31 - 8
+                        and     parm, #255
+getch_ret               ret
+
+inbit                   long    1 << (rx_pin & 31)
+bitcycles               long    clock_freq / baud_rate
+
+'*******************************************************************************
+' Send one character to the output port.
+' Input parm
+' Changes parm, temp1, temp2
+' Output none             
+'*******************************************************************************
+putch                   or      parm, #$100
+                        shl     parm, #1
+                        mov     temp1, #10
+                        getct   temp2
+putch1                  shr     parm, #1               wc
+        if_c            or      outb, txmask
+        if_nc           andn    outb, txmask
+                        addct1  temp2, bitcycles
+                        waitct1
+                        djnz    temp1, #putch1
+putch_ret               ret
+
+txmask                  long    tx_mask
+rxmask                  long    rx_mask
+parm                    long    0
+temp                    long    0
+temp1                   long    0
+temp2                   long    0
+a_verbose               long    1
+a_hello                 long    @hello
+hello                   byte    "Hello World", 13, 0

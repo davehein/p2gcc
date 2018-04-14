@@ -1,0 +1,20 @@
+                   con
+                   	lr = $1f6
+                   dat
+00000 000          	org
+00000 000 fb3bffff 	reti0
+00004 001 fb3bfff5 	reti1
+00008 002 fb3bfff3 	reti2
+0000c 003 fb3bfff1 	reti3
+                   
+00400              	orgh	$400
+                   
+00400     fd63ec2c sub1	jmp	lr
+                   
+00404     fb27edfe loop	calld	lr,#sub1
+00408     fb27ecf6 	calld	lr,#sub3
+0040c     fd9ffff4 	jmp	#loop
+                   
+00410     00000000 	long	0[245]
+                   
+007e4     fd63ec2c sub3	jmp	lr

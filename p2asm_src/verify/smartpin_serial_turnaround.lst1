@@ -1,0 +1,46 @@
+                   ' 10M baud 8-bit serial demo
+                   
+00000 000          dat		org
+                   
+00000 000 fd65fe00 		hubset	#$FF		'set clock to 80MHz
+                   
+00004 001 fc042800 		wrpin	pm_tx,	#0	'set asynchronous tx mode in smart pin 0
+00008 002 fc142c00 		wxpin	bitper,	#0	'set tx bit period
+                   
+0000c 003 fc042a01 		wrpin	pm_rx,	#1	'set asynchronous rx mode in smart pin 1
+00010 004 fc142c01 		wxpin	bitper,	#1	'set rx bit period
+                   
+00014 005 ff00007f 		mov	dira,##$FF03	'enable pins 15..8 and smart pins 1..0
+00018 006 f607f503 
+                   
+0001c 007 fc2c0000 		wypin	#0,#0		'send initial byte to tx pin
+                   
+00020 008          .loop	'	waitx	#200		'uncomment for delay between bytes
+                   
+00020 008 fd740040 .full		testp	#0	wc	'wait for buffer empty on tx pin
+00024 009 3d9ffff8 	if_nc	jmp	#.full
+                   
+00028 00a fc242e00 		wypin	x,#0		'send next byte to tx pin
+                   
+0002c 00b f7042eff 		incmod	x,#$FF		'increment byte
+                   
+00030 00c fd740240 .recv		testp	#1	wc	'wait for smart pin 1 to signal rx data received
+00034 00d 3d9ffff8 	if_nc	jmp	#.recv
+                   
+00038 00e fa8c3001 		rdpin	y,#1		'get data from rx pin
+0003c 00f f0443018 		shr	y,#32-8
+                   
+00040 010 f8cbf818 		setbyte	outa,y,#1	'write rx data to to pins 15..8
+                   
+00044 011 fd64024f 		outnot	#1		'make scope trigger on pin 1 (since smart pin 1 is
+00048 012 fd64024f 		outnot	#1		'...reading pin 0, pin 1 is still usable for normal output)
+                   
+0004c 013 fd9fffd0 		jmp	#.loop		'loop
+                   
+                   
+00050 014 0000007c pm_tx		long	%0000_0000_000_0000000000000_01_11110_0	'async tx mode, output enabled for smart output
+00054 015 7000007e pm_rx		long	%0111_0000_000_0000000000000_01_11111_0	'async rx mode, output enabled for normal output, inputs pin 0
+                   
+00058 016 00080007 bitper		long	8<<16 + 7	'number of clocks per bit period, 3..65536, 8-bit words
+0005c 017 00000000 x		long	0
+00060 018 00000000 y		long	0
