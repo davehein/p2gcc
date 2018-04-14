@@ -1,0 +1,3 @@
+./dump $1.bin >t1
+./dump $1.obj >t2
+diff t1 t2
