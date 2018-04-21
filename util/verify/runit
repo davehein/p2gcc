@@ -1,0 +1,6 @@
+echo $1 $2
+../p2dump -dis -data -hub $2 $1.obj >t1
+../p2dump -dis -hub $2 $1.obj >tt.spin2
+../../bin/p2asm tt.spin2
+../p2dump -dis -data -hub $2 tt.bin >t2
+diff t1 t2
