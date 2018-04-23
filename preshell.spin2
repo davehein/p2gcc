@@ -1,7 +1,7 @@
 con
 	rx_pin = 63
 	tx_pin = 62
-	clock_freq = 60_000_000
+	clock_freq = 80_000_000
 	baud_rate = 115_200
 	lr = $1f6
 	hub_ram_kb = 64
@@ -15,6 +15,7 @@ dat
 	org
 
 start	mov	sp, ##hub_ram_kb*1024 - 64
+        hubset  #ff
 	drvh    #tx_pin
 	calld	lr, main_address
 	cogid	r1
