@@ -390,11 +390,7 @@ int main(int argc, char **argv)
     char buffer[80];
 
     waitcnt(CNT+12000000);
-#if 0
-    sd_mount(8, 9, 10, 11);
-#else
     sd_mount(59, 60, 58, 61);
-#endif
 
     stdinfile = stdin;
     stdoutfile = stdout;

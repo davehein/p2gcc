@@ -65,7 +65,8 @@ as follows:
      p2gcc -r -t fsrwtest.c
      p2gcc -r -t filetest.c
 
-fsrwtest and filetest require that an SD card be connected to I/O pins 0, 1, 2 and 3.
+fsrwtest and filetest require that an SD card be connected to I/O pins 59, 60,
+58 and 61.
 
 Programs can also be run on the simulator by specifying the -s option.  A Windows
 executable for spinsim is included in this distribution.  spinsim must be built

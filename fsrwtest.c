@@ -21,11 +21,7 @@ int main(void)
 
     waitcnt(CNT+12000000);
 
-#if 1
-    mount_explicit(8, 9, 10, 11);
-#else
     mount_explicit(59, 60, 58, 61);
-#endif
 
     printf("FSRWTEST\n");
     //printf("&tempval1 = %x\n", &tempval1);
