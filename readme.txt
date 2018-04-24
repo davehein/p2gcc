@@ -36,8 +36,10 @@ a small number of routines that run from cog memory.  prefix.spin2 is added to a
 included as the first object in the list.
 
 The various tools are pre-built for Windows and MinGW.  They can be rebuilt using
-the build script build_mingw run from a MinGW window.  The build scripts
-build_cygwin and buld_linux are provided to build the tools for Cygwin and Linux.
+the build script build_mingw run from a MinGW window.  The build script
+build_cygwin is used to build the tools for Cygwin.  build_linux is used to build
+for Linux and macOS.
+
 The executable files are placed in the bin subdirectory.  The source code for the
 various tools are located in the subdirectories loadp2_005, p2asm005, p2link002,
 s2pasm003 and util002.
