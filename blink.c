@@ -1,6 +1,6 @@
 #include <propeller.h>
 
-unsigned int _clkfreq = 60000000;
+unsigned int _clkfreq = 80000000;
 
 int main(void)
 {

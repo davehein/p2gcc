@@ -2,11 +2,11 @@
 #include <stdlib.h>
 #include <propeller.h>
 
-unsigned int _clkfreq = 60000000;
+unsigned int _clkfreq = 80000000;
 
 #define INTEGER_ONLY
 #define MSC_CLOCK
-#define CLOCKS_PER_SEC 60000000
+#define CLOCKS_PER_SEC 80000000
 
 #ifdef NOTDEFINED /* To compile and run this file, say "sh dry.c" */
 	case $0 in
