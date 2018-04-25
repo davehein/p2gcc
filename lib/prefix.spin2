@@ -4,7 +4,7 @@ con
 	clock_freq = 80_000_000
 	baud_rate = 115_200
 	lr = $1f6
-	hub_ram_size = 104*1024
+	hub_ram_size = 30*1024
 
 dat
 	orgh	0
