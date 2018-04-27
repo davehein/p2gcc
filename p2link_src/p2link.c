@@ -683,7 +683,7 @@ int main(int argc, char **argv)
 
     if (picflag) AddPicTable();
 
-    AddAdjTable();
+    //AddAdjTable();
 
     InitHeapAddress();
 
