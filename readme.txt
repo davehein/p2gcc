@@ -1,5 +1,5 @@
                                      P2GCC
-                                 April 24, 2018
+                                 April 27, 2018
                                    Dave Hein
 
 p2gcc will compile, link and load a C file onto a P2 FPGA board.  If the -s
@@ -41,8 +41,8 @@ build_cygwin, build_linux and build_macos are used to build the tools for Cygwin
 Linux and macOS.
 
 The executable files are placed in the bin subdirectory.  The source code for the
-various tools are located in the subdirectories loadp2_005, p2asm005, p2link002,
-s2pasm003 and util002.
+various tools are located in the subdirectories loadp2_src, p2asm_src, p2link_src,
+s2pasm_src and util.
 
 The bin directory should be added to the user's path, or the file in the bin
 directory should be copied to an existing directory that is already in the user's
