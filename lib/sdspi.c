@@ -47,7 +47,7 @@ void errorexit(int val)
     exit(1);
 }
 
-int getcnt(void)
+int sdspi_getcnt(void)
 {
     return CNT;
 }
@@ -118,7 +118,7 @@ void send(int outv)
 //
 void checktime(void)
 {
-    if (getcnt() - starttime > 50000000)
+    if (sdspi_getcnt() - starttime > 50000000)
         errorexit(-41); // Timeout during read
 }
 
@@ -283,7 +283,7 @@ int sdspi_start_explicit(int DO, int CLK, int DI, int CS)
         DIRB |= clk_mask | di_mask | cs_mask;
     }
 
-    starttime = getcnt();
+    starttime = sdspi_getcnt();
     for (i = 0; i < 600; i++) read();
 
     i = cmd(0, 0);
@@ -324,7 +324,7 @@ int readblock(int n, char *b)
 {
     int i;
 
-    starttime = getcnt();
+    starttime = sdspi_getcnt();
     if (!sdhc) n <<= 9;
     cmd(17, n);
     readresp();
@@ -343,7 +343,7 @@ int getCSD(char *b)
 {
     int i;
 
-    starttime = getcnt();
+    starttime = sdspi_getcnt();
     cmd(9, 0);
     readresp();
     for (i = 0; i < 16; i++)
@@ -360,7 +360,7 @@ int writeblock(int n, char *b)
 {
     int i;
 
-    starttime = getcnt();
+    starttime = sdspi_getcnt();
     if (!sdhc) n <<= 9;
     cmd(24, n);
     send(0xfe);
