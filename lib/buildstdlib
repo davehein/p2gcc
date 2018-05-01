@@ -6,7 +6,7 @@
 ./c2o rand
 ./c2o toupper
 ./c2o tolower
-./s2o sleep
+./c2o sleep
 ./c2o clock
 ./c2o ctype
 ./c2o malloc

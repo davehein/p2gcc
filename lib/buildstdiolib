@@ -11,5 +11,5 @@
 ./c2o getchar
 ./s2o getch
 ./c2o putchar
-./s2o putch
+./c2o putch
 cat printf.o sprintf.o scanf.o sscanf.o fprintf.o fileio.o fsrw.o sdspi.o puts.o gets.o getchar.o getch.o putchar.o putch.o >stdio.a
