@@ -122,6 +122,11 @@ void checktime(void)
         errorexit(-41); // Timeout during read
 }
 
+static void __attribute__ ((noinline)) sdspi_delay(int cycles)
+{
+    __asm__("waitx r0");
+}
+
 //
 //  Read eight bits from the card.
 //
@@ -134,6 +139,7 @@ int reada(void)
     {
         OUTA &= ~clk_mask;
         OUTA |= clk_mask;
+        sdspi_delay(2);
         r <<= 1;
         if (INA & do_mask)
             r |= 1;
@@ -150,6 +156,7 @@ int readb(void)
     {
         OUTB &= ~clk_mask;
         OUTB |= clk_mask;
+        sdspi_delay(2);
         r <<= 1;
         if (INB & do_mask)
             r |= 1;
