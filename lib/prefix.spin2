@@ -4,7 +4,7 @@ con
 	clock_freq = 80_000_000
 	baud_rate = 115_200
 	lr = $1f6
-	hub_ram_size = 30*1024
+	init_stack_ptr = 32*1024 - 32*4
 
 dat
 	orgh	0
@@ -80,7 +80,7 @@ __MEMCPY
         ret
 
 prefix_setup
-	mov	sp, ##hub_ram_size - 64
+	mov	sp, ##init_stack_ptr
 	drvh    #tx_pin
         hubset  #$ff
 	mov	r0, #1
