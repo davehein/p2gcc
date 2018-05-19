@@ -44,6 +44,8 @@
 #define TYPE_RCZR     46
 #define TYPE_MODCZ    47
 #define TYPE_TESTP    48
+#define TYPE_MODC     49
+#define TYPE_MODZ     50
 
 #define TYPE_ALIGNL   52
 #define TYPE_ALIGNW   53

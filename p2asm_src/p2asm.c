@@ -180,6 +180,7 @@ int EncodePointerField(int *pindex, char **tokens, int num)
 void GenerateAugx(int opcode, int value, int dfield)
 {
     opcode &= 0xf0000000; // Extract the condition code
+    if (opcode == 0) opcode = 0xf0000000;
     if (dfield)
         opcode |= 0x0f800000; // AUGD
     else
@@ -206,9 +207,12 @@ int EncodeAddressField(int *pindex, char **tokens, int num, int type, int opcode
     int extended = 0;
     int is_float = -1;
 
-    if (StrCompNoCase(name, "ptra") || StrCompNoCase(name, "ptrb") ||
-        !strcmp(name, "++") || !strcmp(name, "--"))
+//if (type==2&&dfield) printf("EncodeAddressField: Trace 1\n");
+
+    if (type >= 2 && (StrCompNoCase(name, "ptra") || StrCompNoCase(name, "ptrb") ||
+        !strcmp(name, "++") || !strcmp(name, "--")))
     {
+//if (type==2&&dfield) printf("EncodeAddressField: Trace 2\n");
 	if (type >= 2)
 	{
             value = EncodePointerField(&i, tokens, num);
@@ -225,6 +229,7 @@ int EncodeAddressField(int *pindex, char **tokens, int num, int type, int opcode
 
     if (!strcmp(name, "#") || !strcmp(name, "##"))
     {
+//if (type==2&&dfield) printf("EncodeAddressField: Trace 3\n");
         if (!strcmp(name, "##")) extended = 1;
 	if (type < 1)
 	{
@@ -243,6 +248,8 @@ int EncodeAddressField(int *pindex, char **tokens, int num, int type, int opcode
     }
     else
     {
+//if (type==2&&dfield) printf("EncodeAddressField: Trace 4\n");
+//if (type==2&&dfield) printf("tokens[%d] = %s\n", i, tokens[i]);
         errnum = EvaluateExpression(12, &i, tokens, num, &value, &is_float);
     }
 
@@ -385,14 +392,11 @@ int ProcessBigSrc(int *pi, char **tokens, int num, int *popcode)
     int is_float = -1;
     int target_hubmode;
 
-//printf("Trace 5\n");
     (*pi)++;
     if (!strcmp(tokens[*pi], "\\"))
     {
-//printf("Force Absolute - %d\n", *pi);
         (*pi)++;
         forceabs = 1;
-//printf("*pi is now %d, token is %s\n", *pi, tokens[*pi]);
     }
     if (objflag && *pi == num - 1)
     {
@@ -431,7 +435,6 @@ int GetImmSrcValue(int i, char **tokens, int num, int *retval)
     int target_hubmode;
 
     if (!strcmp(tokens[++i], "\\")) i++;
-//printf("Trace 4 - %s, %d, %d\n", tokens[i], i, num);
     if (objflag && i == num - 1 && FindSymbol(tokens[i]) < 0)
         value = 0x1000000;
     else if (EvaluateExpression(12, &i, tokens, num, &value, &is_float)) return 1;
@@ -471,6 +474,7 @@ int CountExtras(int i, char **tokens, int num)
         //if (!strcmp(tokens[i++], "[")) count += atol(tokens[i]) - 1;
         if (!strcmp(tokens[i++], "["))
         {
+/*xxxxxxxxxxxxxx*/
             if (EvaluateExpression(12, &i, tokens, num, &value, &is_float)) break;
             count += value - 1;
             i++;
@@ -629,7 +633,6 @@ int ProcessRsrc(int *pi, char **tokens, int num, int *popcode)
 
     i++;
 
-//printf("Trace 6\n");
     if (!strcmp(tokens[i], "#"))
     {
         i++;
@@ -666,7 +669,6 @@ void CheckVref(int i, char **tokens, int num, int srcflag)
 
     if (!objflag || picflag) return;
     if (strcmp(tokens[i++], "##")) return;
-    //printf("CheckVref: %s\n", tokens[i]);
     index = FindSymbol(tokens[i]);
     if (index < 0) return;
     s = &SymbolTable[index];
@@ -963,7 +965,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
         {
             hubmode = 0;
             printflag = PRINT_NOCODE;
-            hub_addr = (hub_addr + 3) & ~3;
+            //hub_addr = (hub_addr + 3) & ~3;
             if (i == num)
                 cog_addr = 0;
             else
@@ -980,7 +982,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
         {
             hubmode = 0;
             printflag = PRINT_NOCODE;
-            hub_addr = (hub_addr + 3) & ~3;
+            //hub_addr = (hub_addr + 3) & ~3;
             if (i == num)
                 cog_addr = 0;
             else
@@ -1093,7 +1095,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
                 cog_incr <<= 2;
             }
             cog_addr = (cog_addr + 3) & ~3;
-            hub_addr = (hub_addr + 3) & ~3;
+            //hub_addr = (hub_addr + 3) & ~3;
             break;
         }
 
@@ -1219,6 +1221,24 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
             opcode |= (value & 15) << 13;
             if (CheckExpected(",", i, tokens, num)) break;
             i++;
+            value = GetModczParm(&i, tokens, num);
+            opcode |= (value & 15) << 9;
+            i--;
+            ProcessWx(&i, tokens, num, &opcode);
+            break;
+        }
+
+        case TYPE_MODC:
+        {
+            value = GetModczParm(&i, tokens, num);
+            opcode |= (value & 15) << 13;
+            i--;
+            ProcessWx(&i, tokens, num, &opcode);
+            break;
+        }
+
+        case TYPE_MODZ:
+        {
             value = GetModczParm(&i, tokens, num);
             opcode |= (value & 15) << 9;
             i--;
@@ -1378,6 +1398,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
         // Handle AKPIN instruction, such as akpin s/#
         case TYPE_AKPIN:
         {
+            i--;
             ProcessSrc(&i, tokens, num, &opcode);
             break;
         }
@@ -1454,7 +1475,6 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
             if (CheckExpected(",", ++i, tokens, num)) break;
             if (strcmp(tokens[i+1], "#") || value < 0x1f6 || value > 0x1f9)
             {
-//printf("Trace 1\n");
                 if (is_loc)
                 {
                     PrintError("ERROR: Invalid LOC instruction\n", 0, 0);
@@ -1469,14 +1489,12 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
             {
                 int srcval;
                 if (CheckExpected("#", ++i, tokens, num)) break;
-//printf("Trace 2- tokens[%d] = %s\n", i, tokens[i+1]);
                 if (!strcmp(tokens[i+1], "\\"))
                     srcval = 1;
                 else
                     GetImmSrcValue(i, tokens, num, &srcval);
                 if ((srcval&3) == 0 && srcval < (255 * 4) && srcval > (-256 * 4) && !is_loc)
                 {
-//printf("Trace 2\n");
                     i--;
                     s = &SymbolTable[opindex+1];
                     opcode = s->value | (opcode & 0xf0000000);
@@ -1485,7 +1503,6 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
                 }
                 else
                 {
-//printf("Trace 3\n");
 	            opcode |= ((value - 0x1f6) & 3) << 21;
                     ProcessBigSrc(&i, tokens, num, &opcode);
                 }
