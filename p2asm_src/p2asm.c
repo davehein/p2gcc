@@ -551,7 +551,11 @@ int GetData(int i, char **tokens, int num, int datasize)
         if (!strcmp(tokens[i], "["))
         {
             i++;
+            hub_addr -= datasize;
+            cog_addr -= datasize;
             if (EvaluateExpression(12, &i, tokens, num, &count, &is_float)) break;
+            hub_addr += datasize;
+            cog_addr += datasize;
             i++;
             count--;
         }
