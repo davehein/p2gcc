@@ -65,7 +65,7 @@ usage: loadp2\n\
 int loadfile(char *fname, int address)
 {
     FILE *infile;
-    int num, size, i;
+    int num, size, i, j;
 
     infile = fopen(fname, "rb");
     if (!infile)
@@ -81,12 +81,36 @@ int loadfile(char *fname, int address)
     msleep(50);
     tx((uint8_t *)"> Prop_Hex 0 0 0 0", 18);
 
+#if 0
     while ((num=fread(binbuffer, 1, 101, infile)))
     {
         for( i = 0; i < num; i++ )
             sprintf( &buffer[i*3], " %2.2x", binbuffer[i] & 255 );
         tx( (uint8_t *)buffer, strlen(buffer) );
     }
+#else
+    j = 0;
+    // Copy cog image starting at location 0
+    while (j < 0x400 && (num=fread(binbuffer, 1, 64, infile)))
+    {
+        for( i = 0; i < num; i++ )
+            sprintf( &buffer[i*3], " %2.2x", binbuffer[i] & 255 );
+        tx( (uint8_t *)buffer, strlen(buffer) );
+        j += num;
+    }
+    address += 0x400;
+    strcpy(buffer, " 00");
+    // Insert zeros to offset the hub image if needed
+    for (;j < address; j++)
+        tx( (uint8_t *)buffer, 3 );
+    // Copy the hub image
+    while ((num=fread(binbuffer, 1, 64, infile)))
+    {
+        for( i = 0; i < num; i++ )
+            sprintf( &buffer[i*3], " %2.2x", binbuffer[i] & 255 );
+        tx( (uint8_t *)buffer, strlen(buffer) );
+    }
+#endif
     tx((uint8_t *)"~", 1);   // Added for Prop2-v28
 
     msleep(50);
