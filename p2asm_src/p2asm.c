@@ -52,6 +52,7 @@ int case_sensative = 0;
 int picflag = 0;
 int textmode = 1;
 int hubonly = 0;
+int undefined = 0;
 
 void DumpIt(int printflag, void *ptr, int num);
 void PrintIt(int printflag, int hub_addr, int cog_addr, int data_size, char *buffer2, void *ptr);
@@ -1688,8 +1689,19 @@ int ProcessConstantLine(int currval, char **tokens, int num)
     {
         if (commaflag)
         {
-            commaflag = 0;
-            if (CheckExpected(",", i, tokens, num)) break;
+            if (!strcmp(tokens[i], "["))
+            {
+                int tempval;
+                i++;
+                if (EvaluateExpression(12, &i, tokens, num, &tempval, &is_float)) return currval;
+                if (CheckExpected("]", ++i, tokens, num)) break;
+                currval += tempval - 1;
+            }
+            else
+            {
+                commaflag = 0;
+                if (CheckExpected(",", i, tokens, num)) break;
+            }
         }
         else
         {
