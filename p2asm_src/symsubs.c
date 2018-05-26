@@ -311,6 +311,14 @@ int EvaluateExpression(int prevprec, int *pindex, char **tokens, int num, int *p
             value = (int)floor((double)(fvalue + fvalue1));
             getvalue = 0;
         }
+        else if (!strcmp(tokens[i], "|<"))
+        {
+            int is_float1 = 0;
+            i++;
+            if ((errnum = EvaluateExpression(12, &i, tokens, num, &value, &is_float1))) return errnum;
+            value = 1 << value;
+            getvalue = 0;
+        }
         if (getvalue)
         {
             index = FindSymbol(tokens[i]);
