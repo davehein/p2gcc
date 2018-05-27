@@ -12,6 +12,8 @@ extern int hub_addr;
 extern int cog_addr;
 extern int numsym;
 extern int case_sensative;
+extern int undefined;
+extern int allow_undefined;
 extern FILE *lstfile;
 static int numsym1 = 0;
 
@@ -318,29 +320,40 @@ int EvaluateExpression(int prevprec, int *pindex, char **tokens, int num, int *p
             if ((errnum = EvaluateExpression(12, &i, tokens, num, &value, &is_float1))) return errnum;
             value = 1 << value;
             getvalue = 0;
+            *is_float = 0;
         }
         if (getvalue)
         {
             index = FindSymbol(tokens[i]);
+            if (index >= 0 && SymbolTable[index].type == TYPE_UCON) index = -1;
             if (index < 0)
             {
-                printf("EvaluateExpression: Symbol %s is undefined\n", tokens[i]);
-                return 3;
-            }
-            s = &SymbolTable[index];
-            is_float1 = (s->type == TYPE_FLOAT);
-            if (CheckFloat(is_float, is_float1)) { *pindex = i; return 1; }
-            if (hub_addr_flag || s->type == TYPE_HUB_ADDR)
-                value = s->value2;
-            else if (negate)
-            {
-                if (is_float1)
-                    value ^= 0x80000000;
+                undefined++;
+                if (allow_undefined)
+                    value = 0;
                 else
-                    value = -s->value;
+                {
+                    printf("EvaluateExpression: Symbol %s is undefined\n", tokens[i]);
+                    return 3;
+                }
             }
             else
-                value = s->value;
+            {
+                s = &SymbolTable[index];
+                is_float1 = (s->type == TYPE_FLOAT);
+                if (CheckFloat(is_float, is_float1)) { *pindex = i; return 1; }
+                if (hub_addr_flag || s->type == TYPE_HUB_ADDR)
+                    value = s->value2;
+                else if (negate)
+                {
+                    if (is_float1)
+                        value ^= 0x80000000;
+                    else
+                        value = -s->value;
+                }
+                else
+                    value = s->value;
+            }
         }
     }
 
@@ -362,7 +375,11 @@ int EvaluateExpression(int prevprec, int *pindex, char **tokens, int num, int *p
 	    else if (index == 1) fvalue -= fvalue2;
 	    else if (index == 2) fvalue *= fvalue2;
 	    else if (index == 3) fvalue /= fvalue2;
-	    else break;
+	    else
+            {
+                printf("ERROR: Operator '%s' is invalid for floating point\n", oplist[index]);
+                break;
+            }
             memcpy(&value, &fvalue, 4);
         }
         else

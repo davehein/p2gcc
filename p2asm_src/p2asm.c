@@ -53,6 +53,7 @@ int picflag = 0;
 int textmode = 1;
 int hubonly = 0;
 int undefined = 0;
+int allow_undefined = 0;
 
 void DumpIt(int printflag, void *ptr, int num);
 void PrintIt(int printflag, int hub_addr, int cog_addr, int data_size, char *buffer2, void *ptr);
@@ -1670,19 +1671,50 @@ int CheckComment(char *buffer, int *pflag)
     }
 }
 
-int ProcessConstantLine(int currval, char **tokens, int num)
+void AddSymbolCon(char *symbol, int value, int type)
+{
+    SymbolT *s;
+    int index = FindSymbol(symbol);
+
+    if (allow_undefined)
+    {
+        if (index >= 0)
+        {
+            printf("ERROR: Symbol %s is already defined\n", symbol);
+            return;
+        }
+        AddSymbol(symbol, value, type);
+    }
+    else
+    {
+        if (index < 0)
+        {
+            printf("ERROR: Symbol %s not previously defined\n", symbol);
+            return;
+        }
+        s = &SymbolTable[index];
+        if (s->type == TYPE_UCON)
+        {
+            s->type = type;
+            s->value = value;
+        }
+    }
+}
+
+void ProcessConstantLine(int *pcurrval, int *pcurrund, char **tokens, int num)
 {
     int j;
     int i= 0;
     int is_float = -1;
     int commaflag = 0;
 
-    if (num < 1) return currval;
+    if (num < 1) return;
 
     if (StrCompNoCase(tokens[0], "con"))
     {
         i++;
-        currval = 0;
+        *pcurrval = 0;
+        *pcurrund = 0;
     }
 
     for (;i < num; i++)
@@ -1693,9 +1725,9 @@ int ProcessConstantLine(int currval, char **tokens, int num)
             {
                 int tempval;
                 i++;
-                if (EvaluateExpression(12, &i, tokens, num, &tempval, &is_float)) return currval;
+                if (EvaluateExpression(12, &i, tokens, num, &tempval, &is_float)) return;
                 if (CheckExpected("]", ++i, tokens, num)) break;
-                currval += tempval - 1;
+                *pcurrval += tempval - 1;
             }
             else
             {
@@ -1708,16 +1740,20 @@ int ProcessConstantLine(int currval, char **tokens, int num)
             commaflag = 1;
             if (!strcmp(tokens[i], "#"))
             {
+                int undefined1 = undefined;
                 if (i >= num - 1)
                 {
                     fprintf(lstfile, "Expected a constant value\n");
                     break;
                 }
                 i++;
-                EvaluateExpression(12, &i, tokens, num, &currval, &is_float);
+                EvaluateExpression(12, &i, tokens, num, pcurrval, &is_float);
+                *pcurrund = (undefined != undefined1);
             }
             else if (i < num - 1 && !strcmp(tokens[i+1], "="))
             {
+                int undefined1 = undefined;
+
                 if (i >= num - 2)
                 {
                     fprintf(lstfile, "Expected a constant value\n");
@@ -1725,17 +1761,55 @@ int ProcessConstantLine(int currval, char **tokens, int num)
                 }
                 j = i;
                 i += 2;
-                if (EvaluateExpression(12, &i, tokens, num, &currval, &is_float)) return currval;
-                AddSymbol(tokens[j], currval++, (is_float ? TYPE_FLOAT : TYPE_CON));
+                EvaluateExpression(12, &i, tokens, num, pcurrval, &is_float);
+                if (undefined > undefined1)
+                {
+                    if (!allow_undefined) printf("ERROR: %s is undefined\n", tokens[j]);
+                    AddSymbolCon(tokens[j], (*pcurrval)++, TYPE_UCON);
+                }
+                else
+                {
+                    AddSymbolCon(tokens[j], (*pcurrval)++, (is_float ? TYPE_FLOAT : TYPE_CON));
+                }
             }
             else
             {
-                AddSymbol(tokens[i], currval++, TYPE_CON);
+                if (*pcurrund)
+                    AddSymbolCon(tokens[i], (*pcurrval)++, TYPE_UCON);
+                else
+                    AddSymbolCon(tokens[i], (*pcurrval)++, TYPE_CON);
             }
         }
     }
 
-    return currval;
+    return;
+}
+
+// Parse the con section of a Spin file
+void ParseCon(void)
+{
+    int i, num;
+    char *tokens[200];
+    char buffer[600];
+    int mode = MODE_CON;
+    int commentflag = 0;
+    int currval = 0;
+    int currund = 0;
+
+    textmode = 1;
+    cog_addr = 0;
+    hub_addr = 0;
+
+    while (ReadString(buffer2, 300, infile, unicode))
+    {
+        if (CheckComment(buffer2, &commentflag)) continue;
+	num = Tokenize(buffer2, tokens, 100, buffer);
+        if (num == 0) continue;
+	i = SearchList(SectionKeywords, tokens[0]);
+        if (i >= 0) mode = i;
+        if (mode == MODE_CON)
+            ProcessConstantLine(&currval, &currund, tokens, num);
+    }
 }
 
 // Parse a Spin file and call ParseDat for lines in the DAT section
@@ -1746,7 +1820,7 @@ void Parse(int pass)
     char buffer[600];
     int mode = MODE_CON;
     int commentflag = 0;
-    int currval = 0;
+    //int currval = 0;
 
     textmode = 1;
     cog_addr = 0;
@@ -1769,8 +1843,6 @@ void Parse(int pass)
                 ParseDat(pass, buffer2, tokens, num);
 	    else if (pass == 2)
                 fprintf(lstfile, "                   %s\n", buffer2);
-	    else if (mode == MODE_CON)
-                currval = ProcessConstantLine(currval, tokens, num);
 	    continue;
         }
         ParseDat(pass, buffer2, tokens, num);
@@ -1849,6 +1921,11 @@ int main(int argc, char **argv)
     }
 
     ReadSymbolTable();
+    undefined = 0;
+    allow_undefined = 1;
+    ParseCon();
+    allow_undefined = 0;
+    if (undefined) ParseCon();
     Parse(1);
     if (FindSymbol("main") >= 0) hasmain = 1;
     Parse(2);

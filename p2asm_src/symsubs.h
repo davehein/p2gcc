@@ -55,6 +55,7 @@
 #define TYPE_TEXT     57
 #define TYPE_DATA     58
 #define TYPE_MODCZP   59
+#define TYPE_UCON     60
 
 #define MAX_SYMBOLS    2000
 #define MAX_SYMBOL_LEN   39
