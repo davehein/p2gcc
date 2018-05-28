@@ -209,12 +209,9 @@ int EncodeAddressField(int *pindex, char **tokens, int num, int type, int opcode
     int extended = 0;
     int is_float = -1;
 
-//if (type==2&&dfield) printf("EncodeAddressField: Trace 1\n");
-
     if (type >= 2 && (StrCompNoCase(name, "ptra") || StrCompNoCase(name, "ptrb") ||
         !strcmp(name, "++") || !strcmp(name, "--")))
     {
-//if (type==2&&dfield) printf("EncodeAddressField: Trace 2\n");
 	if (type >= 2)
 	{
             value = EncodePointerField(&i, tokens, num);
@@ -231,7 +228,6 @@ int EncodeAddressField(int *pindex, char **tokens, int num, int type, int opcode
 
     if (!strcmp(name, "#") || !strcmp(name, "##"))
     {
-//if (type==2&&dfield) printf("EncodeAddressField: Trace 3\n");
         if (!strcmp(name, "##")) extended = 1;
 	if (type < 1)
 	{
@@ -246,12 +242,19 @@ int EncodeAddressField(int *pindex, char **tokens, int num, int type, int opcode
 	    return -1;
 	}
         errnum = EvaluateExpression(12, &i, tokens, num, &value, &is_float);
-        if (extended) GenerateAugx(opcode, value, dfield);
+        if (extended)
+            GenerateAugx(opcode, value, dfield);
+        else if (type == 2)
+        {
+            if (value & (~255))
+                PrintError("ERROR: Immediate value must be between 0 and 255\n", 0, 0);
+            value &= 255;
+        }
+        else if (value & (~511))
+            PrintError("ERROR: Immediate value must be between 0 and 511\n", 0, 0);
     }
     else
     {
-//if (type==2&&dfield) printf("EncodeAddressField: Trace 4\n");
-//if (type==2&&dfield) printf("tokens[%d] = %s\n", i, tokens[i]);
         errnum = EvaluateExpression(12, &i, tokens, num, &value, &is_float);
     }
 
@@ -706,7 +709,10 @@ int ProcessSrc(int *pi, char **tokens, int num, int *popcode)
         immediate = 1;
     }
     if (EvaluateExpression(12, pi, tokens, num, &value, &is_float)) return 1;
-    if (extended) GenerateAugx(*popcode, value, 0);
+    if (extended)
+        GenerateAugx(*popcode, value, 0);
+    else if (value & (~511))
+        PrintError("ERROR: Immediate value must be between 0 and 511\n", 0, 0);
     if (objflag && picflag)
     {
         if (!immediate && value >= pictableaddr && value < 0x1f0 && hub_addr >= 0x400)
@@ -739,7 +745,10 @@ int ProcessSrcWlx(int *pi, char **tokens, int num, int *popcode)
         immediate = 1;
     }
     if (EvaluateExpression(12, pi, tokens, num, &value, &is_float)) return 1;
-    if (extended) GenerateAugx(*popcode, value, 0);
+    if (extended)
+        GenerateAugx(*popcode, value, 0);
+    else if (value & (~511))
+        PrintError("ERROR: Immediate value must be between 0 and 511\n", 0, 0);
     if (objflag && picflag)
     {
         if (!immediate && value >= pictableaddr && value < 0x1f0 && hub_addr >= 0x400)
@@ -772,7 +781,10 @@ int ProcessSrcWcz(int *pi, char **tokens, int num, int *popcode)
         immediate = 1;
     }
     if (EvaluateExpression(12, pi, tokens, num, &value, &is_float)) return 1;
-    if (extended) GenerateAugx(*popcode, value, 0);
+    if (extended)
+        GenerateAugx(*popcode, value, 0);
+    else if (value & (~511))
+        PrintError("ERROR: Immediate value must be between 0 and 511\n", 0, 0);
     if (objflag && picflag)
     {
         if (!immediate && value >= pictableaddr && value < 0x1f0 && hub_addr >= 0x400)
