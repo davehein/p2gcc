@@ -31,7 +31,9 @@
 
 #define LOADER_BAUD 2000000
 
+static int clock_mode = 0xff;
 static int user_baud = 115200;
+static int clock_freq = 80000000;
 
 #if defined(__CYGWIN__) || defined(__MINGW32__) || defined(__MINGW64__)
   #define PORT_PREFIX "com"
@@ -41,31 +43,42 @@ static int user_baud = 115200;
   #define PORT_PREFIX "/dev/ttyUSB"
 #endif
 
-static char buffer[512];
-static char binbuffer[101];   // Added for Prop2-v28
+char *MainLoader =
+" 00 1e 60 fd 13 00 88 fc 20 7e 65 fd 24 08 60 fd 24 28 60 fd 1f 20 60 fd 08 06 dc fc 40 7e 74 fd 01 28 84 f0 1f 22 60 fd 18 28 44 f0 15 28 60 fd f6 25 6c fb 00 00 7c fc 13 00 e8 fc";
+
+static char buffer[1024];
 static int verbose = 0;
 
 /* Usage - display a usage message and exit */
 static void Usage(void)
 {
 printf("\
-loadp2 - a loader for the propeller 2 - version 0.005, 2018-04-04\n\
+loadp2 - a loader for the propeller 2 - version 0.006, 2018-05-28\n\
 usage: loadp2\n\
          [ -p port ]               serial port\n\
          [ -b baud ]               baud rate (default is %d)\n\
+         [ -f clkfreq ]            clock frequency (default is %d)\n\
+         [ -m clkmode ]            clock mode in hex (default is %02x)\n\
          [ -s address ]            starting address in hex (default is 0)\n\
          [ -t ]                    enter terminal mode after running the program\n\
          [ -T ]                    enter PST-compatible terminal mode\n\
          [ -v ]                    enable verbose mode\n\
          [ -? ]                    display a usage message and exit\n\
-         file                      file to load\n", user_baud);
+         file                      file to load\n", user_baud, clock_freq, clock_mode);
     exit(1);
+}
+
+void txval(int val)
+{
+    sprintf(buffer, " %2.2x %2.2x %2.2x %2.2x",
+        val&255, (val >> 8) & 255, (val >> 16) & 255, (val >> 24) & 255);
+    tx((uint8_t *)buffer, strlen(buffer));
 }
 
 int loadfile(char *fname, int address)
 {
     FILE *infile;
-    int num, size, i, j;
+    int num, size;
 
     infile = fopen(fname, "rb");
     if (!infile)
@@ -80,39 +93,18 @@ int loadfile(char *fname, int address)
     hwreset();
     msleep(50);
     tx((uint8_t *)"> Prop_Hex 0 0 0 0", 18);
-
-#if 0
-    while ((num=fread(binbuffer, 1, 101, infile)))
+    tx((uint8_t *)MainLoader, strlen(MainLoader));
+    txval(clock_mode);
+    txval(3*clock_freq/LOADER_BAUD/2-6);
+    txval(clock_freq/LOADER_BAUD-6);
+    txval(size);
+    txval(address);
+    tx((uint8_t *)"~", 1);
+    msleep(100);
+    while ((num=fread(buffer, 1, 1024, infile)))
     {
-        for( i = 0; i < num; i++ )
-            sprintf( &buffer[i*3], " %2.2x", binbuffer[i] & 255 );
-        tx( (uint8_t *)buffer, strlen(buffer) );
+        tx((uint8_t *)buffer, num);
     }
-#else
-    j = 0;
-    // Copy cog image starting at location 0
-    while (j < 0x400 && (num=fread(binbuffer, 1, 64, infile)))
-    {
-        for( i = 0; i < num; i++ )
-            sprintf( &buffer[i*3], " %2.2x", binbuffer[i] & 255 );
-        tx( (uint8_t *)buffer, strlen(buffer) );
-        j += num;
-    }
-    address += 0x400;
-    strcpy(buffer, " 00");
-    // Insert zeros to offset the hub image if needed
-    for (;j < address; j++)
-        tx( (uint8_t *)buffer, 3 );
-    // Copy the hub image
-    while ((num=fread(binbuffer, 1, 64, infile)))
-    {
-        for( i = 0; i < num; i++ )
-            sprintf( &buffer[i*3], " %2.2x", binbuffer[i] & 255 );
-        tx( (uint8_t *)buffer, strlen(buffer) );
-    }
-#endif
-    tx((uint8_t *)"~", 1);   // Added for Prop2-v28
-
     msleep(50);
     if (verbose) printf("%s loaded\n", fname);
     return 0;
@@ -184,6 +176,24 @@ int main(int argc, char **argv)
                     user_baud = atoi(&argv[i][2]);
                 else if (++i < argc)
                     user_baud = atoi(argv[i]);
+                else
+                    Usage();
+            }
+            else if (argv[i][1] == 'f')
+            {
+                if(argv[i][2])
+                    clock_freq = atoi(&argv[i][2]);
+                else if (++i < argc)
+                    clock_freq = atoi(argv[i]);
+                else
+                    Usage();
+            }
+            else if (argv[i][1] == 'm')
+            {
+                if(argv[i][2])
+                    clock_mode = atox(&argv[i][2]);
+                else if (++i < argc)
+                    clock_mode = atox(argv[i]);
                 else
                     Usage();
             }
