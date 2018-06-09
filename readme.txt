@@ -1,5 +1,5 @@
                                      P2GCC
-                                 May 20, 2018
+                                 May 29, 2018
                                    Dave Hein
 
 p2gcc will compile, link and load a C file onto a P2 FPGA board.  If the -s
@@ -23,7 +23,8 @@ message.
        -T      - Run terminal emulator in PST mode
        -k      - Keep intermediate files
        -s      - Run simulutor
-       -o file - set output file name
+       -o file - Set output file name
+       -p path - Port used for loading
 
 If the -o option is not specified an executable binary file named a.out will be
 created.
