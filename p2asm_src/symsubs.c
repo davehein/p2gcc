@@ -15,6 +15,8 @@ extern int case_sensative;
 extern int undefined;
 extern int allow_undefined;
 extern FILE *lstfile;
+extern int objflag;
+extern int addifmissing;
 static int numsym1 = 0;
 
 extern SymbolT SymbolTable[MAX_SYMBOLS];
@@ -23,6 +25,7 @@ void PrintError(char *str, void *parm1, void *parm2);
 int StrToDec1(char *str, int *is_float);
 int CheckExpected(char *str, int i, char **tokens, int num);
 int CheckForEOL(int i, int num);
+void WriteObjectEntry(int type, int addr, char *str);
 
 void ReadSymbolTable(void)
 {
@@ -107,6 +110,14 @@ int FindSymbol(char *symbol)
         }
     }
 
+    if (objflag && addifmissing && strcmp(symbol, "_main"))
+    {
+        printf("Need to add symbol %s\n", symbol);
+        AddSymbol2(symbol, 0, 0x400, TYPE_HUB_ADDR);
+        WriteObjectEntry('d', 0x400, symbol);
+        return numsym - 1;
+    } 
+
     return -1;
 }
 
@@ -170,19 +181,6 @@ void PurgeLocalLabels(int index)
 	if (SymbolTable[i].name[0] == '.') SymbolTable[i].name[0] = ';';
     }
 }
-
-#if 0
-int FindNeededSymbol(char *str)
-{
-    int index = FindSymbol(str);
-    if (index < 0)
-    {
-	fprintf(lstfile, "ERROR: %s is undefined\n", str);
-	return 0;
-    }
-    return index;
-}
-#endif
 
 SymbolT *GetSymbolPointer(char *str)
 {
@@ -334,7 +332,17 @@ int EvaluateExpression(int prevprec, int *pindex, char **tokens, int num, int *p
                 else
                 {
                     printf("EvaluateExpression: Symbol %s is undefined\n", tokens[i]);
-                    return 3;
+#if 0
+                    if (objflag)
+                    {
+                        printf("Need to add symbol\n");
+                        AddSymbol2(tokens[i], 0, 0, TYPE_HUB_ADDR);
+                        WriteObjectEntry('d', 0, tokens[i]);
+                        value = 0;
+                    }
+                    else
+#endif
+                        return 3;
                 }
             }
             else

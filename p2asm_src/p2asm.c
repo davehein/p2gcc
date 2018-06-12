@@ -54,6 +54,9 @@ int textmode = 1;
 int hubonly = 0;
 int undefined = 0;
 int allow_undefined = 0;
+int addifmissing = 0;
+
+static int finalpass = 0;
 
 void DumpIt(int printflag, void *ptr, int num);
 void PrintIt(int printflag, int hub_addr, int cog_addr, int data_size, char *buffer2, void *ptr);
@@ -405,7 +408,10 @@ int ProcessBigSrc(int *pi, char **tokens, int num, int *popcode)
     }
     if (objflag && *pi == num - 1)
     {
-        int index = FindSymbol(tokens[*pi]);
+        int index;
+        addifmissing = 0;
+        index = FindSymbol(tokens[*pi]);
+        addifmissing = finalpass;
         if (index < 0)
         {
             value = hub_addr + 4;
@@ -440,9 +446,11 @@ int GetImmSrcValue(int i, char **tokens, int num, int *retval)
     int target_hubmode;
 
     if (!strcmp(tokens[++i], "\\")) i++;
+    addifmissing = 0;
     if (objflag && i == num - 1 && FindSymbol(tokens[i]) < 0)
         value = 0x1000000;
     else if (EvaluateExpression(12, &i, tokens, num, &value, &is_float)) return 1;
+    addifmissing = finalpass;
     target_hubmode = value >= 0x400;
     if (hubmode == target_hubmode) rflag = 1;
     if (rflag)
@@ -1940,6 +1948,8 @@ int main(int argc, char **argv)
     if (undefined) ParseCon();
     Parse(1);
     if (FindSymbol("main") >= 0) hasmain = 1;
+    finalpass = 1;
+    addifmissing = 1;
     Parse(2);
 
     i = 0;
