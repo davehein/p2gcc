@@ -1,6 +1,37 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../p2link_src/p2link.h"
+
+typedef struct ObjectTypeS {
+    int type;
+    char *descript;
+} ObjectTypeT;
+
+ObjectTypeT objtypes[] = {
+    {OTYPE_GLOBAL_FUNC,  "Global Func   "},
+    {OTYPE_REF_AUGS,     "Ref augs, s   "},
+    {OTYPE_REF_AUGD,     "Ref augd, d   "},
+    {OTYPE_REF_FUNC_UND, "Undef func ref"},
+    {OTYPE_REF_LONG_REL, "Reloc long ref"},
+    {OTYPE_LABEL,        "Label         "},
+    {OTYPE_INIT_DATA,    "Init data     "},
+    {OTYPE_UNINIT_DATA,  "Uninit data   "},
+    {OTYPE_REF_LONG_UND, "Undef long ref"},
+    {OTYPE_END_OF_CODE,  "End of code   "},
+    {0,                  "Invalid type  "}};
+
+char *GetDescription(int type)
+{
+    ObjectTypeT *ot = objtypes;
+
+    while (ot->type)
+    {
+        if (ot->type == type) break;
+        ot++;
+    }
+    return ot->descript;
+}
 
 void usage(void)
 {
@@ -51,9 +82,9 @@ int main(int argc, char **argv)
     {
         if (fread(&type, 1, 1, infile) != 1) break;
         fread(&value, 1, 4, infile);
-        if (type == 'E')
+        if (type == OTYPE_END_OF_CODE)
         {
-            printf("%c %8.8x\n", type, value);
+            printf("End of code    %8.8x\n", value);
             value -= addr0;
             while (value > 0)
             {
@@ -67,7 +98,7 @@ int main(int argc, char **argv)
         }
         fread(&len, 1, 1, infile);
         fread(buffer, 1, len, infile);
-        printf("%c %8.8x %s\n", type, value, buffer);
+        printf("%s %8.8x %s\n", GetDescription(type), value, buffer);
     }
 
     return 0;
