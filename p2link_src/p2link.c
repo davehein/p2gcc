@@ -1,11 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "p2link.h"
 
 #define MAX_NAME_LEN 30
 #define MAX_OBJECTS 1000
 #define MAX_SYMBOLS 2000
-#define PIC_ADDR    0x140 // Default PIC table address
 
 int FindGlobalLimits(char *str, int type, int first, int last);
 
@@ -22,8 +22,6 @@ char bigbuf[MAX_SYMBOLS*32];
 char *bufptr = bigbuf;
 int objnum = 0;
 int varcount = 0;
-int pictableaddr = PIC_ADDR;
-int picflag = 0;
 int verbose = 0;
 int objstart[MAX_OBJECTS+1];
 char objname[MAX_OBJECTS][MAX_NAME_LEN];
@@ -89,22 +87,22 @@ void ComputeSymbolOffsets(int first, int last, int offset)
 
     for (i = first; i < last; i++)
     {
-        if (symtype[i] == 'W' || symtype[i] == 'X' || symtype[i] == 'R')
+        if (symtype[i] == OTYPE_REF_AUGS || symtype[i] == OTYPE_REF_AUGD || symtype[i] == OTYPE_REF_LONG_REL)
         {
             addr = symvalue[i];
             value1 = mem[addr>>2];
-            index = FindGlobalLimits(symname[i], 'V', first, last);
+            index = FindGlobalLimits(symname[i], OTYPE_LABEL, first, last);
             if (index < 0)
             {
                 printf("Couldn't find %s\n", symname[i]);
                 continue;
             }
-            if (symtype[i] == 'W')
+            if (symtype[i] == OTYPE_REF_AUGS)
             {
                 value1 = (value1 & 0x7fffff) << 9;
                 value1 |= mem[(addr>>2)+1] & 0x1ff;
             }
-            else if (symtype[i] == 'X')
+            else if (symtype[i] == OTYPE_REF_AUGD)
             {
                 value1 = (value1 & 0x7fffff) << 9;
                 value1 |= (mem[(addr>>2)+1] >> 9) & 0x1ff;
@@ -145,7 +143,7 @@ int ReadObject(FILE *infile)
             exit(1);
         }
         if (fread(&symtype[numsym], 1, 1, infile) != 1) return 0;
-        if (symtype[numsym] == 'E')
+        if (symtype[numsym] == OTYPE_END_OF_CODE)
         {
             fread(&size, 1, 4, infile);
             break;
@@ -161,12 +159,6 @@ int ReadObject(FILE *infile)
         bufptr += len;
         if (debugflag)
             printf("%d: %c %8.8x %s\n", numsym, symtype[numsym], symvalue[numsym], symname[numsym]);
-        if (addr == start_addr && symtype[numsym] == 'P' && !strcmp(symname[numsym], "pictable"))
-        {
-            if (debugflag)
-                printf("Setting pictableaddr = %x\n", symvalue[numsym]);
-            pictableaddr = symvalue[numsym];
-        }
         numsym++;
     }
     objstart[objnum+1] = numsym;
@@ -218,7 +210,7 @@ int FindGlobal(char *str)
 
     for (i = 0; i < numsym; i++)
     {
-        if (symtype[i] == 'G' && !strcmp(str, symname[i])) return i;
+        if (symtype[i] == OTYPE_GLOBAL_FUNC && !strcmp(str, symname[i])) return i;
     }
 
     return -1;
@@ -230,7 +222,7 @@ int FindVariable(char *str)
 
     for (i = 0; i < numsym; i++)
     {
-        if (symtype[i] == 'V' && !strcmp(str, symname[i])) return i;
+        if (symtype[i] == OTYPE_LABEL && !strcmp(str, symname[i])) return i;
     }
 
     return -1;
@@ -256,7 +248,7 @@ int Resolve(int num)
 
     for (i = 0; i < num; i++)
     {
-        if (symtype[i] == 'U' || symtype[i] == 'u')
+        if (symtype[i] == OTYPE_REF_FUNC_UND || symtype[i] == OTYPE_REF_LONG_UND)
         {
             if (debugflag)
                 printf("Resolving %s at %8.8x\n", symname[i], symvalue[i]);
@@ -268,12 +260,12 @@ int Resolve(int num)
                 addr_u = symvalue[i];
                 addr_g = symvalue[j];
                 value_u = mem[addr_u>>2];
-                if (symtype[i] == 'U')
+                if (symtype[i] == OTYPE_REF_FUNC_UND)
                     value_r = (value_u & ~0xfffff) | ((addr_g - addr_u - 4) & 0xfffff);
                 else
                     value_r = (addr_g & 0xfffff);
                 mem[addr_u>>2] = value_r;
-                symtype[i] = 'R';
+                symtype[i] = OTYPE_REF_LONG_REL;
                 resolved++;
             }
         }
@@ -287,45 +279,7 @@ void CountVariables(void)
 
     for (i = 0; i < numsym; i++)
     {
-        if (symtype[i] == 'V') varcount++;
-    }
-}
-
-void MergeGlobalVariablesPIC(int prev_num)
-{
-    int i, j;
-
-    for (i = prev_num; i < numsym; i++)
-    {
-        if (symtype[i] == 'V')
-        {
-            j = FindVariable(symname[i]);
-            if (debugflag)
-            {
-                printf("Found variable %s at %8.8x\n", symname[i], symvalue[i]);
-                printf("i = %d, j = %d\n", i, j);
-            }
-            if (j < 0 || j == i)
-            {
-                int oldval = symvalue[i];
-                symvalue[i] = (((pictableaddr >> 2) + varcount++) << 20) | (oldval & 0xfffff);
-                if (debugflag)
-                {
-                    printf("New variable\n");
-                    printf("Changing %8.8x to %8.8x\n", oldval, symvalue[i]);
-                }
-            }
-            else
-            {
-                if (debugflag)
-                {
-                    printf("Merge with entry %d at address %8.8x\n", j, symvalue[j]);
-                    printf("Changing %8.8x to %8.8x\n", symvalue[i], symvalue[j]);
-                }
-                symvalue[i] = symvalue[j];
-                symtype[i] = '-';
-            }
-        }
+        if (symtype[i] == OTYPE_LABEL) varcount++;
     }
 }
 
@@ -338,18 +292,18 @@ void FixUpRef(char *ptr, int newval, int first, int last)
     for (i = first; i < last; i++)
     {
         if (strcmp(ptr, symname[i])) continue;
-        if (symtype[i] != 'W' && symtype[i] != 'X' && symtype[i] != 'R') continue;
+        if (symtype[i] != OTYPE_REF_AUGS && symtype[i] != OTYPE_REF_AUGD && symtype[i] != OTYPE_REF_LONG_REL) continue;
         addr = symvalue[i];
         offset = symoffset[i];
         newval1 = newval + offset;
         if (debugflag && offset) printf("FixUpRef: offset = %d\n", offset);
-        if (symtype[i] == 'W')
+        if (symtype[i] == OTYPE_REF_AUGS)
         {
             if (debugflag) printf("Fixing up reference at entry %d at address %8.8x\n", i, addr);
             ModifyBits(addr, newval1 >> 9, 0x7fffff, 0);
             ModifyBits(addr+4, newval1, 0x1ff, 0);
         }
-        else if (symtype[i] == 'X')
+        else if (symtype[i] == OTYPE_REF_AUGD)
         {
             if (debugflag) printf("Fixing up reference at entry %d at address %8.8x\n", i, addr);
             ModifyBits(addr, newval1 >> 9, 0x7fffff, 0);
@@ -372,10 +326,10 @@ int MergeGlobalVariables(int prev_num)
 
     for (i = prev_num; i < numsym; i++)
     {
-        if (symtype[i] == 'd')
+        if (symtype[i] == OTYPE_UNINIT_DATA)
         {
-            j = FindSymbol(symname[i], 'D');
-            if (j < 0) j = FindSymbol(symname[i], 'd');
+            j = FindSymbol(symname[i], OTYPE_INIT_DATA);
+            if (j < 0) j = FindSymbol(symname[i], OTYPE_UNINIT_DATA);
             if (debugflag)
             {
                 printf("Found variable %s at %8.8x\n", symname[i], symvalue[i]);
@@ -391,7 +345,7 @@ int MergeGlobalVariables(int prev_num)
                 }
                 symvalue[i] = symvalue[j];
                 // Fix address in "V" list also
-                j = FindGlobalLimits(symname[i], 'V', prev_num, numsym);
+                j = FindGlobalLimits(symname[i], OTYPE_LABEL, prev_num, numsym);
                 if (j >= 0)
                 {
                     if (debugflag) printf("Also change entry %d\n", j);
@@ -400,7 +354,7 @@ int MergeGlobalVariables(int prev_num)
                 }
             }
         }
-        else if (symtype[i] == 'D')
+        else if (symtype[i] == OTYPE_INIT_DATA)
         {
             if (debugflag) printf("Found initialized global variable %s at entry %d and address %8.8x\n", symname[i], i, symvalue[i]);
             // Loop over previous objects
@@ -408,10 +362,10 @@ int MergeGlobalVariables(int prev_num)
             {
                 first = objstart[k];
                 last = objstart[k+1];
-                j = FindGlobalLimits(symname[i], 'd', first, last);
+                j = FindGlobalLimits(symname[i], OTYPE_UNINIT_DATA, first, last);
                 if (j < 0)
                 {
-                    j = FindGlobalLimits(symname[i], 'D', first, last);
+                    j = FindGlobalLimits(symname[i], OTYPE_INIT_DATA, first, last);
                     if (j >= 0) printf("WARNING: Global variable %s initialized in another object\n", symname[i]);
                 }
                 if (j < 0) continue;
@@ -420,7 +374,7 @@ int MergeGlobalVariables(int prev_num)
                 FixUpRef(symname[i], symvalue[i], first, last);
                 symvalue[j] = symvalue[i];
                 // Fix address in "V" list also
-                j = FindGlobalLimits(symname[i], 'V', first, last);
+                j = FindGlobalLimits(symname[i], OTYPE_LABEL, first, last);
                 if (j >= 0)
                 {
                     if (debugflag) printf("Also change entry %d\n", j);
@@ -448,13 +402,13 @@ void FixVariableRef(int prev_num)
 
     for (i = prev_num; i < numsym; i++)
     {
-        if (symtype[i] == 'W' || symtype[i] == 'X' || symtype[i] == 'R')
+        if (symtype[i] == OTYPE_REF_AUGS || symtype[i] == OTYPE_REF_AUGD || symtype[i] == OTYPE_REF_LONG_REL)
         {
             int newval;
             int addr = symvalue[i];
             int oldval = mem[addr>>2];
             int offset = symoffset[i];
-            j = FindGlobalLimits(symname[i], 'V', prev_num, numsym);
+            j = FindGlobalLimits(symname[i], OTYPE_LABEL, prev_num, numsym);
             if (debugflag)
             {
                 printf("Found variable %s at %8.8x\n", symname[i], symvalue[i]);
@@ -467,29 +421,17 @@ void FixVariableRef(int prev_num)
                 continue;
             }
             newval = symvalue[j] + offset;
-            if (picflag)
-            {
-                int oldval = mem[addr>>2] & 0x1ff;
-                int newval = (symvalue[j] >> 20) & 0x1ff;
-                if (debugflag)
-                    printf("Changing variable ref at %8.8x from %3.3x to %3.3x\n", addr, oldval, newval);
-                oldval = mem[addr>>2];
-                newval = (oldval & ~0x1ff) | newval;
-                if (debugflag)
-                    printf("Changing %8.8x to %8.8x\n", oldval, newval);
-                mem[addr>>2] = newval;
-            }
-            else if (symtype[i] == 'W')
+            if (symtype[i] == OTYPE_REF_AUGS)
             {
                 ModifyBits(addr, newval >> 9, 0x7fffff, 0);
                 ModifyBits(addr+4, newval, 0x1ff, 0);
             }
-            else if (symtype[i] == 'X')
+            else if (symtype[i] == OTYPE_REF_AUGD)
             {
                 ModifyBits(addr, newval >> 9, 0x7fffff, 0);
                 ModifyBits(addr+4, newval, 0x1ff, 9);
             }
-            else if (symtype[i] == 'R')
+            else if (symtype[i] == OTYPE_REF_LONG_REL)
             {
                 mem[addr>>2] = newval;
                 if (debugflag)
@@ -497,65 +439,6 @@ void FixVariableRef(int prev_num)
             }
         }
     }
-}
-
-void AddPicTable(void)
-{
-    int i;
-
-    if (debugflag) printf("AddPicTable: Setting PIC table address to %8.8x at %8.8x\n", addr, pictableaddr);
-    mem[pictableaddr>>2] = addr;
-        
-    if (debugflag) printf("Number of variables = %d\n", varcount);
-    mem[addr>>2] = varcount;
-    addr += 4;
-    for (i = 0; i < numsym; i++)
-    {
-        if (symtype[i] == 'V')
-        {
-            if (debugflag)
-                printf("%8.8x %s\n", symvalue[i], symname[i]);
-            mem[addr>>2] = symvalue[i] & 0xfffff;
-            addr += 4;
-        }
-    }
-}
-
-void AddAdjTable(void)
-{
-    int i;
-    int num = 0;
-    int adjust_addr = addr;
-    int adjtableaddr = pictableaddr - 4;
-
-    if (debugflag) printf("AddAdjTable: Setting ADJ table address to %8.8x at %8.8x\n", addr, adjtableaddr);
-    mem[adjtableaddr>>2] = addr;
-    addr += 4;
-    for (i = 0; i < numsym; i++)
-    {
-        if (symtype[i] == 'J')
-        {
-            if (debugflag)
-                printf("Adding %8.8x %s to adjustment table\n", symvalue[i] & 0xfffff, symname[i]);
-            mem[addr>>2] = symvalue[i] & 0xfffff;
-            addr += 4;
-            num++;
-        }
-        else if (symtype[i] == 'V')
-        {
-            if (!strcmp(symname[i], "heapaddr") || !strcmp(symname[i], "heapaddrlast"))
-            {
-                if (debugflag)
-                    printf("Adding %8.8x %s to adjustment table\n", symvalue[i] & 0xfffff, symname[i]);
-                mem[addr>>2] = symvalue[i] & 0xfffff;
-                addr += 4;
-                num++;
-            }
-        }
-    }
-        
-    if (debugflag) printf("Number of addresses = %d\n", num);
-    mem[adjust_addr>>2] = num;
 }
 
 void ReadFile(FILE *infile, int libflag)
@@ -604,7 +487,7 @@ void InitHeapAddress(void)
     int i, hub_addr;
     for (i = 0; i < numsym; i++)
     {
-        if (symtype[i] == 'V')
+        if (symtype[i] == OTYPE_LABEL)
         {
             if (!strcmp(symname[i], "_heapaddr") || !strcmp(symname[i], "_heapaddrlast"))
             {
@@ -632,7 +515,6 @@ int main(int argc, char **argv)
         {
             if (!strcmp(argv[i], "-d")) debugflag = 1;
             else if (!strcmp(argv[i], "-v")) verbose = 1;
-            else if (!strcmp(argv[i], "-PIC")) picflag = 1;
             else if (argv[i][1] == 'o')
             {
                 if (argv[i][2])
@@ -668,7 +550,7 @@ int main(int argc, char **argv)
     // Check if any remaining unresolves
     for (i = 0; i < numsym; i++)
     {
-        if (symtype[i] == 'U')
+        if (symtype[i] == OTYPE_REF_FUNC_UND)
         {
             unresolved++;
             printf("%s is unresolved\n", symname[i]);
@@ -680,10 +562,6 @@ int main(int argc, char **argv)
         printf("%d symbol(s) are unresolved\n", unresolved);
         exit(1);
     }
-
-    if (picflag) AddPicTable();
-
-    //AddAdjTable();
 
     InitHeapAddress();
 
