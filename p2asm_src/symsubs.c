@@ -6,6 +6,7 @@
 #include "strsubs.h"
 #include "symsubs.h"
 #include "p2asmsym.h"
+#include "../p2link_src/p2link.h"
 
 extern int hubmode;
 extern int hub_addr;
@@ -114,7 +115,7 @@ int FindSymbol(char *symbol)
     {
         printf("Need to add symbol %s\n", symbol);
         AddSymbol2(symbol, 0, 0x400, TYPE_HUB_ADDR);
-        WriteObjectEntry('d', 0x400, symbol);
+        WriteObjectEntry(OTYPE_UNINIT_DATA, 0x400, symbol);
         return numsym - 1;
     } 
 

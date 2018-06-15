@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include "strsubs.h"
 #include "symsubs.h"
+#include "../p2link_src/p2link.h"
 
 // Printing modes
 #define PRINT_NOCODE    0
@@ -44,12 +45,7 @@ int objflag = 0;
 int hasmain = 0;
 char buffer2[300];
 int debugflag = 0;
-int pictableaddr = 0x7fffffff;
-int pictablemode = 0;
-char PicTableName[1000][MAX_SYMBOL_LEN+1];
-int pictablenum = 0;
 int case_sensative = 0;
-int picflag = 0;
 int textmode = 1;
 int hubonly = 0;
 int undefined = 0;
@@ -416,7 +412,7 @@ int ProcessBigSrc(int *pi, char **tokens, int num, int *popcode)
         {
             value = hub_addr + 4;
             if (debugflag) printf("UNDEFI %8.8x %s\n", hub_addr, tokens[*pi]);
-            WriteObjectEntry('U', hub_addr, tokens[*pi]);
+            WriteObjectEntry(OTYPE_REF_FUNC_UND, hub_addr, tokens[*pi]);
         }
         else if (SymbolTable[index].type == TYPE_HUB_ADDR)
             value = SymbolTable[index].value2;
@@ -580,20 +576,20 @@ int GetData(int i, char **tokens, int num, int datasize)
                 int index = FindSymbol(tokens[i]);
                 if (index < 0)
                 {
-                    if (hub_addr/*+j*/ >= 0x400 || !hubonly)
+                    if (hub_addr >= 0x400 || !hubonly)
                     {
                         value = 0;
-                        if (debugflag) printf("UNDEFI %8.8x %s\n", hub_addr/*+j*/, tokens[i]);
-                        WriteObjectEntry('u', hub_addr/*+j*/, tokens[i]);
+                        if (debugflag) printf("UNDEFI %8.8x %s\n", hub_addr, tokens[i]);
+                        WriteObjectEntry(OTYPE_REF_LONG_UND, hub_addr, tokens[i]);
                     }
                 }
                 else if (SymbolTable[index].type == TYPE_HUB_ADDR)
                 {
-                    if (hub_addr/*+j*/ >= 0x400 || !hubonly)
+                    if (hub_addr >= 0x400 || !hubonly)
                     {
                         value = SymbolTable[index].value2;
-                        if (debugflag) printf("VREF %8.8x %s\n", hub_addr/*+j*/, tokens[i]);
-                        WriteObjectEntry('R', hub_addr/*+j*/, tokens[i]);
+                        if (debugflag) printf("VREF %8.8x %s\n", hub_addr, tokens[i]);
+                        WriteObjectEntry(OTYPE_REF_LONG_REL, hub_addr, tokens[i]);
                     }
                 }
                 else
@@ -610,7 +606,7 @@ int GetData(int i, char **tokens, int num, int datasize)
                     (hub_addr >= 0x400 || !hubonly))
                 {
                     if (debugflag) printf("VREF %8.8x %s\n", hub_addr, tokens[i0]);
-                    WriteObjectEntry('R', hub_addr, tokens[i0]);
+                    WriteObjectEntry(OTYPE_REF_LONG_REL, hub_addr, tokens[i0]);
                     if (debugflag)
                     {
                         printf("Found Offset Reference -");
@@ -684,7 +680,7 @@ void CheckVref(int i, char **tokens, int num, int srcflag)
     int index;
     SymbolT *s;
 
-    if (!objflag || picflag) return;
+    if (!objflag) return;
     if (strcmp(tokens[i++], "##")) return;
     index = FindSymbol(tokens[i]);
     if (index < 0) return;
@@ -692,9 +688,9 @@ void CheckVref(int i, char **tokens, int num, int srcflag)
     if (s->type != TYPE_HUB_ADDR) return;
     if (debugflag) printf("VREF %8.8x %s\n", hub_addr, s->name);
     if (srcflag)
-        WriteObjectEntry('W', hub_addr, s->name);
+        WriteObjectEntry(OTYPE_REF_AUGS, hub_addr, s->name);
     else
-        WriteObjectEntry('X', hub_addr, s->name);
+        WriteObjectEntry(OTYPE_REF_AUGD, hub_addr, s->name);
 }
 
 // Handle source for OP1S or OP2 instruction, such as jmp s or add d,s/#n
@@ -721,14 +717,6 @@ int ProcessSrc(int *pi, char **tokens, int num, int *popcode)
         GenerateAugx(*popcode, value, 0);
     else if (value & (~511))
         PrintError("ERROR: Immediate value must be between 0 and 511\n", 0, 0);
-    if (objflag && picflag)
-    {
-        if (!immediate && value >= pictableaddr && value < 0x1f0 && hub_addr >= 0x400)
-        {
-            if (debugflag) printf("VREF %8.8x %s\n", hub_addr, PicTableName[value-pictableaddr]);
-            WriteObjectEntry('W', hub_addr, PicTableName[value-pictableaddr]);
-        }
-    }
     *popcode |= (value & 511);
     return ProcessWx(pi, tokens, num, popcode);
 }
@@ -757,14 +745,6 @@ int ProcessSrcWlx(int *pi, char **tokens, int num, int *popcode)
         GenerateAugx(*popcode, value, 0);
     else if (value & (~511))
         PrintError("ERROR: Immediate value must be between 0 and 511\n", 0, 0);
-    if (objflag && picflag)
-    {
-        if (!immediate && value >= pictableaddr && value < 0x1f0 && hub_addr >= 0x400)
-        {
-            if (debugflag) printf("VREF %8.8x %s\n", hub_addr, PicTableName[value-pictableaddr]);
-            WriteObjectEntry('W', hub_addr, PicTableName[value-pictableaddr]);
-        }
-    }
     *popcode |= (value & 511);
     return ProcessWlx(pi, tokens, num, popcode, 22);
 }
@@ -793,14 +773,6 @@ int ProcessSrcWcz(int *pi, char **tokens, int num, int *popcode)
         GenerateAugx(*popcode, value, 0);
     else if (value & (~511))
         PrintError("ERROR: Immediate value must be between 0 and 511\n", 0, 0);
-    if (objflag && picflag)
-    {
-        if (!immediate && value >= pictableaddr && value < 0x1f0 && hub_addr >= 0x400)
-        {
-            if (debugflag) printf("VREF %8.8x %s\n", hub_addr, PicTableName[value-pictableaddr]);
-            WriteObjectEntry('W', hub_addr, PicTableName[value-pictableaddr]);
-        }
-    }
     *popcode |= (value & 511);
     return ProcessWcz(pi, tokens, num, popcode);
 }
@@ -816,11 +788,6 @@ int ProcessPointerSrc(int *pi, char **tokens, int num, int *popcode)
     value = EncodeAddressField(pi, tokens, num, 2, *popcode, 0);
     if (value < 0) return 1;
     if (value & 0x200) *popcode |= I_BIT;
-    else if (value >= pictableaddr && value < 0x1f0 && hub_addr >= 0x400)
-    {
-        if (debugflag) printf("VREF %8.8x %s\n", hub_addr, PicTableName[value-pictableaddr]);
-        WriteObjectEntry('W', hub_addr, PicTableName[value-pictableaddr]);
-    }
     *popcode |= (value & 0x1ff);
     return ProcessWx(pi, tokens, num, popcode);
 }
@@ -893,14 +860,6 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
         if (index < 0 || (pass == 1 && tokens[i][0] == '.'))
         {
             AddSymbol2(tokens[i], cog_addr >> 2, hub_addr, hubmode ? TYPE_HUB_ADDR : TYPE_COG_ADDR);
-            if (!strcmp(tokens[i], "pictable"))
-            {
-                pictableaddr = cog_addr >> 2;
-                if (debugflag) printf("PICTABLE %8.8x %s\n", hub_addr, "pictable");
-                WriteObjectEntry('P', hub_addr, "pictable");
-            }
-            if (!strcmp(tokens[i], "_hub_pic_table")) pictablemode = 1;
-            if (!strcmp(tokens[i], "_hub_pic_count")) pictablemode = 0;
             if (num == 1) printflag = PRINT_NOCODE;
             i++;
         }
@@ -1092,9 +1051,9 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
             {
                 if (debugflag) printf("GLOBAL %8.8x %s\n", hub_addr, tokens[0]);
                 if (textmode)
-                    WriteObjectEntry('G', hub_addr, tokens[0]);
+                    WriteObjectEntry(OTYPE_GLOBAL_FUNC, hub_addr, tokens[0]);
                 else
-                    WriteObjectEntry('D', hub_addr, tokens[0]);
+                    WriteObjectEntry(OTYPE_INIT_DATA, hub_addr, tokens[0]);
             }
             return;
         }
@@ -1104,7 +1063,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
             if (pass == 2 && objflag)
             {
                 if (debugflag) printf("GLOBAL0 %8.8x %s\n", hub_addr, tokens[0]);
-                WriteObjectEntry('d', hub_addr, tokens[0]);
+                WriteObjectEntry(OTYPE_UNINIT_DATA, hub_addr, tokens[0]);
             }
             return;
         }
@@ -1141,14 +1100,6 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
                 datalen = GetData(i, tokens, num, 4);
                 if (datalen) DumpIt(printflag, databuffer, datalen);
                 PrintIt(printflag, hub_addr, cog_addr, datalen, buffer2, databuffer);
-            }
-            else if (pictablemode)
-            {
-                //PicTableValue[pictablenum] = hub_addr;
-                if (pictablemode == 2)
-                    strcpy(PicTableName[pictablenum++], tokens[1]);
-                else
-                    pictablemode = 2;
             }
             cog_addr += cog_incr;
             hub_addr += hub_incr;
@@ -1899,8 +1850,6 @@ int main(int argc, char **argv)
                 debugflag = 1;
             else if(!strcmp(argv[i], "-c"))
                 case_sensative = 1;
-            else if(!strcmp(argv[i], "-PIC"))
-                picflag = 1;
             else if(!strcmp(argv[i], "-hub"))
                 hubonly = 1;
 	    else
@@ -1965,32 +1914,18 @@ int main(int argc, char **argv)
     {
         int num;
         SymbolT *s;
-        if (picflag)
         {
-            for (i = 0; i < pictablenum; i++)
-            {
-                num = (pictableaddr + i) << 20;
-                s = GetSymbolPointer(PicTableName[i]);
-                if (s) num += s->value2;
-                if (debugflag) printf("VDEF %8.8x %s\n", num, PicTableName[i]);
-                WriteObjectEntry('V', num, PicTableName[i]);
-            }
-        }
-        else
-        {
-            SymbolT *s;
-
             for (i = 0; i < numsym; i++)
             {
                 s = &SymbolTable[i];
                 if (s->type == TYPE_HUB_ADDR)
                 {
                     if (debugflag) printf("VDEF %8.8x %s\n", s->value2, s->name);
-                    WriteObjectEntry('V', s->value2, s->name);
+                    WriteObjectEntry(OTYPE_LABEL, s->value2, s->name);
                 }
             }
         }
-        i = 'E';
+        i = OTYPE_END_OF_CODE;
         fwrite(&i, 1, 1, objfile);
         fwrite(&hub_addr, 1, 4, objfile);
         binfile = FileOpen(binfname, "rb");
