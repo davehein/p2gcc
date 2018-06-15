@@ -1,5 +1,5 @@
                                      P2GCC
-                                 April 27, 2018
+                                 May 29, 2018
                                    Dave Hein
 
 p2gcc will compile, link and load a C file onto a P2 FPGA board.  If the -s
@@ -23,7 +23,8 @@ message.
        -T      - Run terminal emulator in PST mode
        -k      - Keep intermediate files
        -s      - Run simulutor
-       -o file - set output file name
+       -o file - Set output file name
+       -p path - Port used for loading
 
 If the -o option is not specified an executable binary file named a.out will be
 created.
@@ -44,7 +45,7 @@ The executable files are placed in the bin subdirectory.  The source code for th
 various tools are located in the subdirectories loadp2_src, p2asm_src, p2link_src,
 s2pasm_src and util.
 
-The bin directory should be added to the user's path, or the file in the bin
+The bin directory should be added to the user's path, or the files in the bin
 directory should be copied to an existing directory that is already in the user's
 path.  The environment variable, P2GCC_LIBDIR must also be defined to point to
 the lib directory.  It is used for linking and also defines where prefix.spin2 is

@@ -49,7 +49,8 @@ echo "  -t      - Run terminal emulator"
 echo "  -T      - Run terminal emulator in PST mode"
 echo "  -k      - Keep intermediate files"
 echo "  -s      - Run simulutor"
-echo "  -o file - set output file name"
+echo "  -o file - Set output file name"
+echo "  -p port - Port used for loading"
 exit
 fi
 
@@ -102,6 +103,9 @@ do
     shift
     binfile=$1
     linkstr="$linkstr -o $1 "
+  else if [ $1 = "-p" ]; then
+    shift
+    loadstr="$loadstr -p $1 "
   else
     getroot $1
     getext $1
@@ -148,6 +152,7 @@ do
     fi
     fi
     fi
+  fi
   fi
   fi
   fi

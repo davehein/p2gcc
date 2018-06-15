@@ -6,7 +6,8 @@
 
 static char *Delimiters[] = {
     "@@@", "##", "#", ",", "[", "]", "++", "+", "--", "-", "<<",
-    "<", ">>", "><", ">", "*", "/", "\\", "&", "|", "(", ")", "@", 0};
+    "<", ">>", "><", ">", "*", "/", "\\", "&", "|<", "|", "(", ")",
+     "@", "==", "=", 0};
 
 char *FindChar(char *str, int val)
 {
@@ -77,7 +78,7 @@ int Tokenize(char *str, char **tokens, int maxnum, char *tokenbuf)
         }
         else
         {
-	    ptr = FindChars(str, " \t@#,[]+-<>*/&|()\"");
+	    ptr = FindChars(str, " \t@#,[]+-<>*/&|()\"='");
             len = ptr - str;
         }
         tokens[num++] = tokenbuf;
@@ -87,8 +88,11 @@ int Tokenize(char *str, char **tokens, int maxnum, char *tokenbuf)
         str = ptr;
     }
 #if 0
-    for (i = 0; i < num; i++) printf("<%s>", tokens[i]);
-    printf("\n");
+    {
+        int i;
+        for (i = 0; i < num; i++) printf("<%s>", tokens[i]);
+        printf("\n");
+    }
 #endif
     return num;
 }

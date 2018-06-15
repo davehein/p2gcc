@@ -52,6 +52,11 @@ int case_sensative = 0;
 int picflag = 0;
 int textmode = 1;
 int hubonly = 0;
+int undefined = 0;
+int allow_undefined = 0;
+int addifmissing = 0;
+
+static int finalpass = 0;
 
 void DumpIt(int printflag, void *ptr, int num);
 void PrintIt(int printflag, int hub_addr, int cog_addr, int data_size, char *buffer2, void *ptr);
@@ -180,6 +185,7 @@ int EncodePointerField(int *pindex, char **tokens, int num)
 void GenerateAugx(int opcode, int value, int dfield)
 {
     opcode &= 0xf0000000; // Extract the condition code
+    if (opcode == 0) opcode = 0xf0000000;
     if (dfield)
         opcode |= 0x0f800000; // AUGD
     else
@@ -206,8 +212,8 @@ int EncodeAddressField(int *pindex, char **tokens, int num, int type, int opcode
     int extended = 0;
     int is_float = -1;
 
-    if (StrCompNoCase(name, "ptra") || StrCompNoCase(name, "ptrb") ||
-        !strcmp(name, "++") || !strcmp(name, "--"))
+    if (type >= 2 && (StrCompNoCase(name, "ptra") || StrCompNoCase(name, "ptrb") ||
+        !strcmp(name, "++") || !strcmp(name, "--")))
     {
 	if (type >= 2)
 	{
@@ -239,7 +245,16 @@ int EncodeAddressField(int *pindex, char **tokens, int num, int type, int opcode
 	    return -1;
 	}
         errnum = EvaluateExpression(12, &i, tokens, num, &value, &is_float);
-        if (extended) GenerateAugx(opcode, value, dfield);
+        if (extended)
+            GenerateAugx(opcode, value, dfield);
+        else if (type == 2)
+        {
+            if (value & (~255))
+                PrintError("ERROR: Immediate value must be between 0 and 255\n", 0, 0);
+            value &= 255;
+        }
+        else if (value & (~511))
+            PrintError("ERROR: Immediate value must be between 0 and 511\n", 0, 0);
     }
     else
     {
@@ -385,18 +400,18 @@ int ProcessBigSrc(int *pi, char **tokens, int num, int *popcode)
     int is_float = -1;
     int target_hubmode;
 
-//printf("Trace 5\n");
     (*pi)++;
     if (!strcmp(tokens[*pi], "\\"))
     {
-//printf("Force Absolute - %d\n", *pi);
         (*pi)++;
         forceabs = 1;
-//printf("*pi is now %d, token is %s\n", *pi, tokens[*pi]);
     }
     if (objflag && *pi == num - 1)
     {
-        int index = FindSymbol(tokens[*pi]);
+        int index;
+        addifmissing = 0;
+        index = FindSymbol(tokens[*pi]);
+        addifmissing = finalpass;
         if (index < 0)
         {
             value = hub_addr + 4;
@@ -431,10 +446,11 @@ int GetImmSrcValue(int i, char **tokens, int num, int *retval)
     int target_hubmode;
 
     if (!strcmp(tokens[++i], "\\")) i++;
-//printf("Trace 4 - %s, %d, %d\n", tokens[i], i, num);
+    addifmissing = 0;
     if (objflag && i == num - 1 && FindSymbol(tokens[i]) < 0)
         value = 0x1000000;
     else if (EvaluateExpression(12, &i, tokens, num, &value, &is_float)) return 1;
+    addifmissing = finalpass;
     target_hubmode = value >= 0x400;
     if (hubmode == target_hubmode) rflag = 1;
     if (rflag)
@@ -471,6 +487,7 @@ int CountExtras(int i, char **tokens, int num)
         //if (!strcmp(tokens[i++], "[")) count += atol(tokens[i]) - 1;
         if (!strcmp(tokens[i++], "["))
         {
+/*xxxxxxxxxxxxxx*/
             if (EvaluateExpression(12, &i, tokens, num, &value, &is_float)) break;
             count += value - 1;
             i++;
@@ -547,7 +564,11 @@ int GetData(int i, char **tokens, int num, int datasize)
         if (!strcmp(tokens[i], "["))
         {
             i++;
+            hub_addr -= datasize;
+            cog_addr -= datasize;
             if (EvaluateExpression(12, &i, tokens, num, &count, &is_float)) break;
+            hub_addr += datasize;
+            cog_addr += datasize;
             i++;
             count--;
         }
@@ -629,7 +650,6 @@ int ProcessRsrc(int *pi, char **tokens, int num, int *popcode)
 
     i++;
 
-//printf("Trace 6\n");
     if (!strcmp(tokens[i], "#"))
     {
         i++;
@@ -666,7 +686,6 @@ void CheckVref(int i, char **tokens, int num, int srcflag)
 
     if (!objflag || picflag) return;
     if (strcmp(tokens[i++], "##")) return;
-    //printf("CheckVref: %s\n", tokens[i]);
     index = FindSymbol(tokens[i]);
     if (index < 0) return;
     s = &SymbolTable[index];
@@ -698,7 +717,10 @@ int ProcessSrc(int *pi, char **tokens, int num, int *popcode)
         immediate = 1;
     }
     if (EvaluateExpression(12, pi, tokens, num, &value, &is_float)) return 1;
-    if (extended) GenerateAugx(*popcode, value, 0);
+    if (extended)
+        GenerateAugx(*popcode, value, 0);
+    else if (value & (~511))
+        PrintError("ERROR: Immediate value must be between 0 and 511\n", 0, 0);
     if (objflag && picflag)
     {
         if (!immediate && value >= pictableaddr && value < 0x1f0 && hub_addr >= 0x400)
@@ -731,7 +753,10 @@ int ProcessSrcWlx(int *pi, char **tokens, int num, int *popcode)
         immediate = 1;
     }
     if (EvaluateExpression(12, pi, tokens, num, &value, &is_float)) return 1;
-    if (extended) GenerateAugx(*popcode, value, 0);
+    if (extended)
+        GenerateAugx(*popcode, value, 0);
+    else if (value & (~511))
+        PrintError("ERROR: Immediate value must be between 0 and 511\n", 0, 0);
     if (objflag && picflag)
     {
         if (!immediate && value >= pictableaddr && value < 0x1f0 && hub_addr >= 0x400)
@@ -764,7 +789,10 @@ int ProcessSrcWcz(int *pi, char **tokens, int num, int *popcode)
         immediate = 1;
     }
     if (EvaluateExpression(12, pi, tokens, num, &value, &is_float)) return 1;
-    if (extended) GenerateAugx(*popcode, value, 0);
+    if (extended)
+        GenerateAugx(*popcode, value, 0);
+    else if (value & (~511))
+        PrintError("ERROR: Immediate value must be between 0 and 511\n", 0, 0);
     if (objflag && picflag)
     {
         if (!immediate && value >= pictableaddr && value < 0x1f0 && hub_addr >= 0x400)
@@ -963,7 +991,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
         {
             hubmode = 0;
             printflag = PRINT_NOCODE;
-            hub_addr = (hub_addr + 3) & ~3;
+            //hub_addr = (hub_addr + 3) & ~3;
             if (i == num)
                 cog_addr = 0;
             else
@@ -980,7 +1008,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
         {
             hubmode = 0;
             printflag = PRINT_NOCODE;
-            hub_addr = (hub_addr + 3) & ~3;
+            //hub_addr = (hub_addr + 3) & ~3;
             if (i == num)
                 cog_addr = 0;
             else
@@ -1093,7 +1121,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
                 cog_incr <<= 2;
             }
             cog_addr = (cog_addr + 3) & ~3;
-            hub_addr = (hub_addr + 3) & ~3;
+            //hub_addr = (hub_addr + 3) & ~3;
             break;
         }
 
@@ -1219,6 +1247,24 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
             opcode |= (value & 15) << 13;
             if (CheckExpected(",", i, tokens, num)) break;
             i++;
+            value = GetModczParm(&i, tokens, num);
+            opcode |= (value & 15) << 9;
+            i--;
+            ProcessWx(&i, tokens, num, &opcode);
+            break;
+        }
+
+        case TYPE_MODC:
+        {
+            value = GetModczParm(&i, tokens, num);
+            opcode |= (value & 15) << 13;
+            i--;
+            ProcessWx(&i, tokens, num, &opcode);
+            break;
+        }
+
+        case TYPE_MODZ:
+        {
             value = GetModczParm(&i, tokens, num);
             opcode |= (value & 15) << 9;
             i--;
@@ -1378,6 +1424,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
         // Handle AKPIN instruction, such as akpin s/#
         case TYPE_AKPIN:
         {
+            i--;
             ProcessSrc(&i, tokens, num, &opcode);
             break;
         }
@@ -1454,7 +1501,6 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
             if (CheckExpected(",", ++i, tokens, num)) break;
             if (strcmp(tokens[i+1], "#") || value < 0x1f6 || value > 0x1f9)
             {
-//printf("Trace 1\n");
                 if (is_loc)
                 {
                     PrintError("ERROR: Invalid LOC instruction\n", 0, 0);
@@ -1469,14 +1515,12 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
             {
                 int srcval;
                 if (CheckExpected("#", ++i, tokens, num)) break;
-//printf("Trace 2- tokens[%d] = %s\n", i, tokens[i+1]);
                 if (!strcmp(tokens[i+1], "\\"))
                     srcval = 1;
                 else
                     GetImmSrcValue(i, tokens, num, &srcval);
                 if ((srcval&3) == 0 && srcval < (255 * 4) && srcval > (-256 * 4) && !is_loc)
                 {
-//printf("Trace 2\n");
                     i--;
                     s = &SymbolTable[opindex+1];
                     opcode = s->value | (opcode & 0xf0000000);
@@ -1485,7 +1529,6 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
                 }
                 else
                 {
-//printf("Trace 3\n");
 	            opcode |= ((value - 0x1f6) & 3) << 21;
                     ProcessBigSrc(&i, tokens, num, &opcode);
                 }
@@ -1648,43 +1691,89 @@ int CheckComment(char *buffer, int *pflag)
     }
 }
 
-int ProcessConstantLine(int currval, char **tokens, int num)
+void AddSymbolCon(char *symbol, int value, int type)
+{
+    SymbolT *s;
+    int index = FindSymbol(symbol);
+
+    if (allow_undefined)
+    {
+        if (index >= 0)
+        {
+            printf("ERROR: Symbol %s is already defined\n", symbol);
+            return;
+        }
+        AddSymbol(symbol, value, type);
+    }
+    else
+    {
+        if (index < 0)
+        {
+            printf("ERROR: Symbol %s not previously defined\n", symbol);
+            return;
+        }
+        s = &SymbolTable[index];
+        if (s->type == TYPE_UCON)
+        {
+            s->type = type;
+            s->value = value;
+        }
+    }
+}
+
+void ProcessConstantLine(int *pcurrval, int *pcurrund, char **tokens, int num)
 {
     int j;
     int i= 0;
     int is_float = -1;
     int commaflag = 0;
 
-    if (num < 1) return currval;
+    if (num < 1) return;
 
     if (StrCompNoCase(tokens[0], "con"))
     {
         i++;
-        currval = 0;
+        *pcurrval = 0;
+        *pcurrund = 0;
     }
 
     for (;i < num; i++)
     {
         if (commaflag)
         {
-            commaflag = 0;
-            if (CheckExpected(",", i, tokens, num)) break;
+            if (!strcmp(tokens[i], "["))
+            {
+                int tempval;
+                i++;
+                if (EvaluateExpression(12, &i, tokens, num, &tempval, &is_float)) return;
+                if (CheckExpected("]", ++i, tokens, num)) break;
+                *pcurrval += tempval - 1;
+            }
+            else
+            {
+                commaflag = 0;
+                if (CheckExpected(",", i, tokens, num)) break;
+            }
         }
         else
         {
             commaflag = 1;
             if (!strcmp(tokens[i], "#"))
             {
+                int undefined1 = undefined;
                 if (i >= num - 1)
                 {
                     fprintf(lstfile, "Expected a constant value\n");
                     break;
                 }
                 i++;
-                EvaluateExpression(12, &i, tokens, num, &currval, &is_float);
+                EvaluateExpression(12, &i, tokens, num, pcurrval, &is_float);
+                *pcurrund = (undefined != undefined1);
             }
             else if (i < num - 1 && !strcmp(tokens[i+1], "="))
             {
+                int undefined1 = undefined;
+
                 if (i >= num - 2)
                 {
                     fprintf(lstfile, "Expected a constant value\n");
@@ -1692,17 +1781,55 @@ int ProcessConstantLine(int currval, char **tokens, int num)
                 }
                 j = i;
                 i += 2;
-                if (EvaluateExpression(12, &i, tokens, num, &currval, &is_float)) return currval;
-                AddSymbol(tokens[j], currval++, (is_float ? TYPE_FLOAT : TYPE_CON));
+                EvaluateExpression(12, &i, tokens, num, pcurrval, &is_float);
+                if (undefined > undefined1)
+                {
+                    if (!allow_undefined) printf("ERROR: %s is undefined\n", tokens[j]);
+                    AddSymbolCon(tokens[j], (*pcurrval)++, TYPE_UCON);
+                }
+                else
+                {
+                    AddSymbolCon(tokens[j], (*pcurrval)++, (is_float ? TYPE_FLOAT : TYPE_CON));
+                }
             }
             else
             {
-                AddSymbol(tokens[i], currval++, TYPE_CON);
+                if (*pcurrund)
+                    AddSymbolCon(tokens[i], (*pcurrval)++, TYPE_UCON);
+                else
+                    AddSymbolCon(tokens[i], (*pcurrval)++, TYPE_CON);
             }
         }
     }
 
-    return currval;
+    return;
+}
+
+// Parse the con section of a Spin file
+void ParseCon(void)
+{
+    int i, num;
+    char *tokens[200];
+    char buffer[600];
+    int mode = MODE_CON;
+    int commentflag = 0;
+    int currval = 0;
+    int currund = 0;
+
+    textmode = 1;
+    cog_addr = 0;
+    hub_addr = 0;
+
+    while (ReadString(buffer2, 300, infile, unicode))
+    {
+        if (CheckComment(buffer2, &commentflag)) continue;
+	num = Tokenize(buffer2, tokens, 100, buffer);
+        if (num == 0) continue;
+	i = SearchList(SectionKeywords, tokens[0]);
+        if (i >= 0) mode = i;
+        if (mode == MODE_CON)
+            ProcessConstantLine(&currval, &currund, tokens, num);
+    }
 }
 
 // Parse a Spin file and call ParseDat for lines in the DAT section
@@ -1713,7 +1840,7 @@ void Parse(int pass)
     char buffer[600];
     int mode = MODE_CON;
     int commentflag = 0;
-    int currval = 0;
+    //int currval = 0;
 
     textmode = 1;
     cog_addr = 0;
@@ -1736,8 +1863,6 @@ void Parse(int pass)
                 ParseDat(pass, buffer2, tokens, num);
 	    else if (pass == 2)
                 fprintf(lstfile, "                   %s\n", buffer2);
-	    else if (mode == MODE_CON)
-                currval = ProcessConstantLine(currval, tokens, num);
 	    continue;
         }
         ParseDat(pass, buffer2, tokens, num);
@@ -1816,8 +1941,15 @@ int main(int argc, char **argv)
     }
 
     ReadSymbolTable();
+    undefined = 0;
+    allow_undefined = 1;
+    ParseCon();
+    allow_undefined = 0;
+    if (undefined) ParseCon();
     Parse(1);
     if (FindSymbol("main") >= 0) hasmain = 1;
+    finalpass = 1;
+    addifmissing = 1;
     Parse(2);
 
     i = 0;

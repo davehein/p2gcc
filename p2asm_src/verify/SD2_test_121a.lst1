@@ -1,0 +1,1729 @@
+                   '' +--------------------------------------------------------------------------+
+                   '' | Cluso's Minimal SD Boot Test for P2                                      |
+                   '' +--------------------------------------------------------------------------+
+                   '' |  Authors:       (c)2012-2017 "Cluso99" (Ray Rodrick)                     |
+                   '' |  Acknowledge:   Andy Schenk, Isonix (originally based on Andy's code)    |
+                   '' |                 Kwabena W. Agyeman  (Kye)                                |
+                   '' |                 Radical Eye Software                                     |
+                   '' |                 Mike Green                                               |
+                   '' |                 Tomas Rokicki                                            |
+                   '' |                 ..and others                                             |
+                   '' |  License:       MIT License - See end of file for terms of use           |
+                   '' +--------------------------------------------------------------------------+
+                   
+                   ' Original by Andy Schenk (c)2012, although v111 basically no resemblence to that code
+                   '------------------------------------------------------------------------------
+                   ' RR20120820 modified by Cluso99 to test SD cards (for later use in P2 ROM)
+                   ' RR20120824 display a few more details on MBR
+                   ' RR20160901 try onP8XBlade2
+                   '------------------------------------------------------------------------------
+                   ' rename SD_test_100.spin       P8XBlade2 working w both SanDisk Ultra HCI Class 10 8GB & Mixza 8GB HCI(1)
+                   ' RR20160927 v100
+                   '            v101a  add SD_trace_032d & fix buffers at $4000 hub
+                   '                c  wkg w/o SD_trace_032d
+                   ' v101d_1a          log more data
+                   '        c          why does /CS=1 before CMD41 ???
+                   '        d          stop CMD41 from /CS=1
+                   '        h          also counts & times cmd55+cmd41 sent 
+                   '        j          + sector #1 display - wkg :)
+                   ' RR20160929           not wkg so go back to SD_test_101d_1k and copy parts from SD_test_032e-1l
+                   '        l,m,p      wkg
+                   ' v101d_1q10        both cards wkg
+                   '       1q20        wkg for SDV2(block address); SDV2(byte address not verified); SDV1(not coded correctly); MMC(ignored)
+                   '       1q22  (bug) add $FF stall counter; SDV2(block & byte) & SDV1 should work correctly; MMC ignored/error
+                   '         21->25    add $FF stall counter & $77777777 identifier
+                   '         29        wkg
+                   ' RR20161003 v102   wkg (need to test SDV2(byte address) & SDV1 cards)
+                   '                d  fix: SanDisk 2GB rejects CMD16
+                   '                f  fix: remove shl blockno,blocksh from cmd to readblock routine (caused reject of CMD16)
+                   '                   fix: CMD16 does not change blocksh to 0!!
+                   ' RR20161003     g  wkg SDV2(block & byte) (1GB & 2GB SDV2byte, 8GB & 64GB SDV2block) check ok
+                   ' RR20161003 v103   P1 test release
+                   ' RR20161012 v104   CMD8 $05 reply reqd to test for SDV1
+                   '                   dane-elec sdhc card did not initialise (fails CMD0) - add try 74clocks with CS=0 & 50 retries
+                   '                   74clocks CS=0+DI=1 fails on 1GB SD, try 96 x1's OK
+                   '                   P1 test release  - still fails CMD0 returns $00 instead of $01
+                   ' RR20161013 v105   CMD0: allow R1= $01 & $00, reduce retry=20
+                   ' RR20161017 v106   Increase timeout 1s->2s   - still fails, suspect card fault.
+                   ' RR20161027 v107   get/display CSD & CID registers (after MBR is read)
+                   ' RR20171102 v108   send 96x1's only sent 8x1's (bug) - insert 1ms delay instead
+                   '                   VOL display incorrect sector bug !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                   '                a  simplify 74 clock routine and extend to 96 clocks
+                   '                b  simplify cmd (sending par bytes)
+                   '                c  fix bug command0 does not do CS=0 before c0mmand8, add delay 1ms before retries
+                   '                d  fix call/jmp cmd16/cmd9&10/etc & readmbr
+                   '                e  add docn for responses and r/w block(s)
+                   '                f  add cmdtype & mod cmd s/r; add delay to CLK=0 in readblock
+                   '                g  change call #cmd to call #cmdR1/R3R7/RZ
+                   '                h  separate getreply s/r from cmdRx s/r
+                   '                i  adj sendio/hi/cnt to finish with CLK=0
+                   '                j  sendio->sendbyte, sendiohi->sendones, sendiocnt->sendlong, add recvbyte, recvlong
+                   '                k  include /CS=1 before cmdxx_ret except for cmdRZ; temp include CLK=0 before /CS=1
+                   '                l  swap mbr/vol/csd/cid order
+                   '                m  sequence cmds & display better debug info
+                   ' RR20171106 v109a  delay1ms->delay10us before cmd0, slight tidy, debug /CS & CLK
+                   '                b  debug tidy
+                   '                cdef  tweek sendxxxx for known start CLK=0, end with CLK=0, debug tidy, add 2*nop in sendxxxx 
+                   ' RR20171108     g  sendxxxx: wkg - remove obsolete debug & instrs
+                   '   bug--->         fail09? CMD9/10/17 after FF need to look for 0bit instead of FE ???
+                   '                h
+                   '                i
+                   '                j  revert to 109e sendxxxx routine because 2=V2(byte) card fails 09. 3=V2(block) ok
+                   '                l  mod sendxxxx/recvxxxx for setting up dataout & bitscnt
+                   '                   make readregister use call #readbyte
+                   '                m  tidy
+                   '                no  tweek send/recv s/r, use rlc
+                   '                p  add time(ms)
+                   ' RR20171109 v110a
+                   '                bc  tweek
+                   ' RR20171110  c->f   bugs in d&e !!
+                   '                gh wkg, 2s->1s
+                   '                i  tweek, 10us->5us
+                   '                jk tweek cmdR1/R1R3/R1R7/RZA41/RZtoken
+                   '                l  combine common parts of CMD17 & readregister into readblock
+                   '                m  add verify R1=$00 for CMD9/10/17
+                   '                n  getreply decodes R1=$00+$01+>$01 used for testing R1 response
+                   '                o  renumber failxx
+                   ' RR20171110 v111   Release 5MHz 
+                   '                a  remove unused code
+                   ' bug when $05=IllegalCmd is returned - corrupts z flag!
+                   ' RR20171123 v112   debug: PTN Table and fetch VOLID sector
+                   '                b  fix bug when $05=IllegalCmd is returned - corrupts z flag!
+                   '                c
+                   '------------------------------------------------------------------------------
+                   ' RR20171123 v113   convert to P2 (SD2_test_113a.spin2)
+                   ' RR20171213     bc  P2v28: use CS,CLK,DO,DI=61,60,59,58
+                   ' RR20171214  114abcdef  add hex debug code (interferes w SD pins)
+                   ' RR20171220  115a  seems to be reading SD ok
+                   '                c  list MBR, VOL, etc
+                   ' RR20171220  116   works reading SD Card, then display info
+                   '                b  tidy
+                   ' RR20180106 v117   P2v31:
+                   '                b  debug only at end (and uses RGB LEDs on P5,9,7)
+                   '                c  remove sd cmd debug to hub
+                   '                d  add sector# to mbr & vol info
+                   '                f  validate ptn0 and if ok, get vol
+                   '                g  start red=on, mbr read blue=on, vol read green=on, all ok red=off 
+                   '------------------------------------------------------------------------------
+                   ' RR20180106 v118a  strip lmm debug code (leave rgb led) (emailed to Chip)
+                   '------------------------------------------------------------------------------
+                   ' RR20180106 v117ga  decode fat and display more sectors
+                   '                ge  use cluster to get 1st data sector for file: sector=(cluster-2)<<6 + dir_begin
+                   '                gf,gg  make display sector a routine
+                   '                gh-gj  walk file tree
+                   '------------------------------------------------------------------------------
+                   ' RR20180108 v119ab       swap hub lmm_code & trace locations; make sector logging routine generic
+                   '                cdefgh   revalidate mbr, vol, fsi, fat, dat
+                   '		 i        scans dir (1 cluster) for fname entry
+                   ' RR20180109     jkl      add/tidy  
+                   ' RR20180109 v120ab   working nicely             
+                   '------------------------------------------------------------------------------
+                   ' RR20180408 v121a    compile for P2-v32b
+                                            
+                   
+                   ''============================[ CON ]============================================================
+                   CON
+                   
+                     _clockfreq = 80_000_000
+                     _freq      = _clockfreq
+                   
+                   ' constants for serial driver
+                     _rxpin   = 63                                 ' P63=SI
+                     _txpin   = 62                                 ' P62=SO
+                     _baud    = 115_200
+                     _bitper  = (_clockfreq / _baud) << 16 + 7     ' 115200 baud, 8 bits
+                     _txmode  = %0000_0000_000_0000000000000_01_11110_0 'async tx mode, output enabled for smart output
+                     _rxmode  = %0000_0000_000_0000000000000_00_11111_0 'async rx mode, input  enabled for smart input
+                   
+                   ' microSD CV-A9 pins
+                     pinCS    = 61   '39  
+                     pinCLK   = 60   '41  
+                     pinDO    = 59   '36  
+                     pinDI    = 58   '40  
+                           CS       = pinCS-32
+                           CLK      = pinCLK-32
+                           DO       = pinDO-32
+                           DI       = pinDI-32
+                   
+                   ' RGB LED pins (h=on)
+                     _redled   = 5
+                     _greenled = 9
+                     _blueled  = 7
+                   
+                   
+                   '------------------------------------------------------------------------------------------------
+                   ' Command             Argument        Response/Data    Description
+                     CMD0  = 0  +$40   ' 0               R1       -       GO_IDLE_STATE            *Reqs valid CRC      
+                     CMD1  = 1  +$40   ' 0               R1       -       SEND_OP_COND
+                     ACMD41= 41 +$40   ' $4000_0000      R1       -       APP_SEND_OP_COND         *Reqs CMD55 first
+                     CMD8  = 8  +$40   ' 0               R1+R7    -       SEND_IF_COND             *Reqs valid CRC
+                     CMD9  = 9  +$40   ' 0               R1       Y       SEND_CSD
+                     CMD10 = 10 +$40   ' 0               R1       Y       SEND_CID
+                     CMD12 = 12 +$40   ' 0               R2       -       STOP_TRANSMISSION
+                     CMD16 = 16 +$40   ' BlkLen[31:0]    R1       -       SET_BLOCKLEN
+                     CMD17 = 17 +$40   ' Addr[31:0]      R1       Y       READ_SINGLE_BLOCK
+                     CMD18 = 18 +$40   ' Addr[31:0]      R1       Y       READ_MULTIPLE_BLOCK
+                     CMD23 = 23 +$40   ' NoBlks[15:0]    R1       -       SET_BLOCK_COUNT
+                     ACMD23= 23 +$40   ' NoBlks[22:0]    R1       -       SET_WR_BLOCK_ERASE_COUNT *Reqs CMD55 first
+                     CMD24 = 24 +$40   ' Addr[31:0]      R1       Y       WRITE_BLOCK
+                     CMD25 = 25 +$40   ' Addr[31:0]      R1       Y       WRITE_MULTIPLE_BLOCK
+                     CMD55 = 55 +$40   ' 0               R1       -       APP_CMD                  *Prefix for ACMD41/ACMD23
+                     CMD58 = 58 +$40   ' 0               R1+R3    -       READ_OCR  
+                   
+                   
+                   ' R1 response:  $FF = busy/wait (0-8 bytes?)
+                   '               b7: 0 (msb first)
+                   '               b6: Parameter Error
+                   '               b5: Address Error
+                   '               b4: Erase Sequence Error
+                   '               b3: Command CRC Error
+                   '               b2: Illegal Command
+                   '               b1: Erase Reset
+                   '               b0: In Idle State
+                   ' R1b response: ???
+                   ' R3 response:  R1 + OCR(32b)
+                   ' R7 response:  R1($01) + 32b(b11..b0 = $1AA = SDC V2 2V7-3V6, else reject)     
+                   '
+                   ' DataPacket:   DataToken(1byte) + DataBlock(1-2048bytes) + CRC(2bytes)
+                   '   DataToken:  $FE = CMD17/18/24 (read'1'block/read'n'blocks/write'1'block)
+                   '               $FC = CMD25 (write'n'blocks)
+                   '               $FD = CMD25 StopToken  (Single byte packet without data or CRC)
+                   ' ErrorToken:   Single Byte Reply
+                   '               b7-b5: 000
+                   '               b4: Card Locked
+                   '               b3: Out of Range
+                   '               b2: Card ECC failed
+                   '               b1: CC Error
+                   '               b0: Error
+                   ' DataResponse:
+                   '               b7-b4: xxx0
+                   '               $x5: Data Accepted
+                   '               $xB: Data Rejected - CRC Error
+                   '               $xD: Data Rejected - Write Error
+                   
+                   
+                   'PTN Table offsets (16 bytes)
+                   '  ptn_table0    = $1BE          ' ptn 0:     offset to first ptn table
+                   '  ptn_state     = 0  '(1)       ' ptn state: $00=inactive, $80=active
+                   '  ptn_start     = 1  '(3)       ' ptn start: head(1) + cyl/sect(2):cylinder[7:6,15:8],sector[5:0]
+                   '  ptn_type      = 4  '(1)       ' ptn type:  $00=unknown, $01=FAT12, $04=FAT16, $05=ExtDOS, $06=FAT16(>32MB),
+                   '                                '            $0B=FAT32(=<2TB), $0C=FAT32(*), $0E=FAT16(*), $0F=ExtDOS(*) 
+                   '                                '            *=LBA_$13_extensions
+                   '  ptn_end       = 5  '(3)       ' ptn end:   head(1) + cyl/sect(2):cylinder[7:6,15:8],sector[5:0]
+                   '  ptn_skip      = 8  '(4)       ' ptn skip:  skip # sectors to first ptn sector (# between MBR & 1st usable sector)
+                   '  ptn_size      = 12 '(4)       ' ptn size:  # sectors in ptn                                 
+                   
+                   
+                   '------------------------------------------------------------------------------------------------
+                   'Hub Trace Addresses            
+                     done          = $6000         
+                     hubbuf        = done          ' expands up (512byte sectors) and down (16byte sector# & info)
+                   
+                     csd           = done - 32
+                     cid           = done - 16
+                   
+                   
+                     
+                   '------------------------------------------------------------------------------------------------
+                   '               LMM DEBUGGER
+                   '------------------------------------------------------------------------------------------------
+                     _LMM_code     = $4000                         ' lmm debug code in hub
+                     
+                   ' LMM Call Modes...
+                   ' order must match _hubtable
+                     _MODE         = $F << 5                       ' mode bits defining the call b8..b5 (b4..b0 are modifier options)
+                     _SHIFT        = 5                             ' shr # to extract mode bits
+                   ' _CHAR         = 0 << 5                        ' tx char 
+                   '  _ASCII       = 1 << 5                        ' ascii <00>..<1F>," ".."~",<7F>..<FF> (removed v0.70)
+                     _HEX          = 2 << 5                        ' hex...
+                       _REV                = 1 << 4                '   - reverse byte order
+                       _SP                 = 1 << 3                '   - space between hex output pairs
+                      '_DIGITS             = 7..0 where 8->0       '   - no. of digits to display
+                     _LIST         = 3 << 5                        ' LIST memory line (1/4 longs) from cog/hub
+                       _ADDR2              = 1 << 4                ' 1= use lmm_p2 as to-address 
+                       _COUNT              = 1 << 3                ' 1= use lmm_c to display 'n' lines (counter)
+                                                                   '    ^^^ note only _ADDR2 or _COUNT may be specified, not both!
+                       _HDG                = 1 << 2                ' 1=display heading for opcode format
+                       _MON                = 0                     ' \ Format 0:   4 longs, rom "MON"itor format
+                       _SMON               = 1                     ' |        1:   4 longs, "S"hort rom "MON"itor format (no ascii)
+                   '   _CODE               = 2                     ' |        2:   1 long,  code format
+                       _LONG               = 3                     ' /        3:   4 longs, xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx (Sapieha)
+                     _TXSTRING     = 4 << 5                        ' tx string (nul terminated) from hub
+                     _RXSTRING     = 5 << 5                        ' rx string
+                       _ECHO               = 1 << 4                '    - echo char
+                       _PROMPT             = 1 << 3                '    - prompt (lmm_x)
+                       _ADDR               = 1 << 2                '    - addr of string buffer supplied
+                       _NOLF               = 1 << 1                '    - strip <lf>
+                     _DEBUG        = 6 << 5                        ' debug/monitor
+                     _MONITOR      = 7 << 5                        ' goto rom monitor
+                     _MOVE         = 8 << 5                        ' MOVE memory
+                     _UNKNOWN      = 9 << 5                        ' this and above are invalid/unknown
+                   
+                   ' in DEBUG input parse, the following are used...
+                       _HASH               = 1 << 0                ' "#" in param 1
+                       _DOT                = 1 << 1                ' "." in param 2
+                       _COMMA              = 1 << 2                ' "," in param 3
+                   
+                   ' ASCII equates
+                   BS      =       $08
+                   CR      =       $0D                                       
+                   LF      =       $0A
+                   TAB     =       $09
+                   CTRLC   =       $03
+                   CTRLH   =       $08
+                   CTRLS   =       $13
+                   CTRLX   =       $18
+                   CLS     =       $00             ' clear screen
+                   
+                   ''                                                                      
+                   'BUFLEN =       80              ' length of keyboard input buffer        
+                   '_Buffer =      $04000'[80]             'was $E80
+                   
+                   '------------------------------------------------------------------------------------------------
+                   '               COG REGISTERS
+                   '------------------------------------------------------------------------------------------------
+                    _IJMP3 = $1F0                    '' COG Interrupt Jump   3          
+                    _IRET3 = $1F1                    '' COG Interrupt Return 3
+                    _IJMP2 = $1F2                    '' COG Interrupt Jump   2          
+                    _IRET2 = $1F3                    '' COG Interrupt Return 2          
+                    _IJMP1 = $1F4                    '' COG Interrupt Jump   1          
+                    _IRET1 = $1F5                    '' COG Interrupt Return 1          
+                    _ADDRA = $1F6                    '' COG ADDR A                    
+                    _ADDRB = $1F7                    '' COG ADDR B                    
+                    _PTRA  = $1F8                    '' COG PTR  A                  
+                    _PTRB  = $1F9                    '' COG PTR  B                   
+                    _DIRA  = $1FA                    '' COG DIR  A                    
+                    _DIRB  = $1FB                    '' COG DIR  B
+                    _OUTA  = $1FC                    '' COG OUT  A
+                    _OUTB  = $1FD                    '' COG OUT  B
+                    _INA   = $1FE                    '' COG IN   A / Debug JMP
+                    _INB   = $1FF                    '' COG IN   B / Debug RET
+                   '------------------------------------------------------------------------------------------------
+                   
+                   
+                   ''============================[ DAT ]============================================================
+                   DAT
+00000                              orgh    0
+00000 000                          org     0
+                   
+00000 000 fd65fe00 entry           hubset  #$FF                            'set clock to 80MHz
+00004 001 00000000                 nop
+                   
+                   
+                   '###############################################################################
+                   ' set RGB LED...
+00008 002 fd641258                 drvl    #_greenled                      ' GREEN
+0000c 003 fd640e58                 drvl    #_blueled                       ' BLUE
+00010 004 fd640a59                 drvh    #_redled                        ' RED   1=ON 
+                   '###############################################################################
+                   
+                   
+                   '------------------------------------------------------------------------------------------------
+                   '       SD setup...     (sets hub pointers for storing SD mbr/vol/csd/cid/...etc)
+                   '------------------------------------------------------------------------------------------------
+                   '               mov     ptrdone,          par           ' @done  
+                   '               mov     ptrdone,          hubdone       ' @done  
+                           
+                   '+-----------------------------------------------------------------------------+
+                   '+      SD/SDHC/sdxc SPI Initialisation                                        +
+                   '+-----------------------------------------------------------------------------+
+00014 005 fd62e21a                 getct   xstarttime                      '                       debug
+                                   
+                   '+-----------------------------------------------------------------------------+
+                   '+      Wait 1ms (we could assume this has been done)                          +
+                   '+-----------------------------------------------------------------------------+
+00018 006 fd62de1a                 getct   ctr2                            '\ delay 1ms
+0001c 007 fa62df3c                 addct1  ctr2,             delay1ms      '|          
+00020 008 fd602224                 waitct1                                 '/          
+                   
+                   '+-----------------------------------------------------------------------------+
+                   '+      Send >74 clocks with /CS=1 & DI=1 starting & ending with CLK=0         +
+                   '+-----------------------------------------------------------------------------+
+00024 009 f603fb34                 mov     outb,             initmask      ' 1<<cs | 1<<di | 0<<clk 
+00028 00a f603f735                 mov     dirb,             dirmask       ' 1<<cs | 1<<di | 1<<clk (DO=input to prop)
+0002c 00b f606dcc0                 mov     ctr1,             #(96*2)
+00030 00c fd62de1a                 getct   ctr2                            ' 
+00034 00d fa62df3b .count          addct1  ctr2,             delay5us      '          
+00038 00e fd602224                 waitct1                                 '\ 5us+5us (ie 100KHz)         
+0003c 00f f563fb38                 xor     outb,             clkmask       '| CLK=0-->1-->0
+00040 010 fb6eddfc                 djnz    ctr1,             #.count       '/
+                   
+00044 011 fa62df3b                 addct1  ctr2,             delay5us      '| CLK=0 (idle) & /CS=1 
+00048 012 fd602224                 waitct1                                 '/
+                   '+-----------------------------------------------------------------------------+
+                   
+                   
+                   '+-----------------------------------------------------------------------------+
+                   '+ Software Reset:                                                             +
+                   '+      CMD0,  PAR=$0,        CRC=$95, REPLY=R1($01)                           +
+                   '+-----------------------------------------------------------------------------+
+0004c 013 fd62e41a Command0        getct   starttime                       ' timeout up to CMD9
+00050 014 f606dc0a                 mov     ctr1,             #10           ' try a few times
+00054 015 f606c840 .again0         mov     cmdout,           #CMD0
+00058 016 f606ca00                 mov     cmdpar,           #0
+0005c 017 f606cc95                 mov     cmdcrc,           #$95
+                   '+-----------------------------------------------------------------------------+
+00060 018 fdb003a4                 call    #cmdR1            ' /CS=0, send cmd, recv R1, /CS=1
+                   '+-----------------------------------------------------------------------------+
+00064 019 1d900018   if_nc_and_nz  jmp     #Command8                       ' $01(idle): SD/MMC, not fully validated
+00068 01a 2d900014   if_nc_and_z   jmp     #Command8                       ' $00(good): (dane card response)
+                   '+-----------------------------------------------------------------------------+
+0006c 01b fd62de1a                 getct   ctr2                            '\ delay 5us
+00070 01c fa62df3b                 addct1  ctr2,             delay5us      '|
+00074 01d fd602224                 waitct1                                 '/
+00078 01e fb6eddf6                 djnz    ctr1,             #.again0      ' n: try again?
+0007c 01f fd900440                 jmp     #fail00                         '
+                   '+=============================================================================+
+                   
+                   ' we know we now have an SD/MMC card but its not fully validated yet...
+                   '+-----------------------------------------------------------------------------+
+                   '+ Check Voltage:                                                              +
+                   '+      CMD8,  PAR=$1AA,      CRC=$87, REPLY=R1($01)+R7($xx1AA) ($05=try SDV1) +
+                   '+-----------------------------------------------------------------------------+
+00080 020          Command8
+00080 020 f606c848                 mov     cmdout,           #CMD8           
+00084 021 f602cb3f                 mov     cmdpar,           x000001AA
+00088 022 f606cc87                 mov     cmdcrc,           #$87
+                   '+-----------------------------------------------------------------------------+
+0008c 023 fdb00378                 call    #cmdR1R7          ' /CS=0, send cmd, recv R1+R7, /CS=1
+                   '+-----------------------------------------------------------------------------+
+00090 024 ed900014   if_c_or_z     jmp     #.illegal                       ' j if <> $01 (not idle)
+00094 025 f502d342 .idle           and     reply,            xFFF          '\ 
+00098 026 f20ad33f                 cmp     reply,            x000001AA wz  '/ R7[11:0]=$1AA ?
+0009c 027 f602cf40                 mov     cmdpar2,          x40000000     ' preset for SDV2
+000a0 028 5d90041c   if_ne         jmp     #fail98                         ' n: unknown R7
+000a4 029 fd90000c                 jmp     #Command55                      ' y: CMD55+ACMD41($4000_0000)
+                   
+000a8 02a f206d405 .illegal        cmp     replyR1,          #$05          ' $05(illegal cmd) ?
+000ac 02b 5d900410   if_ne         jmp     #fail08                         ' <>$01/$05 (not idle/illegal)
+000b0 02c f606ce00                 mov     cmdpar2,          #0            ' try SDV1
+                   ''              jmp     #Command55                      ' CMD55+ACMD41($0) fall thru
+                   
+                   
+                   '+-----------------------------------------------------------------------------+
+                   '+ Prefix to ACMD41 & ACMD23:                                                  +
+                   '+      CMD55, PAR=$0,        CRC=$xx, REPLY=R1($01)                           +
+                   '+-----------------------------------------------------------------------------+
+000b4 02d          Command55                                               '
+000b4 02d f606c877 .again55        mov     cmdout,           #CMD55        '
+000b8 02e f606ca00                 mov     cmdpar,           #0            '   
+                   '+-----------------------------------------------------------------------------+
+000bc 02f fdb00340                 call    #cmdRZA41         ' /CS=0, send cmd, recv R1, /CS=0(ena)
+                   '+-----------------------------------------------------------------------------+
+000c0 030 ed9003fc   if_c_or_z     jmp     #fail55                         ' <>$01 (not idle)
+                   ''              jmp     #CommandA41                     '              fall thru
+                   
+                   '+-----------------------------------------------------------------------------+
+                   '+ Check SDV1/SDV2:  (follows CMD55)                                           +
+                   '+     ACMD41, PAR=$0,        CRC=$xx, REPLY=R1($00) SD-V1                     +
+                   '+     ACMD41, PAR=$40000000, CRC=$xx, REPLY=R1($00) SD-V2                     +
+                   '+-----------------------------------------------------------------------------+
+000c4 031 f606c869 .CommandA41     mov     cmdout,           #ACMD41       '
+000c8 032 f602cb67                 mov     cmdpar,           cmdpar2       ' SDV1=0 / SDV2=$40000000
+                   '+-----------------------------------------------------------------------------+
+000cc 033 fdb00338                 call    #cmdR1            ' /CS=0, send cmd, recv R1, /CS=1
+                   '+-----------------------------------------------------------------------------+
+000d0 034 1602ef78   if_nc_and_nz  mov     ptrcmd,           saveptrcmd    '\ $01(busy): reposition to start..
+000d4 035 1d9fffdc   if_nc_and_nz  jmp     #.again55                       '/ ..of CMD55+CMD41 seq & again
+000d8 036 cd9003e4   if_c          jmp     #fail41                         ' <>$00/$01: error
+                   
+000dc 037 f20ece00                 cmp     cmdpar2,          #0        wz  ' SDV1 ?
+000e0 038 a6069801         if_z    mov     SDtype,           #1            ' y: SDV1
+000e4 039 a606ec09         if_z    mov     blocksh,          #9            ' y: SDV1(byte address)
+000e8 03a ad900024         if_z    jmp     #Command16                      ' y: SDV1 does not use CMD58
+                   ''              jmp     #Command58                      ' SDV2         fall thru
+                   
+                   '+-----------------------------------------------------------------------------+
+                   '+ Check OCR CCS bit:                                                          +
+                   '+      CMD58, PAR=$0,        CRC=$xx, REPLY=R1($00)+R3(b30=1)                 +
+                   '+-----------------------------------------------------------------------------+
+000ec 03b f606c87a Command58       mov     cmdout,           #CMD58        ' SDHC ?
+000f0 03c f606ca00                 mov     cmdpar,           #0            '
+                   '+-----------------------------------------------------------------------------+
+000f4 03d fdb00310                 call    #cmdR1R3          ' /CS=0, send cmd, recv R1+R3, /CS=1
+                   '+-----------------------------------------------------------------------------+
+000f8 03e dd9003c4   if_c_or_nz    jmp     #fail58                         ' <>$00(good): error
+000fc 03f f7cad340                 test    reply,            x40000000 wz  ' bit30=CCS=1?
+00100 040 a6069802         if_z    mov     SDtype,           #2            ' n: SDV2(byte address)
+00104 041 a606ec09         if_z    mov     blocksh,          #9            ' n: SDV2(byte address)
+00108 042 56069803         if_nz   mov     SDtype,           #3            ' y: SDHC/SDV2(block address)
+0010c 043 5606ec00         if_nz   mov     blocksh,          #0            ' y: SDHC/SDV2(block address)
+                   ''      if_nz   jmp     #Command9                       ' y: does not req cmd16?                        ?????????
+                   ''              jmp     #Command16                      ' SDV2(byte)   fall thru
+                   
+                   '+-----------------------------------------------------------------------------+
+                   '+ Force block size to 512 bytes:                                              +
+                   '+      CMD16, PAR=$200,      CRC=$xx, REPLY=R1($00)                           +
+                   '+-----------------------------------------------------------------------------+
+00110 044 f606c850 Command16       mov     cmdout,           #CMD16        ' force blocksize=512bytes
+00114 045 f602cb3e                 mov     cmdpar,           sectorsz      ' 512 bytes
+                   '+-----------------------------------------------------------------------------+
+00118 046 fdb002ec                 call    #cmdR1            ' /CS=0, send cmd, recv R1, /CS=1
+                   '+-----------------------------------------------------------------------------+
+0011c 047 1d9ffff0   if_nc_and_nz  jmp     #Command16                      '  =$01(idle): again
+00120 048 dd90039c   if_c_or_nz    jmp     #fail16                         ' <>$00(good): error
+                   ''              jmp     #Command9                       '              fall thru
+                   
+                   '+-----------------------------------------------------------------------------+
+                   '+ Read CSD register (16 bytes):                                               +
+                   '+      CMD9,  PAR=$0,        CRC=$xx, REPLY=R1($00)                           +
+                   '+-----------------------------------------------------------------------------+
+00124 049 f606c849 Command9        mov     cmdout,           #CMD9         ' read CSD register
+00128 04a f602e979                 mov     bufad,            ptrcsd        '
+0012c 04b fdb00290                 call    #readregister                   '
+                   ''              jmp     #Command10                      '              fall thru
+                   
+                   '+-----------------------------------------------------------------------------+
+                   '+ Read CID register (16 bytes):                                               +
+                   '+      CMD10, PAR=$0,        CRC=$xx, REPLY=R1($00)                           +
+                   '+-----------------------------------------------------------------------------+
+00130 04c f606c84a Command10       mov     cmdout,           #CMD10        ' read CID register        
+00134 04d f602e97a                 mov     bufad,            ptrcid        ' where to store data
+00138 04e fdb00284                 call    #readregister                   '
+                   ''              jmp     #readMBR                        '              fall thru
+                   
+                   '###############################################################################
+0013c 04f fd640e59                 drvh    #_blueled                       ' BLUE 1=ON
+                   '###############################################################################
+                   
+                   
+                   '+-----------------------------------------------------------------------------+
+                   '+ Read MBR/VBR (Sector 0):                                                    +
+                   '+-----------------------------------------------------------------------------+
+00140 050          readmbr
+00140 050 ff1d2921                 mov     _info1,           ##("M" + "B"<<8 + "R"<<16 + ":"<<24)
+00144 051 f606b44d 
+00148 052 f602b749                 mov     _info2,           spaces4
+0014c 053 f602b949                 mov     _info3,           spaces4
+00150 054 f602b351                 mov     _blocknr,         mbr_begin     ' VBR/MBR = SECTOR 0
+00154 055 ff000030                 mov     _bufad,           ##hubbuf      ' where to store data
+00158 056 f606ae00 
+0015c 057 ff00002f                 mov     _bufad2,          ##hubbuf-48   ' where to store info   
+00160 058 f606b1d0 
+00164 059 fdb00204                 call    #read_sector                    ' read sector
+                   
+00168 05a fdb00090                 call    #validate_mbr                   ' returns if valid
+                   '+-----------------------------------------------------------------------------+
+                   '+ Read VOL (Sector x):                                                        +
+                   '+-----------------------------------------------------------------------------+
+                   'readVOL
+0016c 05b ff1d2627                 mov     _info1,           ##("V" + "O"<<8 + "L"<<16 + ":"<<24)
+00170 05c f606b556 
+                   '               mov     _info2,           spaces4
+                   '               mov     _info3,           spaces4
+00174 05d f602b352                 mov     _blocknr,         vol_begin     ' VOL SECTOR#
+00178 05e fdb001e8                 call    #read_nxtslot                   ' read sector
+                   
+0017c 05f fdb000d4                 call    #validate_vol                   ' returns if valid
+                   
+                   '###############################################################################
+00180 060 fd641259                 drvh    #_greenled                      ' GREEN 1=ON
+                   '###############################################################################
+                   
+                   '+-----------------------------------------------------------------------------+
+                   '+ Read FSI (Sector x):                                                        +
+                   '+-----------------------------------------------------------------------------+
+                   'readFSI
+00184 061 ff1d24a9                 mov     _info1,           ##("F" + "S"<<8 + "I"<<16 + ":"<<24)
+00188 062 f606b546 
+                   '               mov     _info2,           spaces4
+                   '               mov     _info3,           spaces4
+0018c 063 f602b353                 mov     _blocknr,         fsi_begin     ' FSI SECTOR#
+00190 064 fdb001d0                 call    #read_nxtslot                   ' read sector
+                   
+00194 065 fdb0012c                 call    #validate_fsi                   ' returns if valid
+                   
+                   '+-----------------------------------------------------------------------------+
+                   '+ Read FAT (Sector x):                                                        +
+                   '+-----------------------------------------------------------------------------+
+                   'readFAT
+00198 066 ff1d2a20                 mov     _info1,           ##("F" + "A"<<8 + "T"<<16 + ":"<<24)
+0019c 067 f606b546 
+                   '               mov     _info2,           spaces4
+                   '               mov     _info3,           spaces4
+001a0 068 f602b354                 mov     _blocknr,         fat_begin     ' FAT SECTOR#
+001a4 069 fdb001bc                 call    #read_nxtslot                   ' read sector
+                   
+                   ''              call    #validate_fat                   ' returns if valid
+                   
+                   
+                   '###############################################################################
+001a8 06a fd640e58                 drvl    #_blueled                      ' BLUE 0=OFF
+                   '###############################################################################
+                   
+                   '+-----------------------------------------------------------------------------+
+                   '+ Read DIR (Sector x):                                                        +
+                   '+-----------------------------------------------------------------------------+
+                   'readDIR
+001ac 06b ff1d2924                 mov     _info1,           ##("D" + "I"<<8 + "R"<<16 + ":"<<24)
+001b0 06c f606b544 
+                   '               mov     _info2,           spaces4
+                   '               mov     _info3,           spaces4
+001b4 06d f602b355                 mov     _blocknr,         dir_begin     ' DIR SECTOR#
+                   
+                   ' search one cluster of sectors for filename entry
+001b8 06e f602bb4d                 mov     _clusters,        PTN0SECCLU    ' max sectors to scan       
+001bc 06f fdb001a4 .nextsector     call    #read_nxtslot                   ' read sector
+001c0 070 fdb00130                 call    #walk_dir                       ' search for file dir entry
+001c4 071 ad90000c 	if_e	jmp	#readDAT                        ' j if entry found
+001c8 072 f106b201                 add     _blocknr,         #1            ' next sector#
+001cc 073 fb6ebbfb 		djnz	_clusters,	#.nextsector
+001d0 074 fd900014 		jmp	#alldone			' not found = give up
+                   
+                   
+                   '+-----------------------------------------------------------------------------+
+                   '+ Read DATA (Sector x):  File "_HELP.TXT"                                     +
+                   '+-----------------------------------------------------------------------------+
+001d4 075          readDAT
+001d4 075 ff1d2a20                 mov     _info1,           ##("D" + "A"<<8 + "T"<<16 + ":"<<24)
+001d8 076 f606b544 
+                   '               mov     _info2,           spaces4
+                   '               mov     _info3,           spaces4
+001dc 077 f602b356                 mov     _blocknr,         dat_begin     ' DAT SECTOR#
+001e0 078 fdb00180                 call    #read_nxtslot                   ' read sector
+                   
+001e4 079 fdb00178                 call    #read_nxtsector                 ' read ++sector
+                   '                call    #read_nxtsector                 ' read ++sector
+                   
+                   '+-----------------------------------------------------------------------------+
+                   ''              jmp     #alldone                        ' fall thru             
+                   '+-----------------------------------------------------------------------------+
+                   
+                   '+-----------------------------------------------------------------------------+
+                   '+ All Done:                                                                   +
+                   '+-----------------------------------------------------------------------------+
+001e8 07a f523fb38 alldone         andn    outb,             clkmask       ' n: CLK=0 (idle)       
+001ec 07b f543fb36                 or      outb,             csmask        ' n: /CS=1 (disable)
+                   '+-----------------------------------------------------------------------------+
+                   
+                   '###############################################################################
+001f0 07c fd640a58                 drvl    #_redled                        ' RED 0=OFF
+                   '###############################################################################
+                   
+                   '+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++               
+001f4 07d fda04000                 call    #finishup                       '                       finish up
+                   '+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++               
+                   
+001f8 07e fd9ffffc halt            jmp     #halt                           ' just loop here!
+                   '+=============================================================================+
+                   
+                    
+                   '+-----------------------------------------------------------------------------+
+                   ' Validate MBR (PTN0 table & signature)
+                   '       	+$1BE[16]   =         = Ptn0 Table...
+                   '       verify	+$1BE+$0[1] = $00/$80 = Ptn0 State
+                   '       verify	+$1BE+$4[1] = $0B/$0C = Ptn0 Type                 
+                   '       calc	+$1BE+$8[4] =         = Ptn0 StartSector#    --> vol_begin         
+                   '       calc	+$1BE+$C[4] =         = Ptn0 SectorSize      --> ptn_size     
+                   '       verify	+$1FE[2]    = $55AA   = signature               
+                   '+-----------------------------------------------------------------------------+
+001fc 07f          validate_mbr
+001fc 07f f602e957                 mov     bufad,  _bufad  ' MBR hub addr
+00200 080 f106e9be                 add     bufad,  #$1BE           ' offset to PTN0 table
+00204 081 fac2d374                 rdbyte  reply,            bufad         ' ptn_state
+00208 082 f506d27f                 and     reply,            #$7F          
+0020c 083 f20ed200                 cmp     reply,            #0        wz  ' $00/80? inactive/active
+00210 084 5d9000dc         if_ne   jmp     #invalid_mbr                    ' 
+00214 085 f106e804                 add     bufad,            #$4           ' offset to ptn_type
+00218 086 fac2d374                 rdbyte  reply,            bufad         ' ptn_type
+0021c 087 f20ed20c                 cmp     reply,            #$0C      wz  ' $0C=FAT32(LBA)
+00220 088 520ed20b         if_ne   cmp     reply,            #$0B      wz  ' $0B=FAT32(<=2TB)
+00224 089 5d9000c8         if_ne   jmp     #invalid_mbr                    '
+00228 08a f106e83c                 add     bufad,  #($1FE-$1BE-$4) ' offset to $55AA signature
+0022c 08b fae2d374                 rdword  reply,            bufad         ' read
+00230 08c f20ad346                 cmp     reply,            x55AA     wz  ' we read it reversed!
+00234 08d 5d9000b8         if_ne   jmp     #invalid_mbr                    '
+                   
+00238 08e f602e957                 mov     bufad,            _bufad        ' MBR hub addr
+0023c 08f f106e9be                 add     bufad,            #$1BE         ' offset to PTN0 table
+                   '+-----------------------------------------------------------------------------+
+                   ' Calculate the raw sector address (LBA) for the VOL sector (vol_begin)...
+                   '	vol_begin = LBA begin  ptn0 $1BE+$08[4] (reversed & not long aligned!!!)
+                   '+-----------------------------------------------------------------------------+
+00240 090 f106e808 		add	bufad,	#$08		' offset to start sector LBA
+00244 091 fb02a574 		rdlong	vol_begin,	bufad		' read
+                   		
+                   '+-----------------------------------------------------------------------------+
+                   ' Calculate the partition size in sectors
+                   '	ptn_size = #sectors in ptn0 $1BE+$0C[4] (reversed & not long aligned!!!)
+                   '+-----------------------------------------------------------------------------+
+00248 092 f106e804 		add	bufad,	#($0C-$08)	' offset to PTN0 size
+0024c 093 fb02c174 		rdlong	ptn_size,	bufad		' read
+00250 094          validate_mbr_ret
+00250 094 fd64002d                 ret
+                   '+-----------------------------------------------------------------------------+
+                   
+                   
+                   '+-----------------------------------------------------------------------------+
+                   ' Validate VOL...
+                   '       verify 	+$00B[2] = 512   = Bytes/Sector                 
+                   '       verify 	+$00D[1] = 64    = Sectors/Cluster	   --> PTN0SECCLU	
+                   '       calc   	+$00E[2]         = #ResvSectors            --> PTN0RESV    
+                   '       verify 	+$010[1] = 2     = #NoOfFATs                    
+                   '       ???   	+$020[4]         = #Sectors/PTN            --> =ptn_size?     
+                   '       calc   	+$024[4]         = #Sectors/FAT            --> PTN0SECFAT    
+                   '       calc   	+$030[2]         = #FileSystemInfo         --> fsi_begin
+                   '       verify 	+$1FE[2] = $55AA = signature                    
+                   '       
+                   '       calc	fat_begin = vol_begin + PTN0RESV
+                   '       calc	dir_begin = fat_begin + (PTN0SECFAT * 2)
+                   '+-----------------------------------------------------------------------------+
+00254 095          validate_vol
+00254 095 f602e957                 mov     bufad,            _bufad        ' VOL hub locn
+                   
+00258 096 f106e80b                 add     bufad,            #$0B          '\ offset to bytes/sector               
+0025c 097 fae2d374                 rdword  reply,            bufad         '| read 
+00260 098 f20ad33e                 cmp     reply,            x512      wz  '|
+00264 099 5d900088         if_ne   jmp     #invalid_vol                    '/
+                   
+00268 09a f106e802 		add	bufad,	#($0D-$0B)	' offset to Sectors/Cluster
+0026c 09b fac29b74 		rdbyte	PTN0SECCLU,	bufad		' read
+                           
+00270 09c f106e801                 add     bufad,            #($0E-$0D)    ' offset to #ResvSectors
+00274 09d fae29d74                 rdword  PTN0RESV,         bufad         ' read                                       
+                   
+00278 09e f106e802                 add     bufad,            #($10-$0E)    '\ offset to #nooffats
+0027c 09f fac2d374                 rdbyte  reply,            bufad         '| read
+00280 0a0 f20ed202                 cmp     reply,            #2        wz  '| $02
+00284 0a1 5d900068         if_ne   jmp     #invalid_vol                    '/
+                   
+00288 0a2 f106e814                 add     bufad,            #($24-$10)    ' offset to #Sectors/FAT
+0028c 0a3 fb029f74                 rdlong  PTN0SECFAT,       bufad         ' read
+                   
+00290 0a4 f106e80c                 add     bufad,            #($30-$24)    ' offset to #FileSystemSector
+00294 0a5 fae2a774                 rdword  fsi_begin,        bufad         ' read
+00298 0a6 f102a752                 add     fsi_begin,        vol_begin     ' add vol_begin
+                   
+0029c 0a7 f106e9ce                 add     bufad,            #($1FE-$30)   ' offset to $55AA signature
+002a0 0a8 fae2d374                 rdword  reply,            bufad         ' read
+002a4 0a9 f20ad346                 cmp     reply,            x55AA     wz  ' we read it reversed!
+002a8 0aa 5d900044         if_ne   jmp     #invalid_vol                    '
+                   
+002ac 0ab f602a952                 mov     fat_begin,        vol_begin     '\ start of FAT table
+002b0 0ac f102a94e                 add     fat_begin,        PTN0RESV      '/
+002b4 0ad f602ab4f                 mov     dir_begin,        PTN0SECFAT    '\ start of DATA (DIR table)
+002b8 0ae f066aa01                 shl     dir_begin,        #1            '| *2
+002bc 0af f102ab54                 add     dir_begin,        fat_begin     '/ +base
+002c0 0b0          validate_vol_ret
+002c0 0b0 fd64002d                 ret
+                   '+-----------------------------------------------------------------------------+
+                   
+                   
+                   '+-----------------------------------------------------------------------------+
+                   ' Validate FSI...
+                   '       verify  +$000[2] = "RRaR" = signature 
+                   '       verify  +$1E4[2] = "rrAa" = signature 
+                   '       verify  +$1FE[2] = $55AA  = signature 
+                   '+-----------------------------------------------------------------------------+
+002c4 0b1          validate_fsi
+002c4 0b1 f602e957                 mov     bufad,            _bufad        ' FSI hub locn
+002c8 0b2 fb02d374                 rdlong  reply,             bufad        ' read
+002cc 0b3 f20ad347                 cmp     reply,            x52526141 wz  ' "RRaA" signature (reversed)
+002d0 0b4 f106e9e4                 add     bufad,            #$1E4         ' offset to signature
+002d4 0b5 fb02d374                 rdlong  reply,            bufad         ' read
+002d8 0b6 a20ad348         if_e    cmp     reply,            x72724161 wz  ' "rrAa" signature (reversed)
+002dc 0b7 f106e81a                 add     bufad,            #($1FE-$1E4)  ' offset to signature
+002e0 0b8 fae2d374                 rdword  reply,            bufad         ' read
+002e4 0b9 a20ad346         if_e    cmp     reply,            x55AA     wz  ' $55AA  signature (reversed)
+002e8 0ba 5d900004         if_ne   jmp     #invalid_fsi                    '
+002ec 0bb          validate_fsi_ret
+002ec 0bb fd64002d                 ret
+                   '+-----------------------------------------------------------------------------+
+                   
+                   
+                   '+-----------------------------------------------------------------------------+
+                   ' Validate FAT...
+                   '	nothing to validate
+                   '+-----------------------------------------------------------------------------+
+                   'validate_fat
+                   '+-----------------------------------------------------------------------------+
+                   
+                   
+002f0 0bc          invalid_mbr
+002f0 0bc          invalid_vol
+002f0 0bc          invalid_fsi
+002f0 0bc fd9ffef4 		jmp     #alldone                        ' 
+                   '+-----------------------------------------------------------------------------+
+                   
+                   
+                   '+-----------------------------------------------------------------------------+
+                   ' Walk Directory: (read DIR sectors)
+                   ' 16 x 32byte DIR(fname) entries per DIR sector
+                   '       search	+$00[11] = 8.3 filename                        
+                   '       verify	+$0B[1]  = FileAttrib		     (tbd!)
+                   '       calc    +$14[2]  = FAT32: 1st cluster# HI     -\-> cluster
+                   '       calc    +$1A[2]  = FAT32: 1st cluster# LO     -/
+                   '       calc    +$1C[4]  = FAT32: FileSize in bytes   --> file_size     
+                   '       calc    dat_begin = dir_begin + ((cluster-2)<<6)
+                   '+-----------------------------------------------------------------------------+
+002f4 0bd          walk_dir
+                   ' scan dir sector for files...
+002f4 0bd f606bc10                 mov     _entries,         #16           ' 16*32byte file entries
+002f8 0be f602e957                 mov     bufad,            _bufad        ' dir hub locn
+                   ' scan this sector for filename entry...
+002fc 0bf fb02d374 .scan		rdlong	reply,	bufad		'\  check this entry
+00300 0c0 f20ad361 		cmp	reply,	_fname    wz	'|
+00304 0c1 f106e804 		add	bufad,	#4		'|
+00308 0c2 fb02d374 		rdlong	reply,	bufad		'|
+0030c 0c3 a20ad362 	if_e	cmp	reply,	_fname+1  wz  '|
+00310 0c4 f106e804 		add	bufad,	#4		'|
+00314 0c5 fb02d374 		rdlong	reply,	bufad		'|
+00318 0c6 f502d343 		and	reply,	x00FFFFFF     '|  only compare 3 chars
+0031c 0c7 a20ad363 	if_e	cmp	reply,	_fname+2  wz	'|
+00320 0c8 ad90000c 	if_e	jmp	#.found	              '/  found!	    
+00324 0c9 f106e818 		add	bufad,	#(32-8)	' next entry
+00328 0ca fb6ebdf4 		djnz	_entries,	#.scan        '
+0032c 0cb fd90002c 		jmp	#walk_dir_ret			' not found in this sector
+                   
+                   '+-----------------------------------------------------------------------------+
+                   ' set:          cluster  = +$14[2] +$1A[2]
+                   '               filesize = +$1C[4]
+                   '		sector   = ((cluster-2)<<6)+base
+                   '			   where <<6 = *sectors/cluster, base=dir_begin 
+                   '+-----------------------------------------------------------------------------+
+00330 0cc          .found
+00330 0cc f106e80c 		add     bufad,            #($14-8)      ' ptr to 1st cluster hi
+00334 0cd fae2ad74                 rdword  dat_begin,        bufad         ' read
+00338 0ce f066ac10                 shl     dat_begin,        #16           ' bytes 3&2
+0033c 0cf f106e806                 add     bufad,            #($1A-$14)    ' ptr to 1st cluster lo
+00340 0d0 fae2d374                 rdword  reply,            bufad         ' read
+00344 0d1 f542ad69                 or      dat_begin,        reply         ' bytes 3-0
+                   ' convert to sector#
+00348 0d2 f186ac02                 sub     dat_begin,        #2            '\ correct cluster addr(-2)
+0034c 0d3 f066ac06                 shl     dat_begin,        #6            '| convert to sector
+00350 0d4 f102ad55                 add     dat_begin,        dir_begin     '/ +base
+                   ' read filesize(bytes)
+00354 0d5 f106e802                 add     bufad,            #($1C-$1A)    ' ptr to filesize
+00358 0d6 fb02bf74                 rdlong  file_size,        bufad         ' read                
+0035c 0d7 fd64002d walk_dir_ret    ret                                     ' returns "Z" if found
+                   '+-----------------------------------------------------------------------------+
+                   
+                   
+                   '+-----------------------------------------------------------------------------+
+                   ' Read Sector & Log Info:                                                       
+                   '+-----------------------------------------------------------------------------+
+00360 0d8 f106b201 read_nxtsector  add     _blocknr,         #1            ' next sector#
+00364 0d9 f186b010 read_nxtslot    sub     _bufad2,          #16           ' next info slot
+00368 0da f102af3e                 add     _bufad,           x512          ' next data slot
+0036c 0db          read_sector
+0036c 0db f602e958                 mov     bufad,            _bufad2       ' where to store info
+00370 0dc fc62b574                 wrlong  _info1,           bufad         '\ store info: text[4]
+00374 0dd f106e804                 add     bufad,            #4            '|
+00378 0de fc62b774                 wrlong  _info2,           bufad         '|             text+4[4]
+0037c 0df f106e804                 add     bufad,            #4            '|
+00380 0e0 fc62b974                 wrlong  _info3,           bufad         '|             text+8[4]
+00384 0e1 f106e804                 add     bufad,            #4            '|
+00388 0e2 fc62b374                 wrlong  _blocknr,         bufad         '/             sector#
+                   
+0038c 0e3 f602eb59                 mov     blocknr,          _blocknr      ' sector#
+00390 0e4 f602e957                 mov     bufad,            _bufad        ' where to store data
+00394 0e5 fdb00010                 call    #Command17                      ' read sector (block)
+                   
+                   ' clear next hug slot (because reboot P2 does not clear hub, so old data remains
+00398 0e6 f602e958 		mov	bufad,	_bufad2	'\
+0039c 0e7 f186e810 		sub	bufad,	#16		'| next data slot
+003a0 0e8 fc628974 		wrlong  x00,	bufad		'/ clear
+                   
+003a4 0e9          read_nxtsector_ret
+003a4 0e9          read_nxtslot_ret
+003a4 0e9 fd64002d read_sector_ret ret                
+                   '+-----------------------------------------------------------------------------+
+                   
+                   
+                                   
+                   '+=============================================================================+
+                   '+-----------------------------------------------------------------------------+
+                   '+ Read Block/Sector:  (512 bytes)                                             +
+                   '+      CMD17, PAR=blocknr,   CRC=$xx, REPLY=R1($??) +n*$FF +($FE+block+CRC16) +
+                   '+-----------------------------------------------------------------------------+
+003a8 0ea f602d93e Command17       mov     bytescnt,         sectorsz      ' read block (no. bytes)
+003ac 0eb f606c851                 mov     cmdout,           #CMD17        '
+003b0 0ec f602cb75                 mov     cmdpar,           blocknr       '
+003b4 0ed f062cb76                 shl     cmdpar,           blocksh       ' <<0 or <<9
+                   '+-----------------------------------------------------------------------------+
+003b8 0ee fdb0000c                 call    #readblock                      ' read 512 bytes
+                   '+-----------------------------------------------------------------------------+
+003bc 0ef fd64002d Command17_ret   ret
+                   '+=============================================================================+
+                   
+                   
+                   '+-----------------------------------------------------------------------------+
+                   '+ Read Block/Sector:  (512 bytes)                                             +
+                   '+      CMD9,  PAR=$0,        CRC=$xx, REPLY=R1($00)                           +
+                   '+      CMD10, PAR=$0,        CRC=$xx, REPLY=R1($00)                           +
+                   '+      CMD17, PAR=blocknr,   CRC=$xx, REPLY=R1($??) +n*$FF +($FE+block+CRC16) +
+                   '+-----------------------------------------------------------------------------+
+003c0 0f0 f606d810 readregister    mov     bytescnt,         #16     ' CMD9,10: CSD,CID register
+003c4 0f1 f606ca00                 mov     cmdpar,           #0      '        PAR=$0,      16 bytes
+003c8 0f2          readblock                                         ' CMD17: PAR=sector, 512 bytes
+003c8 0f2 fd62e41a                 getct   starttime                       ' timeout for cmd9,10,17
+                   '+-----------------------------------------------------------------------------+
+003cc 0f3 fdb00030                 call    #cmdRZtoken       ' /CS=0, send cmd, recv R1, /CS=0(ena)
+                   '+-----------------------------------------------------------------------------+
+003d0 0f4 5d9000ec   if_nz         jmp     #fail17                         ' <>$00(good): error
+003d4 0f5 fdb00060                 call    #getreply                       ' n*$FF+$FE
+003d8 0f6 f20ed2fe                 cmp     reply,            #$FE      wz  ' $FE=valid Data Token
+003dc 0f7 5d9000e0         if_nz   jmp     #fail97                         '
+003e0 0f8 fdb000a0 .readbyte       call    #recvbyte                       ' read data byte
+003e4 0f9 fc42d374                 wrbyte  reply,            bufad         ' save byte
+003e8 0fa f106e801                 add     bufad,            #1            ' bufad++
+003ec 0fb fb6ed9fc                 djnz    bytescnt,         #.readbyte    ' byte--
+003f0 0fc fdb00090                 call    #recvbyte                       ' read CRC16 1/2
+003f4 0fd fdb0008c                 call    #recvbyte                       ' read CRC16 2/2
+                   ' NOTE: CRC16 not checked - do we want to do this?                                                      ??????????
+                   ''              andn    outb,             clkmask       ' CLK=0 (idle)          already=0
+003f8 0fe f543fb36                 or      outb,             csmask        ' /CS=1 (disable)
+003fc 0ff          readregister_ret
+003fc 0ff fd64002d readblock_ret   ret
+                   '+=============================================================================+
+                   
+                   
+                   '+-----------------------------------------------------------------------------+
+                   '+      SEND: CMDx, PARx, CRCx, GET REPLY                                      +
+                   '+-----------------------------------------------------------------------------+
+00400 100          cmdRZA41                                                ' CMD55:       R1 response
+00400 100          cmdRZtoken                                              ' CMD9,10,17: R1+$FE response
+00400 100 f606d000                 mov     cmdtype,          #0            ' returns w /CS=0(ena)
+00404 101 fd900004                 jmp     #cmdxx
+00408 102          CMDR1R3                                                 ' CMD58:    R1+R3 response
+00408 102          cmdR1R7                                                 ' CMD8:     R1+R7 response
+00408 102          cmdR1                                                   ' CMD0,A41,16: R1 response
+00408 102 f602d136                 mov     cmdtype,          csmask        ' returns w /CS=1(disabled)
+0040c 103          cmdxx
+                   '+-----------------------------------------------------------------------------+
+0040c 103 f523fb36                 andn    outb,             csmask        ' /CS=0 (enable)
+                   '+-----------------------------------------------------------------------------+
+00410 104 fdb00070                 call    #sendFF                         ' send $FF byte first
+00414 105 f602d764                 mov     dataout,          cmdout        ' CMD
+00418 106 fdb0006c                 call    #sendbyte                       ' send cmd byte
+0041c 107 f602d765                 mov     dataout,          cmdpar        ' Parameter
+00420 108 fdb00058                 call    #sendlong                       ' send 4 bytes (MSB first)
+00424 109 f602d766                 mov     dataout,          cmdcrc        ' CRC
+00428 10a fdb0005c                 call    #sendbyte                       ' send crc byte
+                   '+-----------------------------------------------------------------------------+
+0042c 10b fdb00008                 call    #getreply                       ' recv R1/R1+R3/R1+R7/RZ..+Token
+                   '+-----------------------------------------------------------------------------+
+                   ''              andn    outb,             clkmask       ' CLK=0 (idle)           already=0
+00430 10c f543fb68                 or      outb,             cmdtype       ' /CS=1(disable) if reqd
+                                   
+                   '+-----------------------------------------------------------------------------+
+00434 10d          cmdRZA41_ret                                            '\ returns w /CS=0 (enabled)
+00434 10d          cmdRZtoken_ret                                          '/
+00434 10d          cmdR1R3_ret                                             '\
+00434 10d          cmdR1R7_ret                                             '| returns w /CS=1 (disabled)
+00434 10d fd64002d cmdR1_ret       ret                                     '/
+                   '+=============================================================================+
+                   
+                   '+-----------------------------------------------------------------------------+
+                   '+      READ REPLY: R1/R1+R3/R1+R7/R1+token                                    +
+                   '+-----------------------------------------------------------------------------+
+00438 10e          getreply
+00438 10e fdb00048 .again          call    #recvbyte                       ' recv R1 byte
+0043c 10f f20ed2ff                 cmp     reply,            #$FF      wz  ' reply=$FF=busy ?
+00440 110 5d900014         if_nz   jmp     #.doneR1                        ' n:
+                   ' starttime set in CMD0(for CMD0,8,55,A41,58,16) and CMD9,10,17(readblock)
+00444 111 fd62e61a                 getct   duration                        '\ check timeout ?
+00448 112 f182e772                 sub     duration,         starttime     '|
+0044c 113 f212e73a                 cmp     duration,         delay1s   wc  '|
+00450 114 cd9fffe4         if_c    jmp     #.again                         '| n: try again
+00454 115 fd900068                 jmp     #fail90                         '/ timeout:
+                   
+00458 116 f602d569 .doneR1         mov     replyR1,          reply         ' save R1/Token reply
+                   '+-----------------------------------------------------------------------------+
+0045c 117 f20ec848                 cmp     cmdout,           #CMD8     wz
+00460 118 520ec87a         if_nz   cmp     cmdout,           #CMD58    wz
+00464 119 5d900004         if_nz   jmp     #.end                           ' ret if not CMD8/CMD58
+                   '+-----------------------------------------------------------------------------+
+00468 11a fdb0000c                 call    #recvlong                       ' R7=CMD8=volts/R3=CMD58=OCR
+                   '+-----------------------------------------------------------------------------+
+0046c 11b          .end                                                    '\ returns with...
+0046c 11b f7ced401                 test    replyR1,          #1        wz  '| nc+z  replyR1=$00(success)
+00470 11c f2128b6a                 cmp     x01,              replyR1   wc  '| nc+nz replyR1=$01(idle)
+00474 11d fd64002d getreply_ret    ret                                     '/  c    replyR1>$01(error)
+                   '+=============================================================================+
+                   
+                   
+                   '+-----------------------------------------------------------------------------+
+                   '+      SD SPI Send/Recv Routines... (write/read byte/long simultaneously)     +
+                   '+              /CS=0 & CLK=0 on both entry and exit                           +
+                   '+-----------------------------------------------------------------------------+
+00478 11e f666d601 recvlong        neg     dataout,          #1            ' call here to Recv a Long (+send 1's)
+0047c 11f f606da20 sendlong        mov     bitscnt,          #32           ' call here to Send a Long (long=32bits)
+00480 120 fd90000c                 jmp     #sendrecv
+00484 121          sendFF                                                  ' call here to Send $FF Byte
+00484 121 f666d601 recvbyte        neg     dataout,          #1            ' call here to Recv a Byte (+send 1's)
+00488 122 f026d618 sendbyte        rol     dataout,          #24           ' call here to Send a Byte (msbit first)
+0048c 123 f606da08                 mov     bitscnt,          #8            '                          (byte=8bits)
+00490 124 f606d200 sendrecv        mov     reply,            #0            ' clear reply
+00494 125 f036d601 .nextbit        rol     dataout,          #1    wc      ' \ prepare output bit (DI=0/1)..
+00498 126 f523fb38                 andn    outb,             clkmask       ' | CLK=0  (already 0 first time)
+0049c 127 f583fb37                 muxc    outb,             dimask        ' / write output bit: output on CLK falling edge
+004a0 128 00000000                 nop                                     ' |   setup time 12 clocks..
+004a4 129 00000000                 nop                                     ' |   ..(not reqd, just to be safe)
+004a8 12a f543fb38                 or      outb,             clkmask       ' \ CLK=1
+004ac 12b f7d273ff                 test    domask,           inb   wc      ' | read input bit:   sample on CLK rising edge
+004b0 12c f0a6d201                 rcl     reply,            #1            ' / accum DO input bits 
+004b4 12d fb6edbf7                 djnz    bitscnt,          #.nextbit     '   8/32 bits?
+004b8 12e f523fb38                 andn    outb,             clkmask       ' CLK=0 on exit         
+004bc 12f          recvlong_ret
+004bc 12f          sendlong_ret
+004bc 12f          sendFF_ret
+004bc 12f          recvbyte_ret
+004bc 12f          sendbyte_ret
+004bc 12f fd64002d                 ret
+                   '+=============================================================================+
+                      
+                   '+-----------------------------------------------------------------------------+
+                   '+      Failed...                                                              +
+                   '+-----------------------------------------------------------------------------+
+004c0 130          fail98          'add     x3333_0000,       #1 
+004c0 130          fail97          'add     x3333_0000,       #7 
+004c0 130          fail90          'add     x3333_0000,       #32
+004c0 130          fail58          'add     x3333_0000,       #3 
+004c0 130          fail55          'add     x3333_0000,       #14
+004c0 130          fail41          'add     x3333_0000,       #24
+004c0 130          fail17          'add     x3333_0000,       #1 
+004c0 130          fail16          'add     x3333_0000,       #8 
+004c0 130          fail08          'add     x3333_0000,       #8 
+004c0 130          fail00
+                   
+                   '+-----------------------------------------------------------------------------+
+004c0 130 f523fb38                 andn    outb,             clkmask       ' n: CLK=0 (idle)       
+004c4 131 f543fb36                 or      outb,             csmask        ' n: /CS=1 (disable)
+                   '+-----------------------------------------------------------------------------+
+                   '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++               
+004c8 132 fda04000                 call    #finishup                       '                       finish up
+                   '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++               
+004cc 133 fd9ffd28                 jmp     #halt                           ' 
+                   '+=============================================================================+
+                   
+                   
+                   ''---------------------------------------------------------------------------------------------------
+                   
+004d0 134 24000000 initmask        long    1<<cs | 1<<di | 0<<clk  ' initial output
+004d4 135 34000000 dirmask         long    1<<cs | 1<<di | 1<<clk  '(DO is SD output)
+004d8 136 20000000 csmask          long    1<<cs                   ' /CS
+004dc 137 04000000 dimask          long    1<<di                   ' mosi (fm P1)
+004e0 138 10000000 clkmask         long    1<<clk                  ' CLK
+004e4 139 08000000 domask          long    1<<do                   ' miso (to P1)
+                   
+004e8 13a 04c4b400 delay1s         long    _freq                   ' 1s  (xtal * pll)
+004ec 13b 00000190 delay5us        long    _freq / 200_000         ' 5us
+004f0 13c 00013880 delay1ms        long    _freq / 1_000           ' 1ms
+                   
+004f4 13d 00006000 hubdone         long    done                    ' hub $4000
+004f8 13e          x512                                            '\\
+004f8 13e          x1x512                                          '||
+004f8 13e 00000200 sectorsz        long    512                     '//
+004fc 13f 000001aa x000001AA       long    $0000_01AA              ' CMD8 Parameter
+00500 140          bit30                                           '\\
+00500 140 40000000 x40000000       long    $4000_0000              '// 1<<30 = bit30
+00504 141 ffffffff xFFs            long    $FFFF_FFFF
+00508 142 00000fff xFFF            long    $FFF
+0050c 143 00ffffff x00FFFFFF	long	$00FF_FFFF
+00510 144          x00                                             '\\
+00510 144 00000000 zero            long    0                       '//
+00514 145 00000001 x01             long    $01
+00518 146 0000aa55 x55AA           long    $AA_55                  ' signature $55AA  (reversed)
+0051c 147 41615252 x52526141       long    $41615252               ' signature "RRaA" (reversed)
+00520 148 61417272 x72724161       long    $61417272               ' signature "rrAa" (reversed)
+00524 149 20202020 spaces4         long    $20202020               ' 4 ascii spaces
+                   
+00528 14a 00000400 x2x512          long    2*512
+0052c 14b 00000600 x3x512          long    3*512
+                   
+00530 14c 00000000 SDtype          long    0                       ' 1=SDV1, 2=SDV2(byte address), 3=SDHC/SDV2(block address)
+00534 14d 00000000 PTN0SECCLU	long	0		        ' Ptn0 #SectorsPerCluster
+00538 14e 00000000 PTN0RESV        long    0                       ' Ptn0 #ResvSectors
+0053c 14f 00000000 PTN0SECFAT      long    0                       ' Ptn0 #SectorsPerFAT
+00540 150 00000000 PTN0NFATS       long    0                       ' Ptn0 #FATs (must be 2)
+00544 151 00000000 mbr_begin       long    0 '$0000_0000              '       first sector of disk
+00548 152 00000000 vol_begin       long    0 '$0000_2000              ' Ptn0: first sector of PTN
+0054c 153 00000000 fsi_begin       long    0 '$0000_2001              ' Ptn0:       sector of file system info
+00550 154 00000000 fat_begin       long    0 '$0000_3122              ' Ptn0: first sector of FAT table
+00554 155 00000000 dir_begin       long    0' $0000_4000              ' Ptn0: first sector of DATA is DIR table
+00558 156 00000000 dat_begin       long    0 '$0000_4580              ' Ptn0: first sector of file's DATA
+                   
+0055c 157 00000000 _bufad          long    0
+00560 158 00000000 _bufad2         long    0
+00564 159 00000000 _blocknr        long    0
+00568 15a 00000000 _info1          long    0
+0056c 15b 00000000 _info2          long    0
+00570 15c 00000000 _info3          long    0
+                   
+00574 15d 00000000 _clusters       long    0
+00578 15e 00000000 _entries        long    0
+0057c 15f 00000000 file_size       long    0
+00580 160 00000000 ptn_size        long    0
+                   {
+                   _fname          long    ("_" + "H"<<8 + "E"<<16 + "L"<<24)  '\\ filename...
+                                   long    ("P" + " "<<8 + " "<<16 + " "<<24)  '||   8.3 +$00
+                                   long    ("T" + "X"<<8 + "T"<<16 + $00<<24)  '//
+                   }
+                   {
+                   _fname          long    ("_" + "H"<<8 + "E"<<16 + "L"<<24)  '\\ filename...
+                                   long    ("P" + " "<<8 + " "<<16 + " "<<24)  '||   8.3 +$00
+                                   long    ("C" + "M"<<8 + "D"<<16 + $00<<24)  '//
+                   }
+                   
+00584 161 4f4f425f _fname          long    ("_" + "B"<<8 + "O"<<16 + "O"<<24)  '\\ filename...
+00588 162 31505f54                 long    ("T" + "_"<<8 + "P"<<16 + "1"<<24)  '||   8.3 +$00
+0058c 163 00584942                 long    ("B" + "I"<<8 + "X"<<16 + $00<<24)  '//
+                   
+                   
+                   '+-----------------------------------------------------------------------------+
+                   '+ the following need to be defined!!!   (were: xxxx  res  1)                              
+                   '+-----------------------------------------------------------------------------+
+00590 164 00000000 cmdout          long    0                       ' The 8b CMDxx | $40
+00594 165 00000000 cmdpar          long    0                       ' The 32b parameters
+00598 166 00000000 cmdcrc          long    0                       ' The 8b CRC (must be valid for CMD0 & CMD8)
+0059c 167 00000000 cmdpar2         long    0                       ' SDV1=$0, SDV2=$40000000
+005a0 168 00000000 cmdtype         long    0                       ' reply is R1=1, R3=3, R7=7, else 0
+005a4 169 00000000 reply           long    0                       ' R1 reply (moved to replyR1 when R3/R7 32b reply here)
+005a8 16a 00000000 replyR1         long    0                       ' R1 reply (8b saved when R3/R7 32b reply follows)
+005ac 16b 00000000 dataout         long    0                       ' 8/32 bit data being shifted out
+005b0 16c 00000000 bytescnt        long    0                       ' #bytes to send/recv
+005b4 16d 00000000 bitscnt         long    0                       ' #bits to be shifted in/out
+005b8 16e 00000000 ctr1            long    0
+005bc 16f 00000000 ctr2            long    0
+005c0 170 00000000 delay           long    0
+                   
+005c4 171 00000000 xstarttime      long    0
+005c8 172 00000000 starttime       long    0
+005cc 173 00000000 duration        long    0
+                   
+005d0 174 00000000 bufad           long    0                       ' ptr sector buffer
+005d4 175 00000000 blocknr         long    0                       ' sector#
+005d8 176 00000000 blocksh         long    0                       ' block shift 0/9 bits
+                   
+005dc 177 00000000 ptrcmd          long    0
+005e0 178 00000000 saveptrcmd      long    0
+                   
+005e4 179 00005fe0 ptrcsd          long    csd
+005e8 17a 00005ff0 ptrcid          long    cid
+                   
+                   
+                   
+                   ''=======[ ^^^^^ End of User Code ^^^^^ ]=========================================================
+                   
+                   
+                   '------------------------------------------------------------------------------------------------
+                   
+                   ''================================================================================================
+                   
+                   ''################################################################################################
+                   ''##    COG LMM hard coded to   $1E0                    ' (Location is fixed))                  ##
+                   '???                long    $3D3D3D3D[$1E0-$]               ' fill with "====" (if any)                   
+005ec 17b 3d3d3d3d                 long    $3D3D3D3D[$1D0-$]               ' fill with "====" (if any)                   
+                   ''################################################################################################
+                   
+                   ''-------[ LMM parameters, etc ]------------------------
+00740 1d0          Parms_C
+00740 1d0 00000000 lmm_x           long    0       ' parameter passed to/from LMM routine (typically a value)
+00744 1d1 00000000 lmm_f           long    0       ' parameter passed to      LMM routine (function options; returns unchanged)
+00748 1d2 00000000 lmm_p           long    0       ' parameter passed to/from LMM routine (typically a hub/cog ptr/addr)
+0074c 1d3 00000000 lmm_p2          long    0       ' parameter passed to/from LMM routine (typically a 2nd hub/cog address)
+00750 1d4 00000000 lmm_c           long    0       ' parameter passed to/from LMM routine (typically a count)
+00754 1d5 00000000 lmm_tmp         long    0                               ' internal tmp workarea
+00758 1d6 00000000 lmm_pc          long    0 '''@_LmmCogReturn + 4         ' LMM PC (program counter)
+0075c 1d7 00000000 lmm_sp          long    0 '''@_hub_stack                ' LMM SP (stack pointer)
+                   ''-------[ LMM additional workareas ]------------------------------------------------------------
+00760 1d8 00000000 lmm_w           long    0                               ' workarea (never saved - short term use between calls)
+00764 1d9 00000000 lmm_t0          long    0                               ' tmp workarea for send
+00768 1da 00000000 lmm_t1          long    0
+0076c 1db 00000000 lmm_s0          long    0                               '\ tmp save area
+00770 1dc 00000000 lmm_s1          long    0
+00774 1dd 00000000 lmm_s2          long    0
+00778 1de 00000000 lmm_s3          long    0
+0077c 1df 00000000 lmm_s4          long    0
+                   
+00780 1e0 00000000 lmm_lx          long    0
+00784 1e1 00000000 lmm_lf          long    0
+00788 1e2 00000000 lmm_lp          long    0
+0078c 1e3 00000000 lmm_lp2         long    0
+00790 1e4 00000000 lmm_lc          long    0
+00794 1e5 00000000 lmm_c2          long    0
+                   
+                   '' fill to $1F0                 
+00798 1e6 3d3d3d3d                 long    $3D3D3D3D[$1F0-$]               ' fill with "====" (if any)                   
+                   ''===============================================================================================
+                   ''-------[ COG INTERNAL REGISTERS ]--------------------------------------------------------------
+                   '               org     0                               ' do this to prevent compile error!
+007c0 1f0 24203d3d                 byte    "== $1F0 CODE ==="              ''\ $1F0-3: Placeholder for IJMP3/IRET3/IJMP2/IRET2
+007d0 1f4 24203d3d                 byte    "== $1F4 CODE ==="              ''| $1F4-7: Placeholder for IJMP1/IRET1/ADDRA/ADDRB
+007e0 1f8 24203d3d                 byte    "== $1F8 CODE ==="              ''| $1F8-B: Placeholder for PTRA/PTRB/DIRA/DIRB
+007f0 1fc 24203d3d                 byte    "== $1FC CODE ==="              ''/ $1FC-F: Placeholder for OUTA/OUTB/INA/INB
+                   ''===============================================================================================
+                   
+                   DAT
+                   ''################################################################################################
+                   ''##    HUB LMM hard coded to   $????                                                           ##
+                   ''################################################################################################
+                   ''================================================================================================
+04000                            orgh      _LMM_code  '$4000               ' Lmm Serial Debugger (hubexec) code      <=====
+                   ''================================================================================================
+                   
+                   '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+04000              finishup                                                '                       finish up
+                   ''---------------------------------------------------------------------------------------------------
+                   '' display debug SD info to PST...
+                   ''---------------------------------------------------------------------------------------------------
+                   'a 5 sec delay mechanism only (allows PST to start)
+04000     fd62e01a                 getct   delay
+04004     ff0bebc2                 addct1  delay,##_clockfreq*5            ' 5s
+04008     fa66e000 
+0400c     fd602224                 waitct1               
+                   ''---------------------------------------------------------------------------------------------------
+                   'this call is required to start the serial driver (note a <cr> is sent to kick off the smart pin)
+04010     fdb001bc               call      #_serialinit                    ' init serial P63/P62 & send <cr>
+                   ''---------------------------------------------------------------------------------------------------
+04014     f607a000         	mov     lmm_x, #cls                     ' clear screen
+04018     fdb00100         	call    #_hubTx         
+                   
+0401c     f607a280               mov       lmm_f, #_TXSTRING+0             ' send string, $00 terminated
+04020     ff000027               mov       lmm_p, ##_str_vers              ' (uses 2 instructions)
+04024     f607a431 
+04028     fdb00184               call      #_hubTxString
+                   ''---------------------------------------------------------------------------------------------------
+                   ' SD Type:
+0402c     ff000027               mov       lmm_p, ##_str_sdtype            ' (uses 2 instructions)
+04030     f607a462 
+04034     fdb00178               call      #_hubTxString
+04038     f603a14c               mov       lmm_x, SDtype
+0403c     f547a030               or        lmm_x, #"0"
+04040     fdb000d8               call      #_hubTx
+04044     f607a00d               mov       lmm_x, #CR
+04048     fdb000d0               call      #_hubTx
+                   ''---------------------------------------------------------------------------------------------------
+                   ' CSD:
+0404c     ff2229a1               mov       lmm_x, ##(cr + "C"<<8 + "S"<<16 + "D"<<24)
+04050     f607a10d 
+04054     fdb000c4               call      #_hubTx
+                   
+04058     f607a274               mov       lmm_f, #_LIST+_ADDR2+_HDG+_MON  ' list count w heading monitor
+0405c     ff00002f               mov       lmm_p, ##csd                    ' fm addr (uses 2 instructions)
+04060     f607a5e0 
+04064     ff00002f               mov       lmm_p2, ##csd+16                ' to addr
+04068     f607a7f0 
+0406c     fdb001b0               call      #_HubList
+                   ''---------------------------------------------------------------------------------------------------
+                   ' CID:
+04070     ff2224a1               mov       lmm_x, ##(cr + "C"<<8 + "I"<<16 + "D"<<24)
+04074     f607a10d 
+04078     fdb000a0               call      #_hubTx
+                   
+0407c     f607a274               mov       lmm_f, #_LIST+_ADDR2+_HDG+_MON  ' list count w heading monitor
+04080     ff00002f               mov       lmm_p, ##cid                    ' fm addr (uses 2 instructions)
+04084     f607a5f0 
+04088     ff000030               mov       lmm_p2, ##cid+16                ' to addr
+0408c     f607a600 
+04090     fdb0018c               call      #_HubList
+                   ''---------------------------------------------------------------------------------------------------
+04094     f607a00d               mov       lmm_x, #cr
+04098     fdb00080               call      #_hubTx
+                   
+                   
+                   ' initialised to log start...
+0409c     ff000030                 mov     _bufad,           ##hubbuf      ' where to store data
+040a0     f606ae00 
+040a4     ff00002f                 mov     _bufad2,          ##hubbuf-48   ' where to store info   
+040a8     f606b1d0 
+                   
+                   ' show until end of log...
+040ac     fdb00014                 call    #show                           ' MBR: display name, sectoraddr, data
+040b0     fdb00008 .more		call	#show_nxtslot                   ' xxx: display name, sectoraddr, data
+040b4     ad9ffff8 	if_e	jmp	#.more		        ' if retruns "NZ" then at end
+                   
+                   
+                   {
+                   ''---------------------------------------------------------------------------------------------------
+                   ' tst
+                                 mov       lmm_x, ##(cr + "t"<<8 + "s"<<16 + "t"<<24)
+                                 call      #_hubTx
+                                 mov       lmm_x, ##(":" + " "<<8)
+                                 call      #_hubTx
+                                 mov       lmm_x, _tst
+                                 mov       lmm_f, #_HEX+0                  ' 8 digits
+                                 call      #_hubHex
+                   ''---------------------------------------------------------------------------------------------------
+                   }
+                   
+                   ''---------------------------------------------------------------------------------------------------
+040b8     fd64002d finishup_ret    ret
+                   ''---------------------------------------------------------------------------------------------------
+                   
+                   
+                   ''---------------------------------------------------------------------------------------------------
+                   '' show the sector name, address, data
+                   ''---------------------------------------------------------------------------------------------------
+040bc     f102af3e show_nxtslot    add     _bufad,           x512                       '\ next slot
+040c0     f186b010                 sub     _bufad2,          #16                        '/         
+040c4              show
+                   ' show info+sector
+040c4     f607a80c                 mov     lmm_c,            #12                       ' char count
+040c8     f603a558                 mov     lmm_p,            _bufad2                   ' fm addr
+040cc     fac3a1d2 .loop           rdbyte  lmm_x,            lmm_p                     ' fetch info char
+040d0     f20fa000 		cmp	lmm_x,	#$00	    wz              ' if $00 exit (end of log)
+040d4     ad90003c 	if_e	jmp	#.exit
+040d8     fdb00040                 call    #_hubTx
+040dc     f107a401                 add     lmm_p,            #1                        'addr++
+040e0     fb6fa9fa                 djnz    lmm_c,            #.loop
+040e4     f607a020                 mov     lmm_x,            #" "
+040e8     fdb00030                 call    #_hubTx
+040ec     fb03a1d2                 rdlong  lmm_x,            lmm_p                     ' fetch sector#
+040f0     f607a240                 mov     lmm_f,            #_HEX+0                   ' 8 digits
+040f4     fdb00048                 call    #_hubHex
+                   ' show data
+                   {{
+                                   mov     lmm_f,            #_LIST+_COUNT+_HDG+_MON   ' list count heading monitor
+                                   mov     lmm_p,            _bufad                    ' fm addr
+                                   mov     lmm_c,            x512                      ' count
+                                   call    #_HubList
+                   }}
+040f8     f607a274                 mov     lmm_f,            #_LIST+_ADDR2+_HDG+_MON   ' list count w heading monitor
+040fc     f603a557                 mov     lmm_p,            _bufad                    ' fm addr 
+04100     f603a7d2                 mov     lmm_p2,           lmm_p                     '\ to addr
+04104     f103a73e                 add     lmm_p2,           x512                      '/
+04108     fdb00114                 call    #_HubList
+0410c     f607a00d                 mov     lmm_x,            #cr
+04110     fdb00008                 call    #_hubTx
+04114     f20fa00d .exit           cmp	lmm_x,	#cr	    wz              ' set "Z" for success
+04118              show_nxtslot_ret
+04118     fd64002d show_ret        ret
+                   '++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+                   
+                   
+                   ''################################################################################################
+                   ''##    HUB LMM serial support code                                                             ##
+                   ''################################################################################################
+                   
+                   ''-------[ Display Char(s) ]--------------------------------------------------- <--- display char(s) --->
+                   ''_HubTx                                                '                       
+                   '' On Entry:
+                   ''      lmm_f = -not used-                              ' mode:
+                   ''      lmm_x = char(s)                                 ' char(s): up to 4 chars; B0 first; <nul> terminates
+                   ''                                                      '            if =$0, tx one <nul>
+                   '' Call Format:
+                   ''            CALL      @_HubTx                         '                       < call: display char(s)>
+                   '' On Return:
+                   ''      lmm_f = -same-                                  ' mode:     (unchanged)
+                   ''      lmm_x = -same-                                  ' char(s):  (unchanged)
+                   ''--------------------------------------------------------------------------------------------------
+0411c              _HubTx                                                  '                       <--- display char(s) --->
+                   '             PUSH      lmm_x                           '                       < push: 'x'    #0 >
+0411c     f603b3d0               MOV       lmm_t0, lmm_x
+                   '               ----------------------------------------        
+04120     f603b5d0 .next           MOV     lmm_t1, lmm_x                   '                       < push: 'x'    #1 >
+04124     f507a0ff                 and     lmm_x, #$FF                     ' reduce to 8 bits
+04128     fdb000d4                 CALL    #_send                          ' send char
+0412c     f603a1da                 MOV     lmm_x, lmm_t1                   '                       < pop:  'x'    #1 >
+04130     f04fa008                 shr     lmm_x, #8               wz      ' any more chars to send?
+04134     5d9fffe8         if_nz   jmp     #.next                          '> br back:  (nz = another char in lmm_x)
+                   '               ----------------------------------------        
+                   '             POP       lmm_x                           '                       < pop:  'x'    #0 >
+04138     f603a1d9               MOV       lmm_x, lmm_t0
+0413c     fd7c002d               RET                               wcz     '                       <--- return to calling routine --->
+                   '---------------------------------------------------------------------------------------------------
+                   
+                   
+                   ''-------[ Display Hex) ]------------------------------------------------------ <--- display hex --->
+                   ''_HubHex                                               '                       
+                   '' On Entry:
+                   ''      lmm_f = _HEX [+options]                         ' mode:  #_HEX[+_REV][+_SP][+_ndigits]
+                   ''                                                      '        'n' digits = 7..0 where 0 = 8 digits
+                   ''      lmm_x = char(s)                                 ' char(s): 
+                   '' Call Format:
+                   ''            CALL      #_HubHex                        '                       < call: display hex >
+                   '' On Return:
+                   ''      lmm_f = -same-                                  ' mode:     (unchanged)
+                   ''      lmm_x = -same-                                  ' char(s):  (unchanged)
+                   ''--------------------------------------------------------------------------------------------------
+04140              _HubHex                                                 '                       <--- display hex --->
+                   
+                   '             PUSH      lmm_x                           '                       < push: 'x'    #0 >
+                   '             PUSH      lmm_c                           '                       < push: 'c'    #1 >
+04140     f603b7d0               MOV       lmm_s0, lmm_x
+04144     f603b9d4               MOV       lmm_s1, lmm_c
+                   '               ----------------------------------------        
+04148     f7cfa210                 test    lmm_f, #_REV            wz      '  reverse mode?
+0414c     59ffa01b         if_nz   movbyts lmm_x, #%%0123                  '  y: reverse bytes     
+04150     f603a9d1                 mov     lmm_c, lmm_f                    '\ CTR = ...
+04154     f50fa807                 and     lmm_c, #7               wz      '|   ... 'n' digits ...
+04158     a607a808         if_z    mov     lmm_c, #8                       '/   ... if 0, then 8
+0415c     f607b008                 mov     lmm_w, #8                       '\ nibbles to...
+04160     f18bb1d4                 sub     lmm_w, lmm_c            wz      '|   ...     ...
+04164     5067b002         if_nz   shl     lmm_w, #2                       '|   ... *4  ...
+04168     5023a1d8         if_nz   rol     lmm_x, lmm_w                    '/   ... discard
+                   '               ----------------------------------------        
+0416c     f027a004 .next           rol     lmm_x, #4                       '\  next nibble  ...
+                   '             PUSH      lmm_x                           '|   ... save    ...    < push: 'x'    #2 >
+04170     f603bbd0               MOV       lmm_s2, lmm_x
+04174     f507a00f                 and     lmm_x, #$0F                     '|   ... extract ...
+04178     f547a030                 or      lmm_x, #"0"                     '|   ... convert ...
+0417c     f217a03a                 cmp     lmm_x, #":"             wc      '|   ...         ... 
+04180     3107a007         if_nc   add     lmm_x, #("A"-"9"-1)             '/   ... now 0-9,A-F
+04184     fdbfff94               CALL      #_HubTx                         '                       < call: display char(s)>
+                   '               ----------------------------------------        
+04188     f7cfa208                 test    lmm_f, #_SP             wz      ' hex space mode?
+0418c     f7d7a801                 test    lmm_c, #1               wc      ' c if odd count
+04190     bd900008    if_z_or_nc   jmp     #.nospace                       '> br: (no space reqd)
+04194     f607a020                 mov     lmm_x, #" "                     ' " "
+04198     fdbfff80               CALL      #_HubTx                         '                       < call: transmit char(s)>
+                   '               ----------------------------------------        
+0419c              .nospace
+                   '             POP       lmm_x                           '    ... restore ...    < pop:  'x'    #2 >
+0419c     f603a1dd               MOV       lmm_x, lmm_s2
+041a0     fb6fa9f2                 djnz    lmm_c, #.next                   '> CTR-- 
+                   '               ----------------------------------------        
+                   '             POP       lmm_c                           '                       < pop:  'c'    #1 >
+                   '             POP       lmm_x                           '                       < pop:  'x'    #0 >
+041a4     f603a9dc               MOV       lmm_c, lmm_s1
+041a8     f603a1db               MOV       lmm_x, lmm_s0
+041ac     fd7c002d               RET                               wcz     '                       <--- return to calling routine --->
+                   '------------------------------------------------------------------------------
+                   
+                   
+                   ''-------[ Display String, <nul> terminated ]---------------------------------- <--- display string --->
+                   ''_HubTxString                                          '
+                   ' On Entry:
+                   ''      lmm_f = #_TXSTRING [+options]                   ' mode:   #_TXSTRING
+                   ''      lmm_p = 'addr'                                  ' addr:   string (hub ptr)
+                   '' Call Format:
+                   ''            CALL      #_HubTxString                   '                       < call: display string>
+                   '' On Return:
+                   ''      lmm_f = -same-                                  ' mode:   (unchanged)
+                   ''      lmm_p = 'addr' (next string)                    ' addr:   (hub ptr to next string)
+                   ''--------------------------------------------------------------------------------------------------
+041b0              _HubTxString                                            '                       <--- display string --->        
+                   '             PUSH      lmm_x                           '                       < push: 'x'    #0 >
+041b0     f603b7d0               MOV       lmm_s0, lmm_x
+                   '               ----------------------------------------        
+041b4     facba1d2 .loop           rdbyte  lmm_x, lmm_p            wz      ' get char from string: nul?
+041b8     f107a401                 add     lmm_p, #1                       ' PTR++
+041bc     ad900008         if_z    jmp     #.return                        '> br fwd:              (returns to calling program)
+041c0     fdbfff58               CALL      #_HubTx                         '                       < call: transmit char(s)>
+041c4     fd9fffec                 jmp     #.loop                          '  br back              
+                   '               ----------------------------------------        
+041c8              .return
+                   '             POP       lmm_x                           '                       < pop:  'x'    #0 >
+                   '''              MOV       lmm_s0, lmm_x   
+041c8     f603a1db               MOV       lmm_x, lmm_s0   
+041cc     fd7c002d               RET                               wcz     '                       <--- return to calling routine --->
+                   '------------------------------------------------------------------------------
+                   
+                   ''=============================================================================
+                   
+                   '--------------------------------------------------------------------------------------------------
+                   '       Serial Routines
+                   '--------------------------------------------------------------------------------------------------
+041d0     ff800000 _serialinit     wrpin   ##_txmode,        #_txpin       ' set asynchronous tx mode in smart pin tx
+041d4     fc0cf83e 
+041d8     ff815b00                 wxpin   ##_bitper,        #_txpin       ' set tx bit period + #(bits-1)
+041dc     fc1c0e3e 
+041e0     fd647c41                 dirh    #_txpin                         ' enable smart pin tx 
+                                   
+041e4     ff800000                 wrpin   ##_rxmode,        #_rxpin       ' set asynchronous rx mode in smart pin rx
+041e8     fc0c7c3f 
+041ec     ff815b00                 wxpin   ##_bitper,        #_rxpin       ' set rx bit period + #(bits-1)
+041f0     fc1c0e3f 
+041f4     fd647e41                 dirh    #_rxpin                         ' enable smart pin rx
+                   
+041f8     f607a00d                 mov     lmm_x,            #CR           ' we have to prime send buffer empty flag, 
+041fc     fd900008                 jmp     #_sendfirst                     ' ..so send <cr>
+                   
+04200     fd747c40 _send           testp   #_txpin                     wc  ' wait for buffer empty on tx pin
+04204     3d9ffff8         if_nc   jmp     #_send                          ' 
+04208     fc27a03e _sendfirst      wypin   lmm_x,            #_txpin       ' send byte to tx pin
+0420c     fd7c002d                 ret                                 wcz
+                                   
+04210     fd747e40 _recv           testp   #_rxpin                     wc  ' char ready?
+04214     3d9ffff8         if_nc   jmp     #_recv                          ' 
+04218     fa8fa03f                 rdpin   lmm_x,            #_rxpin       ' get data from rx pin
+0421c     fd7c002d                 ret                                 wcz
+                   '--------------------------------------------------------------------------------------------------
+                   ''=============================================================================
+                   
+                   ''-------[ LIST a line ]------------------------------------------------------- <--- LIST a line --->
+                   ''_HubList
+                   '' On Entry:
+                   ''      lmm_f   = #_LIST [+options]                     ' mode:         _LIST[+_{ADDR2|COUNT}][+_HDG][+_{MON|SMON|CODE|LONG}]
+                   ''      lmm_p   = 'addr'        (from)                  ' addr:    from cog addr / hub ptr
+                   ''      lmm_p2  = 'addr2'       (to)    (optional)      ' addr2:   to   cog addr / hub ptr (if _ADDR2 specified)
+                   ''      lmm_c   = 'count'       (count) (optional)      ' count:   'n' lines (hex)         (if _COUNT specified)
+                   ''                                                      '          Note: only addr2 or count may be specified, not both!
+                   '' Call Format:
+                   ''             CALL     #_HubList                       '                       < call: LIST a line >
+                   '' On Return:
+                   ''      lmm_f   = same except _HDG off                  ' mode:    same except _HDG will be off
+                   ''      lmm_p   = addr++        (from)                  ' addr:    next from cog addr / hub ptr
+                   ''      lmm_p2  = addr2++/same  (to)                    ' addr2:   next to addr -OR- unchanged
+                   ''      lmm_c   = -same-        (count)                 ' count:   (unchanged)  
+                   ''---------------------------------------------------------------------------------------------------
+                   '' RR20180108 Bug: count doesn't work
+04220              _HubList                                                '                       <--- LIST a line --->
+                   ' ===LIST LINE(S)===
+04220     f603c1d0               MOV       lmm_lx, lmm_x                   '\ save all params
+04224     f603c3d1               MOV       lmm_lf, lmm_f                   '|
+04228     f603c5d2               MOV       lmm_lp, lmm_p                   '|
+0422c     f603c7d3               MOV       lmm_lp2,lmm_p2                  '|
+04230     f603c9d4               MOV       lmm_lc, lmm_c                   '/
+                   ' count mode ?
+04234     f7cfa208                 test    lmm_f, #_COUNT          wz      ' nz if count mode
+04238     5217a821  if_nz          cmp     lmm_c, #33              wc      ' y: validate count (max 32 lines, else 1)
+0423c     1607a801  if_nz_and_nc   mov     lmm_c, #1                       ' y: override!!
+04240     5603cbd4  if_nz        MOV       lmm_c2, lmm_c                   ' y: save a copy for line counting
+                   ' addr2 mode ?
+04244     f7cfa210                 test    lmm_f, #_ADDR2          wz      ' nz if addr2 mode
+04248     5603cbd2  if_nz        MOV       lmm_c2, lmm_p                   ' y: save a copy for addr counting
+                   
+                   '               ----------------------------------------        
+                   ' ===DISPLAY HDG ?===
+0424c     f7cfa204                 test    lmm_f, #_HDG            wz      ' heading?
+04250     ad90004c         if_z    jmp     #.nohdg                         '> br fwd:  (no)
+                   ' determine data display mode...
+04254     f7cfa202                 test    lmm_f, #2               wz      ' z if MON /SMON else CODE/LONG
+04258     f7d7a201                 test    lmm_f, #1               wc      ' c if SMON/LONG else MON /CODE
+0425c     2f000022    if_z_and_nc  mov     lmm_p, ##_str_hmon              ' set addr of MON hdg
+04260     2607a41a 
+04264     8f000022    if_z_and_c   mov     lmm_p, ##_str_hsmon             ' set addr of SMON hdg
+04268     8607a41a 
+0426c     1f000022    if_nz_and_nc mov     lmm_p, ##_str_hcode             ' set addr of CODE hdg
+04270     1607a48a 
+04274     bd900018    if_z_or_nc   jmp     #.hdg                           '> br fwd:  (mon/smon/long)
+04278     ff000001                 cmp     lmm_p, ##$3FF           wcz     ' z|c if =<$3FF = cog/lut mode ? 
+0427c     f21fa5ff 
+04280     ef000022         if_be   mov     lmm_p, ##_str_hlongc            ' set addr of COG/LUT LONG hdg
+04284     e607a562 
+04288     1f000022         if_a    mov     lmm_p, ##_str_hlong             ' set addr of HUB     LONG hdg
+0428c     1607a52c 
+04290     f607a280 .hdg            mov     lmm_f, #_TXSTRING
+04294     fdbfff18               CALL      #_HubTxString                   '                       < call: tx string >
+04298     f603a3e1               MOV       lmm_f, lmm_lf                   ' restore 'f'
+0429c     f603a5e2               MOV       lmm_p, lmm_lp                   ' restore 'p'
+042a0              .nohdg
+                   '               ----------------------------------------        
+                   
+                   ' ===LOOPS HERE FOR MULTIPLE LINES===
+042a0              _HubListLoop
+                   '               ----------------------------------------        
+                   ' ===DISPLAY LINE: ADDR===
+042a0     ff000001                 cmp     lmm_p, ##$3FF           wcz     ' z|c if =<$3FF = cog/lut mode?
+042a4     f21fa5ff 
+                   ' cog:  
+042a8     ef000010         if_be   mov     lmm_x, ##(" "+" "<<8)           ' "  "
+042ac     e607a020 
+042b0     edbffe68         if_be CALL      #_HubTx                         '                       < call: transmit char(s) >
+042b4     e607a243         if_be   mov     lmm_f, #_HEX+3                  ' set hex mode with 3 digits
+                   ' hub:
+042b8     1607a245         if_a    mov     lmm_f, #_HEX+5                  ' set hex mode with 5 digits
+                   ' display address
+042bc     f603a1d2                 mov     lmm_x, lmm_p                    ' set cog/hub address (for displaying)
+042c0     fdbffe7c               CALL      #_HubHex                        '                       < call: display hex >
+042c4     ff000010                 mov     lmm_x, ##(":"+" "<<8)           ' ": "
+042c8     f607a03a 
+042cc     fdbffe4c               CALL      #_HubTx                         '                       < call: transmit char(s) >
+042d0     f603a3e1               MOV       lmm_f, lmm_lf                   ' restore 'f'
+                   '               ----------------------------------------        
+                   ' determine data display mode...
+042d4     f7cfa202                 test    lmm_f, #2               wz      ' z if MON /SMON else CODE/LONG
+042d8     f7d7a201                 test    lmm_f, #1               wc      ' c if SMON/LONG else MON /CODE
+                   ' if_nz_and_nc JMP      #_ListCode                      ' j if CODE      <---?????? code not done!!!
+                   '               ----------------------------------------        
+                   ' ===DISPLAY 4x HEX LONGS===
+                   ' MON/SMON/LONG: lmm_p = ptr to 1st long
+                   '**done**       test    lmm_f, #2               wz      ' z if MON /SMON else CODE/LONG
+                   '**done**       test    lmm_f, #1               wc      ' c if SMON/LONG else MON /CODE
+042dc     4607a240  if_nz_and_c    mov     lmm_f, #_HEX+0                  '   long:     set hex with 8(=0) digits
+042e0     a607a258  if_z           mov     lmm_f, #_HEX+_REV+_SP+0         '   mon/smon: set hex reversed space mode with 8(=0) digits
+042e4     f607a804                 mov     lmm_c, #4                       '   set 4 longs
+                             
+                   ' read a long from cog/hub into lmm_x pointed to by lmm_p and inc lmm_p
+042e8     fdb000dc .long4        CALL      #_RdLongCogHub                  '                       < call: read cog/hub long >
+042ec     fdbffe50               CALL      #_HubHex                        '                       < call: display hex>
+042f0     4f101010  if_nz_and_c    mov     lmm_x, ##$20202020              '   long:  "    "
+042f4     4607a020 
+042f8     4dbffe20  if_nz_and_c  CALL      #_HubTx                         '   long:               < call: transmit char(s) >
+042fc     fb6fa9fa                 djnz    lmm_c, #.long4                  ' (4 longs)--
+04300     f603a3e1               MOV       lmm_f, lmm_lf                   ' restore 'f'
+04304     f603a9e4               MOV       lmm_c, lmm_lc                   ' restore 'c'
+                   '               ----------------------------------------        
+                   ' ===DISPLAY ASCII===
+                   '**done**       test    lmm_f, #2               wz      ' z if MON /SMON else CODE/LONG
+                   '**done**       test    lmm_f, #1               wc      ' c if SMON/LONG else MON /CODE
+04308     cd90005c         if_c    jmp     #.noascii                       '> br fwd:  (smon/long)
+0430c     a607a804         if_z    mov     lmm_c, #4                       ' MON  = 4 longs
+04310     5607a801         if_nz   mov     lmm_c, #1                       ' CODE = 1 long
+04314     f603a5e2               MOV       lmm_p, lmm_lp                   ' restore 'addr'                
+                   '               ------------------------
+                   'xxxx' or 'xxxxxxxxxxxxxxxx' (MON/CODE): lmm_p = ptr to 1st long
+04318     ff000013                 mov     lmm_x, ##(" "+"'"<<8)           ' " '"
+0431c     f607a120 
+04320     fdbffdf8               CALL      #_HubTx                         '                       < call: transmit char(s) >
+                   '               ------------------------
+                   ' read a long from cog/hub into lmm_x pointed to by lmm_p and inc lmm_p
+04324     fdb000a0 .asciiloop    CALL      #_RdLongCogHub                  '                       < call: read cog/hub long >
+                   ' convert 4 bytes to visible
+04328     f607a204                 mov     lmm_f, #4                       ' (lmm_f as temp byte counter)
+0432c     f603b1d0 .convert        mov     lmm_w, lmm_x                    ' duplicate
+04330     f527a0ff                 andn    lmm_x, #$FF                     ' clear   lower byte
+04334     f507b0ff                 and     lmm_w, #$FF                     ' extract lower byte
+04338     f217b020                 cmp     lmm_w, #" "             wc      ' c if <$20: invisible?
+0433c     c607b02e         if_c    mov     lmm_w, #"."                     ' y: replace
+04340     f217b07f                 cmp     lmm_w, #$7F             wc      ' c if <$7F: visible?
+04344     3607b02e         if_nc   mov     lmm_w, #"."                     ' n: replace
+04348     f543a1d8                 or      lmm_x, lmm_w                    ' replace lower byte
+0434c     f007a008                 ror     lmm_x, #8                       ' next byte
+04350     fb6fa3f6                 djnz    lmm_f, #.convert                ' (lmm_f as temp byte counter)
+04354     f603a3e1               MOV       lmm_f, lmm_lf                   ' restore 'f'
+04358     fdbffdc0               CALL      #_HubTx                         ' 4 ascii bytes         < call: transmit char(s)>
+0435c     fb6fa9f1                 djnz    lmm_c, #.asciiloop              ' (longs count)--
+                   
+04360     f607a027                 mov     lmm_x, #"'"                     ' "'"
+04364     fdbffdb4               CALL      #_HubTx                         '                       < call: transmit char(s)>
+04368              .NoAscii
+                   '               ----------------------------------------        
+                   ' ===END OF LINE===
+04368     f607a00d                 mov     lmm_x, #$0D                     ' <cr>
+0436c     fdbffdac               CALL      #_HubTx                         '                       < call: transmit char(s)>
+04370     f603c5d2               MOV       lmm_lp, lmm_p                   ' save new 'addr'
+                   '               ----------------------------------------        
+                   ' ===MULTIPLE LINES ?===
+04374     f603a3e1               MOV       lmm_f, lmm_lf                   ' restore 'f'
+04378     f603a9e4               MOV       lmm_c, lmm_lc                   ' restore 'c'
+                   ' count/addr2 mode ?
+0437c     f7cfa208                 test    lmm_f, #_COUNT          wz      ' nz if count mode
+04380     5d90000c         if_nz   jmp     #.count                         ' y:
+04384     f7cfa210                 test    lmm_f, #_ADDR2          wz      ' nz if addr2 mode
+04388     5d90000c         if_nz   jmp     #.addr2                         ' y:
+0438c     fd90001c                 jmp     #.return                        ' else: (done)
+                   '               ----------------------------------------        
+04390              .count
+04390     fb67ca06                 djz     lmm_c2, #.return                ' (line count)--   b if =0
+04394     fd9fff08                 jmp     #_HubListLoop                   ' another line 
+                   '               ----------------------------------------        
+04398              .addr2
+04398     f213a5d3                 cmp     lmm_p, lmm_p2           wc      ' c|z if addr =< addr2
+0439c     ed9fff00         if_be   jmp     #_HubListLoop                   ' n: another line 
+                   ' we need to calculate how far 'addr' advanced and advance 'addr2' by the same amount
+043a0     f183a5e5                 sub     lmm_p, lmm_c2                   ' final 'addr' - initial 'addr' = diff
+043a4     f103a7d2                 add     lmm_p2, lmm_p                   ' 'addr2' + diff
+043a8     f603c7d3               MOV       lmm_lp2, lmm_p2                 ' save new 'addr2'
+                   '               ----------------------------------------        
+                   ' recover the original 'x' & 'c' values
+043ac              .return
+043ac     f603a1e0               MOV       lmm_x, lmm_lx                   '\ restore all params
+043b0     f603a3e1               MOV       lmm_f, lmm_lf                   '|
+043b4     f603a5e2               MOV       lmm_p, lmm_lp                   '|
+043b8     f603a7e3               MOV       lmm_p2,lmm_lp2                  '|
+043bc     f603a9e4               MOV       lmm_c, lmm_lc                   '/
+043c0     f527a204                 andn    lmm_f, #_HDG                    ' & turn _HDG off
+                   '               ----------------------------------------        
+043c4     fd7c002d               RET                               wcz     '                       <--- return to calling routine --->
+                   ''--------------------------------------------------------------------------------------------------
+                   
+                   ''--------------------------------------------------------------------------------------------------
+                   
+                   ''-------[ Read Cog/Hub Long ]------------------------------------------------- <--- read: cog/hub long --->
+                   ''_RdLongCogHub
+                   '' On Entry:
+                   ''      lmm_x   = -anything-                            ' 'long':
+                   ''      lmm_p   = 'addr'                                ' 'addr':  cog addr / hub ptr
+                   '' Call Format:
+                   ''              CALL    #_RdLongCogHub                  '                       < call: read cog/hub long >
+                   '' On Return:
+                   ''      lmm_x   = 'long'                                ' 'long':  read from cog/hub
+                   ''      lmm_p   = 'addr++'                              ' 'addr++' cog addr++ / hub ptr++
+                   '---------------------------------------------------------------------------------------------------
+043c8              _RdLongCogHub                                           '                       <--- read: cog/hub long --->
+043c8     ff000001                 cmp     lmm_p, ##$3FF           wcz     ' z|c if =<$3FF = cog/lut mode?
+043cc     f21fa5ff 
+                   ' read the 'long' into lmm_x from hub 'addr' in lmm_p
+043d0     1b03a1d2         if_a    rdlong  lmm_x, lmm_p                    '\ read a long (hub)
+043d4     1107a404         if_a    add     lmm_p, #4                       '/ PTR++
+043d8     1d90001c         if_a    jmp     #.rdlongcoghub
+                   
+043dc     f21fa5ff                 cmp     lmm_p, #$1FF            wcz     ' z|c if =<$3FF = cog mode?
+                   ' read the 'long' into lmm_x from lut 'addr' in lmm_p
+043e0     1aa3a1d2         if_a    rdlut   lmm_x, lmm_p                    '\ read a long (lut)
+043e4     1107a401         if_a    add     lmm_p, #1                       '/ PTR++
+043e8     1d90000c         if_a    jmp     #.rdlongcoghub
+                   
+                   ' read the 'long' into lmm_x from cog 'addr' in lmm_p..
+                   '   don't forget we are executing from hub (hubexec)
+043ec     e997a400         if_be   alts    lmm_p                           '\ set PTR
+043f0     e603a000         if_be   mov     lmm_x, 0-0                      '| read a long (cog)
+043f4     e107a401         if_be   add     lmm_p, #1                       '/ PTR++
+                   '               ----------------------------------------
+043f8     fd7c002d .rdlongcoghub   RET                             wcz     '                       <returns to calling routine>
+                   ''--------------------------------------------------------------------------------------------------
+                   
+                   
+                   ''=====================================================================================================================
+043fc     52206f54 _str_mon        byte    "To Rom Monitor - hit <space>",$0D,0
+0441a              _str_hsmon                                                                                      ' same as _str_hmon
+0441a     0d       _str_hmon       byte    $0D
+0441b     64646120                 Byte    " addr-  0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F",$0D
+04452     2d2d2d20                 byte    " -----------------------------------------------------",$0D,0
+0448a     0d       _str_hcode      byte    $0D
+0448b     64646120                 Byte    " addr- instr   zc i cccc dst src - conds         opcode    operands       flags",$0D
+044db     2d2d2d20                 byte    " ------------------------------------------------------------------------------",$0D,0
+0452c     6461200d _str_hlong      byte    $0D," addr- +3+2+1+0    - +$4 --    - +$8 --    - +$C --",$0D,0         ' L3 from HUB
+04562     6461200d _str_hlongc     byte    $0D," addr- +3+2+1+0    -- +1 --    -- +2 --    -- +3 --",$0D,0         ' L3 from COG
+04598     63637553 _str_msg1       byte    "Successfully returned from debugger",$0D,0
+045bd     2d20203f _str_unknown    byte    "?  - Type '?<cr>' for help",$0D,0
+                   
+                   
+045d9              _str_help      'byte $0D
+045d9     2d2d2d20                 byte    " ------------ Help -----------------------------------------------------------",$0D
+04628     235b5b20                 byte    " [[#]xxxxxxxx][.yyyyy][,[$]ccccc]z[m]<cr>          <-- command format         ",$0D
+04677     2d2d2020                 byte    "  -----1-----  ---2--  -----3--- 4 5 --6-          <-- parameter no.          ",$0D
+046c6     772e2e2e                 byte    "...where...                                                                   ",$0D    
+04715     203a3120                 byte    " 1:  # xx xx xx xx  = an immediate byte/word/long value (spaces optional)     ",$0D
+04764     20202020                 byte    "     # xxxxxxxx     = stored as a long (spaces mean little endian order)      ",$0D
+047b3     20202020                 byte    "       xxxxx        = from address (hex) where <$200 is in cog, else hub      ",$0D
+04802     203a3220                 byte    " 2:  . yyyyy        = to   address (hex) where <$200 is in cog, else hub      ",$0D
+04851     203a3320                 byte    " 3:  , $ ccccc      = (hex)     count/length                                  ",$0D
+048a0     20202020                 byte    "     ,   ccccc      = (decimal) count/length                                  ",$0D
+048ef     203a3420                 byte    " 4:  z              = (single char) command ( ? - G L M P Q V )               ",$0D
+0493e     203a3520                 byte    " 5:  m              = (single char) command modifier (command specific)       ",$0D
+0498d     203a3620                 byte    " 6:  <cr>           = <enter> key                                             ",$0D
+049dc     0d                       byte $0D
+049dd     20203f20                 byte    " ?  HELP:   Show this text                                                    ",$0D
+04a2c     20202d20                 byte    " -  STORE:  to {addr1} the following {byte(s)}|{word(s)}|{long(s)}            ",$0D
+04a7b     20204720                 byte    " G  GOTO:   Goto cog {addr1} (if {addr1} omitted, return to user program)     ",$0D
+04aca     20202020                 byte    "            COGINIT  {addr1}:{par2} for COGID {m5}                            ",$0D
+04b19     20202020                 byte    "               {m5} omitted = this cog; 0..7 = cog 0..7; * = next avail cog   ",$0D
+04b68     20204c20                 byte    " L  LIST:   from cog/hub {addr1} to {addr2}                                   ",$0D
+04bb7     20202020                 byte    "            from cog/hub {addr1} for {count3}|{length3}                       ",$0D
+04c06     20202020                 byte    "            L = L0 = bytes + ascii; L1 = bytes; L2 = code; L3 = long          ",$0D
+04c55     20204d20                 byte    " M  MOVE:   from cog/hub {addr1} to cog/hub {addr2} for {Count3}|{length3}    ",$0D
+04ca4     20202020                 byte    "            FILL  #{immediate1}  to cog/hub {addr2} for {count3}|{length3}    ",$0D 
+04cf3     20205020                 byte    " P  PORT:   Show port status                                                  ",$0D
+04d42     20205120                 byte    " Q  QUIT:   Quit user program and run the Rom Monitor                         ",$0D
+04d91     20205620                 byte    " V  VIEW:   View the variables (special for Sapieha)                          ",$0D
+04de0     2d2d2d2d                 byte    "------------------------------------------------------------------------------",$0D
+04e2f     000d                     byte $0D,0
+04e31              _str_vers     long
+04e31     203d3d3d                 byte    "=== Cluso's P2v32 SD Test & Debugger v.121a ===",$0D,0
+04e62              _str_sdtype   long
+04e62     74204453                 byte    "SD type = ",0
+                   ''---------------------------------------------------------------------------------------------------
+                   
+                   {##############################################################################}
+                   {{
+                   +------------------------------------------------------------------------------------------------------------------------------+
+                   |                                                   TERMS OF USE: MIT License                                                  |                                                            
+                   +------------------------------------------------------------------------------------------------------------------------------+
+                   |Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation    | 
+                   |files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy,    |
+                   |modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software|
+                   |is furnished to do so, subject to the following conditions:                                                                   |
+                   |                                                                                                                              |
+                   |The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.|
+                   |                                                                                                                              |
+                   |THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE          |
+                   |WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR         |
+                   |COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,   |
+                   |ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                         |
+                   +------------------------------------------------------------------------------------------------------------------------------+
+                   }}

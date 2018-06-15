@@ -11,7 +11,8 @@ echo   -t      - Run terminal emulator
 echo   -T      - Run terminal emulator in PST mode
 echo   -k      - Keep intermediate files
 echo   -s      - Run simulator
-echo   -o file - set output file name
+echo   -o file - Set output file name
+echo   -p port - Port used for loading
 goto :eof
 :nohelp
 
@@ -74,6 +75,11 @@ if not %1==-o goto :label27
   set linkstr=%linkstr% -o %1
   goto :nextparm
 :label27
+if not %1==-p goto :label32
+  shift
+  set loadstr=%loadstr% -p %1
+  goto :nextparm
+:label32
 if not %1==-s goto :label30
   if %runflag% equ 1 goto :label31
   set simflag=1

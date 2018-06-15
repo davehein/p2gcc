@@ -7,7 +7,6 @@ static char buffer1[1000];
 static char buffer2[1000];
 
 static int debugflag = 0;
-static int twopasses = 0;
 static int globalflag = 0;
 static int localmode = 0;
 static int globalmode = 0;
@@ -273,102 +272,125 @@ int CheckNR(void)
     return 1;
 }
 
+int IsHubVariable(char *ptr)
+{
+    int i;
+    char *regname[] = {
+        "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11",
+        "r12", "r13", "r14", "sp", "lr", "temp", "temp1", "temp2", "__has_cordic",
+        "CNT", "INA", "INB", "OUTA", "OUTB", "DIRA", "DIRB",
+        "cnt", "ina", "inb", "outa", "outb", "dira", "dirb", 0};
+
+    if (*ptr == '#') return 0;
+
+    for (i = 0; regname[i]; i++)
+    {
+        if (!strcmp(ptr, regname[i])) return 0;
+    }
+    return 1;
+}
+
 int CheckSourceDest(void)
 {
     int len;
     int both = 0;
-    char *cptr, *fptr, *pptr, *optr, *sptr;
-    char *lptr = FindString(buffer1, "_L");
+    char *com_ptr, *temp_ptr, *op_ptr, *src_ptr, *dst_ptr, *rem_ptr;
     char first[100];
+    char last[100];
+    char buffer3[1000];
+    int srcflag = 0;
+    int dstflag = 0;
 
-    if (!*lptr) return 0;
-    if (lptr == buffer1) return 0;
-
-    fptr = SkipWhiteSpace(buffer1);
-    if (!strncmp(fptr, "IF_", 3))
+    strcpy(buffer3, buffer1);
+    temp_ptr = SkipWhiteSpace(buffer3);
+    if (temp_ptr == buffer3) return 0;
+    if (!strncmp(temp_ptr, "IF_", 3))
     {
-        optr = FindWhiteSpace(fptr);
-        optr = SkipWhiteSpace(optr);
+        op_ptr = FindWhiteSpace(temp_ptr);
+        op_ptr = SkipWhiteSpace(op_ptr);
     }
     else
-        optr = fptr;
-    if (!*optr) return 0;
-    pptr = FindWhiteSpace(optr);
-    if (!*pptr) return 0;
-
-    if (!strncmp(optr, "jmp", 3)) return 0;
-    if (!strncmp(optr, "djnz", 4)) return 0;
-    if (!strncmp(optr, "call", 4)) return 0;
-    if (!strncmp(optr, "calld", 5)) return 0;
-    if (!strncmp(optr, "long", 4)) return 0;
-    if (lptr[-1] == '_' ||
-        (lptr[2] != 'C' && !(lptr[2] >= '0' && lptr[2] <= '9')))
+        op_ptr = temp_ptr;
+    if (!*op_ptr) return 0;
+    temp_ptr = FindWhiteSpace(op_ptr);
+    if (!*temp_ptr) return 0;
+    *temp_ptr++ = 0;
+    dst_ptr = SkipWhiteSpace(temp_ptr);
+    if (!*dst_ptr) return 0;
+    com_ptr = FindChar(dst_ptr, ',');
+    if (!*com_ptr) return 0;
+    temp_ptr = FindWhiteSpace(dst_ptr);
+    if ((int)com_ptr < (int)temp_ptr) temp_ptr = com_ptr;
+    src_ptr = SkipWhiteSpace(com_ptr+1);
+    if (!*src_ptr) return 0;
+    *temp_ptr = 0;
+    rem_ptr = FindWhiteSpace(src_ptr);
+    if (*rem_ptr)
     {
-        printf("CheckSourceDest: False detection of _L - %s\n", buffer1);
-        return 0;
+        *rem_ptr++ = 0;
+        rem_ptr = SkipWhiteSpace(rem_ptr);
     }
-
-    *pptr++ = 0;
-
-    len = (int)optr - (int)buffer1;
-    memcpy(first, buffer1, len);
+    if (*rem_ptr)
+    {
+        strcpy(last, " ");
+        strcat(last, rem_ptr);
+    }
+    else
+        last[0] = 0;
+    len = (int)op_ptr - (int)buffer3;
+    memcpy(first, buffer3, len);
     first[len] = 0;
 
-    cptr = FindChar(pptr, ',');
-    if (*cptr)
+    //printf("<%s><%s> <%s>,<%s> %s\n", first, op_ptr, dst_ptr, src_ptr, rem_ptr);
+
+    srcflag = IsHubVariable(src_ptr);
+    dstflag = IsHubVariable(dst_ptr);
+    both = srcflag & dstflag;
+    if (!srcflag && !dstflag) return 0;
+
+    if (!strcmp(op_ptr, "jmp")) return 0;
+    if (!strcmp(op_ptr, "djnz")) return 0;
+    if (!strcmp(op_ptr, "call")) return 0;
+    if (!strcmp(op_ptr, "calld")) return 0;
+    if (!strcmp(op_ptr, "long")) return 0;
+    if (both && strcmp(op_ptr, "wrlong"))
     {
-        *cptr++ = 0;
-        // Check if both source and destination are "_L" labels
-        sptr = FindString(cptr, "_L");
-        if (*sptr && sptr != lptr)
-        {
-            both = 1;
-            if (debugflag)
-            {
-                printf("Both source and destination are \"_L\" labels\n");
-                pptr[-1] = ' ';
-                cptr[-1] = ',';
-                printf("%s\n", buffer1);
-                pptr[-1] = 0;
-                cptr[-1] = 0;
-            }
-            if (strncmp(optr, "wrlong", 6))
-            {
-                printf("ERROR: two _L labels, but opcode is not wrlong\n");
-                exit(1);
-            }
-        }
+        printf("ERROR: two _L labels, but opcode is not wrlong\n");
+        exit(1);
     }
 
-    if (!strcmp(optr, "mov"))
+    if (!strcmp(op_ptr, "mov"))
     {
         if (both)
         {
-            fprintf(outfile, "%srdlong\t%s, ##%s%s", first, "temp", sptr, NEW_LINE);
-            fprintf(outfile, "%swrlong\t%s, ##%s%s", first, "temp", lptr, NEW_LINE);
+            fprintf(outfile, "%srdlong\t%s, ##%s%s", first, "temp", src_ptr, NEW_LINE);
+            fprintf(outfile, "%swrlong\t%s, ##%s%s", first, "temp", dst_ptr, NEW_LINE);
         }
-        else if ((int)lptr >= (int)cptr)
-            fprintf(outfile, "%srdlong\t%s, ##%s%s", first, pptr, lptr, NEW_LINE);
+        else if (srcflag)
+            fprintf(outfile, "%srdlong\t%s, ##%s%s%s", first, dst_ptr, src_ptr, last, NEW_LINE);
         else
-            fprintf(outfile, "%swrlong\t%s, ##%s%s", first, pptr, lptr, NEW_LINE);
+            fprintf(outfile, "%swrlong\t%s, ##%s%s%s", first, src_ptr, dst_ptr, last, NEW_LINE);
     }
     else
     {
-        char *wptr = FindWhiteSpace(lptr);
-        int val = *wptr;
-        *wptr = 0;
-        fprintf(outfile, "%srdlong\ttemp, ##%s%s", first, lptr, NEW_LINE);
-        *wptr = val;
         if (both)
         {
-            fprintf(outfile, "%srdlong\ttemp1, ##%s%s", first, sptr, NEW_LINE);
-            fprintf(outfile, "%s%s\ttemp, temp1%s", first, optr, NEW_LINE);
-            //fprintf(outfile, "%swrlong\ttemp, ##%s%s", first, lptr, NEW_LINE);
+            fprintf(outfile, "%srdlong\ttemp, ##%s%s", first, dst_ptr, NEW_LINE);
+            fprintf(outfile, "%srdlong\ttemp1, ##%s%s", first, src_ptr, NEW_LINE);
+            fprintf(outfile, "%s%s\ttemp, temp1%s%s", first, op_ptr, last, NEW_LINE);
+            //fprintf(outfile, "%swrlong\t%s, ##%s%s", first, "temp", dst_ptr, NEW_LINE);
         }
-        else if ((int)lptr >= (int)cptr)
-            fprintf(outfile, "%s%s\t%s, temp%s%s", first, optr, pptr, wptr, NEW_LINE);
+        else if (srcflag)
+        {
+            fprintf(outfile, "%srdlong\ttemp, ##%s%s", first, src_ptr, NEW_LINE);
+            fprintf(outfile, "%s%s\t%s, temp%s%s", first, op_ptr, dst_ptr, last, NEW_LINE);
+        }
         else
-            fprintf(outfile, "%s%s\ttemp,%s%s%s", first, optr, cptr, wptr, NEW_LINE);
+        {
+            fprintf(outfile, "%srdlong\ttemp, ##%s%s", first, dst_ptr, NEW_LINE);
+            fprintf(outfile, "%s%s\ttemp, %s%s%s", first, op_ptr, src_ptr, last, NEW_LINE);
+            //fprintf(outfile, "%swrlong\t%s, ##%s%s", first, "temp", dst_ptr, NEW_LINE);
+        }
     }
 
     return 1;
@@ -451,11 +473,6 @@ int CheckGlobal(void)
     {
         globalmode = 1;
         strcpy(globalname, &buffer1[9]);
-#if 0
-        fgets(buffer1, 1000, infile);
-        RemoveCRLF(buffer1);
-        fprintf(outfile, "%s\tglobal%s", buffer1, NEW_LINE);
-#endif
     }
     return 1;
 }
@@ -528,113 +545,12 @@ SymbolT *FindSymbol(char *name)
     return link;
 }
 
-void GetLCSymbols(char *fname)
-{
-    char name[100];
-    while (fgets(buffer1, 1000, infile))
-    {
-        RemoveCRLF(buffer1);
-        if (!strncmp(buffer1, ".LC", 3))
-        {
-            buffer1[0] = '_';
-            strcpy(name, buffer1);
-            fgets(buffer1, 1000, infile);
-            RemoveCRLF(buffer1);
-            ReplaceString(".L", "_L");
-            CheckLocalName();
-            if (!strncmp(buffer1, "\tlong\t", 6))
-               AddSymbol(name, buffer1+6);
-            else if(debugflag)
-               printf("Don't add %s%s\n", name, buffer1);
-        }
-    }
-    if (debugflag) DumpSymbols();
-    fclose(infile);
-    infile = OpenFile(fname, "r");
-}
-
-int CheckLCSymbol(void)
-{
-    int len;
-    SymbolT *link;
-    char name[100];
-    char *ptr, *ptr2, *ptr3;
-
-    ptr = FindString(buffer1, "_LC");
-    if (!*ptr) return 0;
-    ptr2 = FindWhiteSpace(ptr);
-    ptr3 = FindChar(ptr, ',');
-    if ((int)ptr3 < (int)ptr2) ptr2 = ptr3;
-    len = (int)ptr2 - (int)ptr;
-    memcpy(name, ptr, len);
-    name[len] = 0;
-    if (debugflag) printf("DEBUG: Found _LC - %s\n", name);
-    link = FindSymbol(name);
-    if (!link) return 0;
-    // Check for second _LC reference
-    if (*ptr2)
-    {
-        ptr3 = FindString(ptr2+1, "_LC");
-        if (*ptr3)
-        {
-            SymbolT *link2;
-            char name2[100];
-            ptr2 = FindWhiteSpace(ptr3);
-            len = (int)ptr2 - (int)ptr3;
-            memcpy(name2, ptr3, len);
-            name2[len] = 0;
-            if (debugflag) printf("DEBUG: Found second _LC - %s\n", name2);
-            link2 = FindSymbol(name2);
-            if (!link2) return 0;
-            if (debugflag) printf("CHANGING\n");
-            if (debugflag) printf("%s\n", buffer1);
-            *ptr = 0;
-            if (debugflag) printf("TO\n");
-            if (debugflag) printf("\tmov\ttemp, ##%s\n", link->value);
-            if (debugflag) printf("%stemp, ##%s\n", buffer1, link2->value);
-            fprintf(outfile, "\tmov\ttemp, ##%s%s", link->value, NEW_LINE);
-            fprintf(outfile, "%stemp, ##%s%s", buffer1, link2->value, NEW_LINE);
-            return 1;
-        }
-    }
-    
-    if (ptr == buffer1)
-    {
-        if (debugflag) printf("Skipping %s\n", buffer1);
-        fgets(buffer1, 1000, infile);
-        RemoveCRLF(buffer1);
-        if (debugflag) printf("Skipping %s\n", buffer1);
-    }
-    else
-    {
-        char *ptr4 = FindChar(buffer1, ',');
-        int dflag = (int)ptr4 > (int)ptr;
-        if (debugflag) printf("CHANGING\n");
-        if (debugflag) printf("%s\n", buffer1);
-        if (debugflag) printf("TO\n");
-        *ptr = 0;
-        if (dflag && strcmp(ptr-7, "wrlong\t"))
-        {
-            if (debugflag) printf("\tmov\ttemp, ##%s\n", link->value);
-            if (debugflag) printf("%stemp%s\n", buffer1, ptr2);
-            fprintf(outfile, "\tmov\ttemp, ##%s%s", link->value, NEW_LINE);
-            fprintf(outfile, "%stemp%s%s", buffer1, ptr2, NEW_LINE);
-        }
-        else
-        {
-            if (debugflag) printf("%s##%s%s\n", buffer1, link->value, ptr2);
-            fprintf(outfile, "%s##%s%s%s", buffer1, link->value, ptr2, NEW_LINE);
-        }
-    }
-    return 1;
-}
-
 void usage(void)
 {
     printf("usage: s2pasm [options] filename\n");
     printf("  options are\n");
     printf("  -g      - Generate global directive\n");
-    printf("  -t      - Run two passes\n");
+    //printf("  -t      - Run two passes\n");
     printf("  -d      - Debug mode\n");
     printf("  -p file - Specify prefix file name\n");
     exit(1);
@@ -655,8 +571,6 @@ int main(int argc, char **argv)
         {
             if (!strcmp(argv[argi], "-g"))
                 globalflag = 1;
-            else if (!strcmp(argv[argi], "-t"))
-                twopasses = 1;
             else if (!strcmp(argv[argi], "-d"))
                 debugflag = 1;
             else if (argv[argi][1] == 'p')
@@ -682,7 +596,6 @@ int main(int argc, char **argv)
     extptr = FindChar(fname, '.');
     if (!*extptr) strcpy(extptr, ".s");
     infile = OpenFile(fname, "r");
-    if (twopasses) GetLCSymbols(fname);
     strcpy(extptr, ".spin2");
     outfile = OpenFile(fname, "w");
 
@@ -755,14 +668,6 @@ int main(int argc, char **argv)
         ReplaceString("0x", "$");
         ReplaceString("jmpret", "calld");
         ReplaceString("__MASK_", "##$");
-#if 0
-        ReplaceString("IF_NE", "if_ne");
-        ReplaceString("IF_E", "if_e");
-        ReplaceString("IF_AE", "if_ae");
-        ReplaceString("IF_A", "if_a");
-        ReplaceString("IF_BE", "if_be");
-        ReplaceString("IF_B", "if_b");
-#endif
         if (CheckMova()) continue;
         if (CheckWaitcnt()) continue;
         if (CheckCoginit()) continue;
@@ -776,14 +681,7 @@ int main(int argc, char **argv)
             fprintf(outfile, "\tlong\t%s%s", &buffer1[6], NEW_LINE);
             continue;
         }
-        if (twopasses)
-        {
-            if (CheckLCSymbol()) continue;
-        }
-        else
-        {
-	    if (CheckSourceDest()) continue;
-        }
+        if (CheckSourceDest()) continue;
         if (CheckNR()) continue;
 	if (CheckCNTSource()) continue;
 	if (CheckCNTDest()) continue;

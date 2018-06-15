@@ -1,9 +1,7 @@
 mkdir savesrc
 cp getch.s savesrc
-cp putch.s savesrc
 cp exit.s savesrc
 cp abort.s savesrc
-cp sleep.s savesrc
 cp prefix.spin2 savesrc
 rm *.lst *.s *.spin2 *.bin
 cp savesrc/* .
