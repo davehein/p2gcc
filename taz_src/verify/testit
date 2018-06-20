@@ -1,0 +1,5 @@
+echo $1.c
+#../taz -g $1.c
+#mv $1.s $1.ss
+../taz -g $1.c
+diff $1.s $1.ss

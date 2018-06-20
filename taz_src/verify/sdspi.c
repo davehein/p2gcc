@@ -1,0 +1,297 @@
+//  sdspi:  SPI interface to a Secure Digital card.
+//
+//  Copyright 2008   Radical Eye Software
+//
+//  See end of file for terms of use.
+//
+//  This version is in Spin so it is very slow (3Kb/sec).
+//  A version in assembly is about 100x faster.
+//
+//  You probably never want to call this; you want to use fswr
+//  instead (which calls this); this is only the lowest layer.
+//
+//  Assumes SD card is interfaced using four consecutive Propeller
+//  pins, as follows (assuming the base pin is pin 0):
+//
+//  The 150 ohm resistors are current limiters and are only
+//  needed if you don't trust your code (and don't want an SD
+//  driven signal to conflict with a Propeller driven signal).
+//  A value of 150 should be okay, unless you've got some
+//  unusually high capacitance on the line.  The 20k resistors
+//  are pullups, and should be there on all six lines (even
+//  the ones we don't drive).
+//
+//  This code is not general-purpose SPI code; it's very specific
+//  to reading SD cards, although it can be used as an example.
+//
+//  The code does not use CRC at the moment (this is the default).
+//  With some additional effort we can probe the card to see if it
+//  supports CRC, and if so, turn it on.   
+//
+//  All operations are guarded by a watchdog timer, just in case
+//  no card is plugged in or something else is wrong.  If an
+//  operation does not complete in one second it is aborted.
+//
+int di_pin, do_pin, clk_pin, cs_pin, starttime;
+int di_mask, do_mask, clk_mask, cs_mask;
+
+void errorexit(int val)
+{
+    printf("errorexit: %d\n", val);
+    exit(1);
+}
+
+void getcnt(void)
+{
+    inline("getct reg0");
+}
+
+void release(void)
+{
+    outa |= clk_mask | di_mask | cs_mask;
+    dira &= ~(clk_mask | di_mask | cs_mask);
+}
+
+//
+//  Send eight bits, then raise di.
+//
+void send(int outv)
+{
+    int i;
+
+    for (i = 0; i < 8; i++)
+    {
+        outa &= ~clk_mask;
+        if (outv & 0x80)
+            outa |= di_mask;
+        else
+            outa &= ~di_mask;
+        outv <<= 1;
+        outa |= clk_mask;
+    }
+
+    outa |= di_mask;
+}
+
+//
+//  Did we go over our time limit yet?
+//
+void checktime(void)
+{
+    if (getcnt() - starttime > 50000000)
+        errorexit(-41); // Timeout during read
+}
+
+//
+//  Read eight bits from the card.
+//
+int read(void)
+{
+    int i, r;
+
+    r = 0;
+    for (i = 0; i < 8; i++)
+    {
+        outa &= ~clk_mask;
+        outa |= clk_mask;
+        r <<= 1;
+        if (ina & do_mask)
+            r |= 1;
+    }
+    return r;
+}
+
+//
+//  Read eight bits, and loop until we
+//  get something other than $ff.
+//
+int readresp(void)
+{
+    int r;
+
+    while (1)
+    {
+        r = read();
+        if (r != 0xff) break;
+        checktime();
+    }
+
+    return r;
+}
+
+    
+//
+//  Wait until card stops returning busy
+//
+int busy(void)
+{
+    int r;
+
+    while (1)
+    {
+        r = read();
+        if (r) break;
+        checktime();
+    }
+
+    return r;
+}
+
+//
+//  Send a full command sequence, and get and
+//  return the response.  We make sure cs is low,
+//  send the required eight clocks, then the
+//  command and parameter, and then the CRC for
+//  the only command that needs one (the first one).
+//  Finally we spin until we get a result.
+//
+int cmd(int op, int parm)
+{
+    outa &= ~cs_mask;
+    read();
+    send(0x40+op);
+    send(parm >> 15);
+    send(parm >> 7);
+    send(parm << 1);
+    send(0);
+    send(0x95);
+    return readresp();
+}
+
+//
+//  Deselect the card to terminate a command.
+//
+int endcmd(void)
+{
+    outa |= cs_mask;
+    return 0;
+}
+
+//
+//  Initialize the card!  Send a whole bunch of
+//  clocks (in case the previous program crashed
+//  in the middle of a read command or something),
+//  then a reset command, and then wait until the
+//  card goes idle.  If you want to change this
+//  method to make the pins not be adjacent, all you
+//  need to do is change these first four lines.
+//
+int sdspi_start_explicit(int DO, int CLK, int DI, int CS)
+{
+    int i;
+
+    do_pin  = DO;
+    clk_pin = CLK;
+    di_pin  = DI;
+    cs_pin  = CS;
+    do_mask  = 1 << do_pin;
+    clk_mask = 1 << clk_pin;
+    di_mask  = 1 << di_pin;
+    cs_mask  = 1 << cs_pin;
+
+    outa |= clk_mask | di_mask | cs_mask;
+    dira |= clk_mask | di_mask | cs_mask;
+
+    starttime = getcnt();
+    for (i = 0; i < 600; i++) read();
+
+    cmd(0, 0);
+    endcmd();
+
+    while (1)
+    {
+        cmd(55, 0);
+        i = cmd(41, 0);
+        endcmd();
+        if (i != 1) break;
+    }
+
+    if (i)
+       errorexit(-40); // could not initialize card
+
+    return 0;
+}
+
+int sdspi_start(basepin)
+{
+    return sdspi_start_explicit(basepin, basepin+1, basepin+2, basepin+3);
+}
+
+//
+//  Read a single block.  The "n" passed in is the
+//  block number (blocks are 512 bytes); the b passed
+//  in is the address of 512 blocks to fill with the
+//  data.
+//
+int readblock(int n, char *b)
+{
+    int i;
+
+    starttime = getcnt();
+    cmd(17, n);
+    readresp();
+    for (i = 0; i < 512; i++)
+        *b++ = read();
+    read();
+    read();
+    return endcmd();
+}
+
+//
+//  Read the CSD register.  Passed in is a 16-byte
+//  buffer.
+//
+int getCSD(char *b)
+{
+    int i;
+
+    starttime = getcnt();
+    cmd(9, 0);
+    readresp();
+    for (i = 0; i < 16; i++)
+        *b++ = read();
+    read();
+    read();
+    return endcmd();
+}
+
+//
+//  Write a single block.  Mirrors the read above.
+//
+int writeblock(int n, char *b)
+{
+    int i;
+
+    starttime = getcnt();
+    cmd(24, n);
+    send(0xfe);
+    for (i = 0; i < 512; i++)
+        send(*b++);
+    read();
+    read();
+    if ((readresp() & 0x1f) != 5)
+        errorexit(-42);
+    busy();
+    return endcmd();
+}
+
+//
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files
+// (the "Software"), to deal in the Software without restriction,
+// including without limitation the rights to use, copy, modify, merge,
+// publish, distribute, sublicense, and/or sell copies of the Software,
+// and to permit persons to whom the Software is furnished to do so,
+// subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+// SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//

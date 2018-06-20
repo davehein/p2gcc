@@ -1,0 +1,2 @@
+gcc -Wall taz.c cstrsubs.c csymbols.c ctokens.c gencode.c -o taz
+gcc -Wall prep.c cstrsubs.c -o prep

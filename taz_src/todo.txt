@@ -1,0 +1,2 @@
+Fix array[i]++ and array[i] += j
+Problem with 0x123 numbers in declarations
