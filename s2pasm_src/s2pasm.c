@@ -419,16 +419,9 @@ void ProcessComm(void)
 {
     int len;
     char *ptr = FindChar(buffer1, ',');
+    fprintf(outfile, "%s%s", buffer1, NEW_LINE);
     if (*ptr) *ptr++ = 0;
-    if (localmode || !globalflag)
-    {
-        localmode = 0;
-        fprintf(outfile, "%s%s", &buffer1[7], NEW_LINE);
-    }
-    else
-    {
-        fprintf(outfile, "%s\tglobal0%s", &buffer1[7], NEW_LINE);
-    }
+    fprintf(outfile, "%s%s", &buffer1[7], NEW_LINE);
     sscanf(ptr, "%d", &len);
     if (len <= 4)
         fprintf(outfile, "\tlong\t0%s", NEW_LINE);
@@ -462,6 +455,7 @@ void CheckLocalName(void)
 
 int CheckGlobal(void)
 {
+    if (globalmode) printf("CheckGlobal: %s\n", buffer1);
     if (globalmode && !strcmp(buffer1, globalname))
     {
         globalmode = 0;
@@ -550,7 +544,6 @@ void usage(void)
     printf("usage: s2pasm [options] filename\n");
     printf("  options are\n");
     printf("  -g      - Generate global directive\n");
-    //printf("  -t      - Run two passes\n");
     printf("  -d      - Debug mode\n");
     printf("  -p file - Specify prefix file name\n");
     exit(1);
@@ -613,23 +606,21 @@ int main(int argc, char **argv)
     while (fgets(buffer1, 1000, infile))
     {
         RemoveCRLF(buffer1);
-        if (!strncmp(buffer1, "\t.data", 6))
+        if (!strncmp(buffer1, "\t.set", 5))
         {
-            if (globalflag) fprintf(outfile, "\tdata%s", NEW_LINE);
+            char *ptr1, *ptr2;
+            ptr1 = SkipWhiteSpace(buffer1+5);
+            ptr2 = FindChar(ptr1, ',');
+            *ptr2++ = 0;
+            if (globalmode && !strcmp(globalname, ptr1))
+            {
+                fprintf(outfile, "%s\tglobal%s\n", ptr1, NEW_LINE);
+                globalmode = 0;
+            }
+            ptr2[-1] = ',';
+            fprintf(outfile, "%s%s", buffer1, NEW_LINE);
             continue;
         }
-        if (!strncmp(buffer1, "\t.local", 7))
-        {
-            localmode = 1;
-            continue;
-        }
-        if (!strncmp(buffer1, "\t.text", 6))
-        {
-            if (globalflag) fprintf(outfile, "\ttext%s", NEW_LINE);
-            continue;
-        }
-        if (CheckGlobal()) continue;
-        //if (!strncmp(buffer1, "\t.global", 8)) continue;
         if (!strcmp(buffer1, "\t.section\t.bss"))
         {
             if (globalflag) fprintf(outfile, "\tdata%s", NEW_LINE);

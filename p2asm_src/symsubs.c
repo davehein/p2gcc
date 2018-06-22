@@ -18,6 +18,7 @@ extern int allow_undefined;
 extern FILE *lstfile;
 extern int objflag;
 extern int addifmissing;
+extern int datamode;
 static int numsym1 = 0;
 
 extern SymbolT SymbolTable[MAX_SYMBOLS];
@@ -114,7 +115,7 @@ int FindSymbol(char *symbol)
     if (objflag && addifmissing && strcmp(symbol, "_main"))
     {
         printf("Need to add symbol %s\n", symbol);
-        AddSymbol2(symbol, 0, 0x400, TYPE_HUB_ADDR);
+        AddSymbol2(symbol, 0, 0x400, TYPE_HUB_ADDR, datamode);
         WriteObjectEntry(OTYPE_UNINIT_DATA, 0x400, symbol);
         return numsym - 1;
     } 
@@ -135,7 +136,7 @@ void PrintSymbolTable(int mode)
     }
 }
 
-void AddSymbol(char *symbol, int value, int type)
+void AddSymbol(char *symbol, int value, int type, int section)
 {
     if (numsym >= MAX_SYMBOLS)
     {
@@ -151,10 +152,11 @@ void AddSymbol(char *symbol, int value, int type)
     SymbolTable[numsym].value = value;
     SymbolTable[numsym].value2 = 0;
     SymbolTable[numsym].type = type;
+    SymbolTable[numsym].section = section;
     numsym++;
 }
 
-void AddSymbol2(char *symbol, int value, int value2, int type)
+void AddSymbol2(char *symbol, int value, int value2, int type, int section)
 {
     if (numsym >= MAX_SYMBOLS)
     {
@@ -170,6 +172,7 @@ void AddSymbol2(char *symbol, int value, int value2, int type)
     SymbolTable[numsym].value = value;
     SymbolTable[numsym].value2 = value2;
     SymbolTable[numsym].type = type;
+    SymbolTable[numsym].section = section;
     numsym++;
 }
 
@@ -337,7 +340,7 @@ int EvaluateExpression(int prevprec, int *pindex, char **tokens, int num, int *p
                     if (objflag)
                     {
                         printf("Need to add symbol\n");
-                        AddSymbol2(tokens[i], 0, 0, TYPE_HUB_ADDR);
+                        AddSymbol2(tokens[i], 0, 0, TYPE_HUB_ADDR, 0);
                         WriteObjectEntry('d', 0, tokens[i]);
                         value = 0;
                     }

@@ -51,11 +51,14 @@
 #define TYPE_ALIGNW   53
 #define TYPE_FLOAT    54
 #define TYPE_GLOBAL   55
-#define TYPE_GLOBAL0  56
+
 #define TYPE_TEXT     57
 #define TYPE_DATA     58
 #define TYPE_MODCZP   59
 #define TYPE_UCON     60
+#define TYPE_SET      61
+#define TYPE_LOCAL    62
+#define TYPE_COMM     63
 
 #define MAX_SYMBOLS    2000
 #define MAX_SYMBOL_LEN   39
@@ -65,14 +68,15 @@ typedef struct SymbolS {
     unsigned int value;
     unsigned int value2;
     int type;
+    int section;
     char name[MAX_SYMBOL_LEN+1];
 } SymbolT;
 
 int FindSymbol(char *symbol);
 void ReadSymbolTable(void);
 void PrintSymbolTable(int mode);
-void AddSymbol(char *symbol, int value, int type);
-void AddSymbol2(char *symbol, int value, int value2, int type);
+void AddSymbol(char *symbol, int value, int type, int section);
+void AddSymbol2(char *symbol, int value, int value2, int type, int section);
 void PurgeLocalLabels(int index);
 SymbolT *GetSymbolPointer(char *str);
 int EvaluateExpression(int precedence, int *pindex, char **tokens, int num, int *pval, int *is_float);

@@ -46,11 +46,12 @@ int hasmain = 0;
 char buffer2[300];
 int debugflag = 0;
 int case_sensative = 0;
-int textmode = 1;
+int datamode = 0;
 int hubonly = 0;
 int undefined = 0;
 int allow_undefined = 0;
 int addifmissing = 0;
+int localmode = 0;
 
 static int finalpass = 0;
 
@@ -483,7 +484,6 @@ int CountExtras(int i, char **tokens, int num)
         //if (!strcmp(tokens[i++], "[")) count += atol(tokens[i]) - 1;
         if (!strcmp(tokens[i++], "["))
         {
-/*xxxxxxxxxxxxxx*/
             if (EvaluateExpression(12, &i, tokens, num, &value, &is_float)) break;
             count += value - 1;
             i++;
@@ -856,10 +856,10 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
         // Find the token is in the symbol table
         index = FindSymbol(tokens[i]);
 
-        // Check for an undefined symbol or local label
-        if (index < 0 || (pass == 1 && tokens[i][0] == '.'))
+        // Check for an undefined symbol or local label if not object mode
+        if (index < 0 || (!objflag && pass == 1 && tokens[i][0] == '.'))
         {
-            AddSymbol2(tokens[i], cog_addr >> 2, hub_addr, hubmode ? TYPE_HUB_ADDR : TYPE_COG_ADDR);
+            AddSymbol2(tokens[i], cog_addr >> 2, hub_addr, hubmode ? TYPE_HUB_ADDR : TYPE_COG_ADDR, datamode);
             if (num == 1) printflag = PRINT_NOCODE;
             i++;
         }
@@ -873,7 +873,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
             {
                 if (pass == 2)
                 {
-                    if (tokens[i][0] != '.') PurgeLocalLabels(index);
+                    if (tokens[i][0] != '.' && !objflag) PurgeLocalLabels(index);
                     if (num == 1) printflag = PRINT_NOCODE;
                 }
                 else
@@ -1035,13 +1035,13 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
 
         case TYPE_TEXT:
         {
-            textmode = 1;
+            datamode = 0;
             return;
         }
 
         case TYPE_DATA:
         {
-            textmode = 0;
+            datamode = 1;
             return;
         }
 
@@ -1049,22 +1049,68 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
         {
             if (pass == 2 && objflag)
             {
-                if (debugflag) printf("GLOBAL %8.8x %s\n", hub_addr, tokens[0]);
-                if (textmode)
-                    WriteObjectEntry(OTYPE_GLOBAL_FUNC, hub_addr, tokens[0]);
+                int value = 0;
+                int index = FindSymbol(tokens[1]);
+                if (index >= 0)
+                {
+                    value = SymbolTable[index].value2;
+                    if (debugflag) printf("GLOBAL %8.8x %s\n", value, tokens[1]);
+                    if (SymbolTable[index].section)
+                        WriteObjectEntry(OTYPE_INIT_DATA, value, tokens[1]);
+                    else
+                        WriteObjectEntry(OTYPE_GLOBAL_FUNC, value, tokens[1]);
+                }
                 else
-                    WriteObjectEntry(OTYPE_INIT_DATA, hub_addr, tokens[0]);
+                    printf("ERROR GLOBAL %s not in symbol table\n", tokens[1]);
             }
             return;
         }
 
-        case TYPE_GLOBAL0:
+        case TYPE_SET:
         {
-            if (pass == 2 && objflag)
+            if (pass == 1 && objflag)
             {
-                if (debugflag) printf("GLOBAL0 %8.8x %s\n", hub_addr, tokens[0]);
-                WriteObjectEntry(OTYPE_UNINIT_DATA, hub_addr, tokens[0]);
+                int index;
+                SymbolT *s;
+                if (i != num - 3)
+                {
+                    PrintError("ERROR: Invalid number of parameters for .set directive\n", 0, 0);
+                    return;
+                }
+                if (CheckExpected(",", i+1, tokens, num)) break;
+                index = FindSymbol(tokens[i+2]);
+                if (index < 0)
+                {
+                    PrintError("ERROR: %s is not defined\n", tokens[i+2], 0);
+                    return;
+                }
+                //printf(".set %s %s %s\n", tokens[i], tokens[i+1], tokens[i+2]);
+                s = &SymbolTable[index];
+                AddSymbol2(tokens[i], s->value, s->value2, s->type, s->section);
             }
+            return;
+        }
+
+        case TYPE_LOCAL:
+        {
+            if (pass == 2 && objflag) localmode = 1;
+            return;
+        }
+
+        case TYPE_COMM:
+        {
+            if (pass == 2 && objflag && !localmode)
+            {
+                int value = 0;
+                int index = FindSymbol(tokens[1]);
+                if (index >= 0)
+                    value = SymbolTable[index].value2;
+                else
+                    printf("GLOBAL0 %s not in symbol table\n", tokens[1]);
+                if (debugflag) printf("GLOBAL0 %8.8x %s\n", value, tokens[1]);
+                WriteObjectEntry(OTYPE_UNINIT_DATA, value, tokens[1]);
+            }
+            localmode = 0;
             return;
         }
 
@@ -1642,7 +1688,7 @@ int CheckComment(char *buffer, int *pflag)
     }
 }
 
-void AddSymbolCon(char *symbol, int value, int type)
+void AddSymbolCon(char *symbol, int value, int type, int section)
 {
     SymbolT *s;
     int index = FindSymbol(symbol);
@@ -1654,7 +1700,7 @@ void AddSymbolCon(char *symbol, int value, int type)
             printf("ERROR: Symbol %s is already defined\n", symbol);
             return;
         }
-        AddSymbol(symbol, value, type);
+        AddSymbol(symbol, value, type, section);
     }
     else
     {
@@ -1736,19 +1782,19 @@ void ProcessConstantLine(int *pcurrval, int *pcurrund, char **tokens, int num)
                 if (undefined > undefined1)
                 {
                     if (!allow_undefined) printf("ERROR: %s is undefined\n", tokens[j]);
-                    AddSymbolCon(tokens[j], (*pcurrval)++, TYPE_UCON);
+                    AddSymbolCon(tokens[j], (*pcurrval)++, TYPE_UCON, datamode);
                 }
                 else
                 {
-                    AddSymbolCon(tokens[j], (*pcurrval)++, (is_float ? TYPE_FLOAT : TYPE_CON));
+                    AddSymbolCon(tokens[j], (*pcurrval)++, (is_float ? TYPE_FLOAT : TYPE_CON), datamode);
                 }
             }
             else
             {
                 if (*pcurrund)
-                    AddSymbolCon(tokens[i], (*pcurrval)++, TYPE_UCON);
+                    AddSymbolCon(tokens[i], (*pcurrval)++, TYPE_UCON, datamode);
                 else
-                    AddSymbolCon(tokens[i], (*pcurrval)++, TYPE_CON);
+                    AddSymbolCon(tokens[i], (*pcurrval)++, TYPE_CON, datamode);
             }
         }
     }
@@ -1767,7 +1813,7 @@ void ParseCon(void)
     int currval = 0;
     int currund = 0;
 
-    textmode = 1;
+    datamode = 0;
     cog_addr = 0;
     hub_addr = 0;
 
@@ -1793,7 +1839,7 @@ void Parse(int pass)
     int commentflag = 0;
     //int currval = 0;
 
-    textmode = 1;
+    datamode = 0;
     cog_addr = 0;
     hub_addr = 0;
 
