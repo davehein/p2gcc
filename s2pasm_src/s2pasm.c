@@ -7,10 +7,6 @@ static char buffer1[1000];
 static char buffer2[1000];
 
 static int debugflag = 0;
-static int globalflag = 0;
-static int localmode = 0;
-static int globalmode = 0;
-static char globalname[100];
 
 FILE *infile;
 FILE *outfile;
@@ -453,92 +449,6 @@ void CheckLocalName(void)
     }
 }
 
-int CheckGlobal(void)
-{
-    if (globalmode) printf("CheckGlobal: %s\n", buffer1);
-    if (globalmode && !strcmp(buffer1, globalname))
-    {
-        globalmode = 0;
-        fprintf(outfile, "%s\tglobal%s", buffer1, NEW_LINE);
-        return 1;
-    }
-    if (strncmp(buffer1, "\t.global", 8)) return 0;
-    if (globalflag)
-    {
-        globalmode = 1;
-        strcpy(globalname, &buffer1[9]);
-    }
-    return 1;
-}
-
-typedef struct SymbolS {
-    struct SymbolS *next;
-    char *name;
-    char *value;
-} SymbolT;
-
-SymbolT *symbols = 0;
-
-SymbolT *GetSymTail(void)
-{
-    SymbolT *link;
-    if (!symbols) return 0;
-
-    link = symbols;
-    while (link->next)
-        link = link->next;
-    return link;
-}
-
-void AddSymbol(char *name, char *value)
-{
-    SymbolT *tail;
-    SymbolT *sym = malloc(sizeof(SymbolT));
-    sym->next = 0;
-    sym->name = malloc(strlen(name)+1);
-    sym->value = malloc(strlen(value)+1);
-    strcpy(sym->name, name);
-    strcpy(sym->value, value);
-    if (!symbols)
-        symbols = sym;
-    else
-    {
-        tail = GetSymTail();
-        tail->next = sym;
-    }
-}
-
-void DumpSymbols()
-{
-    SymbolT *link = symbols;
-
-    while (link)
-    {
-        printf("%s\t%s\n", link->name, link->value);
-        link = link->next;
-    }
-}
-
-SymbolT *FindSymbol(char *name)
-{
-    SymbolT *link = symbols;
-
-    if (debugflag) printf("DEBUG: FindSymbol %s\n", name);
-    while (link)
-    {
-        if (!strcmp(link->name, name)) break;
-        link = link->next;
-    }
-    if (debugflag)
-    {
-        if (link)
-            printf("DEBUG: Symbol found\n");
-        else
-            printf("DEBUG: Symbol NOT found\n");
-    }
-    return link;
-}
-
 void usage(void)
 {
     printf("usage: s2pasm [options] filename\n");
@@ -562,9 +472,7 @@ int main(int argc, char **argv)
     {
         if (argv[argi][0] == '-')
         {
-            if (!strcmp(argv[argi], "-g"))
-                globalflag = 1;
-            else if (!strcmp(argv[argi], "-d"))
+            if (!strcmp(argv[argi], "-d"))
                 debugflag = 1;
             else if (argv[argi][1] == 'p')
             {
@@ -606,24 +514,9 @@ int main(int argc, char **argv)
     while (fgets(buffer1, 1000, infile))
     {
         RemoveCRLF(buffer1);
-        if (!strncmp(buffer1, "\t.set", 5))
-        {
-            char *ptr1, *ptr2;
-            ptr1 = SkipWhiteSpace(buffer1+5);
-            ptr2 = FindChar(ptr1, ',');
-            *ptr2++ = 0;
-            if (globalmode && !strcmp(globalname, ptr1))
-            {
-                fprintf(outfile, "%s\tglobal%s\n", ptr1, NEW_LINE);
-                globalmode = 0;
-            }
-            ptr2[-1] = ',';
-            fprintf(outfile, "%s%s", buffer1, NEW_LINE);
-            continue;
-        }
         if (!strcmp(buffer1, "\t.section\t.bss"))
         {
-            if (globalflag) fprintf(outfile, "\tdata%s", NEW_LINE);
+            fprintf(outfile, "\t.data%s", NEW_LINE);
             continue;
         }
         if (!strncmp(buffer1, "\t.section", 9)) continue;

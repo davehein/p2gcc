@@ -22,9 +22,9 @@ function runpropgcc {
 
 function runs2pasm {
   if [ $verbose -eq 1 ]; then
-    echo $s2pasmstr -g -p$P2GCC_LIBDIR/prefix.spin2 $NAME
+    echo $s2pasmstr -p$P2GCC_LIBDIR/prefix.spin2 $NAME
   fi
-  $s2pasmstr -g -p$P2GCC_LIBDIR/prefix.spin2 $NAME
+  $s2pasmstr -p$P2GCC_LIBDIR/prefix.spin2 $NAME
   errorcheck
 }
 
