@@ -344,6 +344,7 @@ int CheckSourceDest(void)
     both = srcflag & dstflag;
     if (!srcflag && !dstflag) return 0;
 
+    if (!strcmp(op_ptr, ".set")) return 0;
     if (!strcmp(op_ptr, "jmp")) return 0;
     if (!strcmp(op_ptr, "djnz")) return 0;
     if (!strcmp(op_ptr, "call")) return 0;
@@ -453,7 +454,6 @@ void usage(void)
 {
     printf("usage: s2pasm [options] filename\n");
     printf("  options are\n");
-    printf("  -g      - Generate global directive\n");
     printf("  -d      - Debug mode\n");
     printf("  -p file - Specify prefix file name\n");
     exit(1);
