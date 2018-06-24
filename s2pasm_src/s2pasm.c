@@ -345,6 +345,7 @@ int CheckSourceDest(void)
     if (!srcflag && !dstflag) return 0;
 
     if (!strcmp(op_ptr, ".set")) return 0;
+    if (!strcmp(op_ptr, ".equ")) return 0;
     if (!strcmp(op_ptr, "jmp")) return 0;
     if (!strcmp(op_ptr, "djnz")) return 0;
     if (!strcmp(op_ptr, "call")) return 0;
