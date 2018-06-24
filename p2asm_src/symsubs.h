@@ -59,9 +59,16 @@
 #define TYPE_SET      61
 #define TYPE_LOCAL    62
 #define TYPE_COMM     63
+#define TYPE_EQU      64
 
 #define MAX_SYMBOLS    2000
 #define MAX_SYMBOL_LEN   39
+
+#define SCOPE_NULL        0
+#define SCOPE_LOCAL       1
+#define SCOPE_GLOBAL      2
+#define SCOPE_GLOBAL_COMM 3
+#define SCOPE_UNDECLARED  4
 
 // Symbol table entry
 typedef struct SymbolS {
@@ -69,6 +76,7 @@ typedef struct SymbolS {
     unsigned int value2;
     int type;
     int section;
+    int scope;
     char name[MAX_SYMBOL_LEN+1];
 } SymbolT;
 

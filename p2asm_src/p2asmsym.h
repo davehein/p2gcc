@@ -488,4 +488,5 @@ char *p2asmsym[] = {
 "0 61 .set",
 "0 62 .local",
 "0 63 .comm",
+"0 64 .equ",
 0 };

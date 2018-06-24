@@ -8,6 +8,7 @@
 #include "p2asmsym.h"
 #include "../p2link_src/p2link.h"
 
+extern int debugflag;
 extern int hubmode;
 extern int hub_addr;
 extern int cog_addr;
@@ -43,6 +44,7 @@ void ReadSymbolTable(void)
 
     for (i = 0; p2asmsym[i]; i++)
     {
+        if (!objflag && p2asmsym[i][5] == '.') break;
         sscanf(p2asmsym[i], "%x %d %s", &s->value, &s->type, s->name);
 	s = &SymbolTable[++numsym];
     }
@@ -114,9 +116,9 @@ int FindSymbol(char *symbol)
 
     if (objflag && addifmissing && strcmp(symbol, "_main"))
     {
-        printf("Need to add symbol %s\n", symbol);
+        if (debugflag) printf("Need to add symbol %s\n", symbol);
         AddSymbol2(symbol, 0, 0x400, TYPE_HUB_ADDR, datamode);
-        WriteObjectEntry(OTYPE_UNINIT_DATA, 0x400, symbol);
+        SymbolTable[numsym-1].scope = SCOPE_UNDECLARED;
         return numsym - 1;
     } 
 
@@ -132,7 +134,8 @@ void PrintSymbolTable(int mode)
     {
         s = &SymbolTable[i];
         if (mode || s->type == 20 || s->type == 39)
-	    printf("%d: %s %d %8.8x %8.8x\n", i, s->name, s->type, s->value, s->value2);
+	    printf("%d: %s %d %8.8x %8.8x %d %d\n",
+                i, s->name, s->type, s->value, s->value2, s->section, s->scope);
     }
 }
 
@@ -153,6 +156,7 @@ void AddSymbol(char *symbol, int value, int type, int section)
     SymbolTable[numsym].value2 = 0;
     SymbolTable[numsym].type = type;
     SymbolTable[numsym].section = section;
+    SymbolTable[numsym].scope = 0;
     numsym++;
 }
 
@@ -173,6 +177,7 @@ void AddSymbol2(char *symbol, int value, int value2, int type, int section)
     SymbolTable[numsym].value2 = value2;
     SymbolTable[numsym].type = type;
     SymbolTable[numsym].section = section;
+    SymbolTable[numsym].scope = 0;
     numsym++;
 }
 

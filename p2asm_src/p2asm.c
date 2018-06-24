@@ -51,7 +51,6 @@ int hubonly = 0;
 int undefined = 0;
 int allow_undefined = 0;
 int addifmissing = 0;
-int localmode = 0;
 
 static int finalpass = 0;
 
@@ -1049,23 +1048,16 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
         {
             if (pass == 2 && objflag)
             {
-                int value = 0;
                 int index = FindSymbol(tokens[1]);
                 if (index >= 0)
-                {
-                    value = SymbolTable[index].value2;
-                    if (debugflag) printf("GLOBAL %8.8x %s\n", value, tokens[1]);
-                    if (SymbolTable[index].section)
-                        WriteObjectEntry(OTYPE_INIT_DATA, value, tokens[1]);
-                    else
-                        WriteObjectEntry(OTYPE_GLOBAL_FUNC, value, tokens[1]);
-                }
+                    SymbolTable[index].scope = SCOPE_GLOBAL;
                 else
                     printf("ERROR GLOBAL %s not in symbol table\n", tokens[1]);
             }
             return;
         }
 
+        case TYPE_EQU:
         case TYPE_SET:
         {
             if (pass == 1 && objflag)
@@ -1093,24 +1085,30 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
 
         case TYPE_LOCAL:
         {
-            if (pass == 2 && objflag) localmode = 1;
+            if (pass == 2 && objflag)
+            {
+                int index = FindSymbol(tokens[1]);
+                if (index >= 0)
+                    SymbolTable[index].scope = SCOPE_LOCAL;
+                else
+                    printf("ERROR LOCAL %s not in symbol table\n", tokens[1]);
+            }
             return;
         }
 
         case TYPE_COMM:
         {
-            if (pass == 2 && objflag && !localmode)
+            if (pass == 2 && objflag)
             {
-                int value = 0;
                 int index = FindSymbol(tokens[1]);
                 if (index >= 0)
-                    value = SymbolTable[index].value2;
+                {
+                    SymbolT *s = &SymbolTable[index];
+                    if (s->scope == 0) s->scope = SCOPE_GLOBAL_COMM;
+                }
                 else
                     printf("GLOBAL0 %s not in symbol table\n", tokens[1]);
-                if (debugflag) printf("GLOBAL0 %8.8x %s\n", value, tokens[1]);
-                WriteObjectEntry(OTYPE_UNINIT_DATA, value, tokens[1]);
             }
-            localmode = 0;
             return;
         }
 
@@ -1960,15 +1958,44 @@ int main(int argc, char **argv)
     {
         int num;
         SymbolT *s;
+
+        // Add globals to object file
+        for (i = 0; i < numsym; i++)
         {
-            for (i = 0; i < numsym; i++)
+            s = &SymbolTable[i];
+            if (s->type == TYPE_HUB_ADDR && s->scope >= 2)
             {
-                s = &SymbolTable[i];
-                if (s->type == TYPE_HUB_ADDR)
+                if (s->scope == SCOPE_GLOBAL_COMM)
                 {
-                    if (debugflag) printf("VDEF %8.8x %s\n", s->value2, s->name);
-                    WriteObjectEntry(OTYPE_LABEL, s->value2, s->name);
+                    if (debugflag) printf("GLOBAL COMM %8.8x %s\n", s->value2, s->name);
+                    WriteObjectEntry(OTYPE_UNINIT_DATA, s->value2, s->name);
                 }
+                else if (s->scope == SCOPE_UNDECLARED)
+                {
+                    if (debugflag) printf("GLOBAL UNDE %8.8x %s\n", s->value2, s->name);
+                    WriteObjectEntry(OTYPE_UNINIT_DATA, s->value2, s->name);
+                }
+                else if (s->section == 0)
+                {
+                    if (debugflag) printf("GLOBAL TEXT %8.8x %s\n", s->value2, s->name);
+                    WriteObjectEntry(OTYPE_GLOBAL_FUNC, s->value2, s->name);
+                }
+                else
+                {
+                    if (debugflag) printf("GLOBAL DATA %8.8x %s\n", s->value2, s->name);
+                    WriteObjectEntry(OTYPE_INIT_DATA, s->value2, s->name);
+                }
+            }
+        }
+
+        // Add labels to object file
+        for (i = 0; i < numsym; i++)
+        {
+            s = &SymbolTable[i];
+            if (s->type == TYPE_HUB_ADDR)
+            {
+                if (debugflag) printf("VDEF %8.8x %s\n", s->value2, s->name);
+                WriteObjectEntry(OTYPE_LABEL, s->value2, s->name);
             }
         }
         i = OTYPE_END_OF_CODE;
