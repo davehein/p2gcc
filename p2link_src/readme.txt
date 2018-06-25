@@ -1,5 +1,5 @@
                                     P2LINK
-                                 June 15, 2018
+                                 June 25, 2018
                                    Dave Hein
 
 P2link is a linker that produces a P2 executable binary file.  It will link one
@@ -43,7 +43,7 @@ The symbol type is a single byte that is defined in p2link.h as follows:
 #define OTYPE_REF_LONG_REL 0x04 // Relocatable long reference
 #define OTYPE_REF_LONG_UND 0x0d // Undefined long reference
 #define OTYPE_GLOBAL_FUNC  0x11 // Global Function
-#define OTYPE_LABEL        0x12 // Label
+#define OTYPE_LOCAL_LABEL  0x12 // Local Label
 #define OTYPE_INIT_DATA    0x13 // Initialized global data
 #define OTYPE_UNINIT_DATA  0x14 // Uninitialized global data
 #define OTYPE_END_OF_CODE  0x20 // End of code/data
