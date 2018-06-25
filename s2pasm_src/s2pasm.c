@@ -353,7 +353,7 @@ int CheckSourceDest(void)
     if (!strcmp(op_ptr, "long")) return 0;
     if (both && strcmp(op_ptr, "wrlong"))
     {
-        printf("ERROR: two _L labels, but opcode is not wrlong\n");
+        printf("ERROR: two .L labels, but opcode is not wrlong\n");
         exit(1);
     }
 
@@ -547,7 +547,7 @@ int main(int argc, char **argv)
         ReplaceString(" maxs\t", " fles\t");
         ReplaceString(" min\t", " fge\t");
         ReplaceString(" mins\t", " fges\t");
-        ReplaceString(".L", "_L");
+        //ReplaceString(".L", "_L");
         ReplaceString(".balign\t4", "alignl");
         ReplaceString(".balign\t2", "alignw");
         ReplaceString("0x", "$");
@@ -556,7 +556,7 @@ int main(int argc, char **argv)
         if (CheckMova()) continue;
         if (CheckWaitcnt()) continue;
         if (CheckCoginit()) continue;
-        if (!strncmp(buffer1, "\tlong\t_L", 8))
+        if (!strncmp(buffer1, "\tlong\t.L", 8))
         {
             fprintf(outfile, "\tlong\t%s%s", &buffer1[6], NEW_LINE);
             continue;
