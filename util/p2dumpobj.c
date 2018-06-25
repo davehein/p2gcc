@@ -20,6 +20,7 @@ ObjectTypeT objtypes[] = {
     {OTYPE_UNINIT_DATA,  "Uninit data   "},
     {OTYPE_REF_LONG_UND, "Undef long ref"},
     {OTYPE_REF_LONG_REL, "Resol long ref"},
+    {OTYPE_WEAK_LABEL,   "Weak Label    "},
     {OTYPE_END_OF_CODE,  "End of code   "},
     {0,                  "Invalid type  "}};
 

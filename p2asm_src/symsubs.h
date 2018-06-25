@@ -60,6 +60,8 @@
 #define TYPE_LOCAL    62
 #define TYPE_COMM     63
 #define TYPE_EQU      64
+#define TYPE_WEAK     65
+#define TYPE_UNDEF    66
 
 #define MAX_SYMBOLS    2000
 #define MAX_SYMBOL_LEN   39
@@ -69,6 +71,7 @@
 #define SCOPE_GLOBAL      2
 #define SCOPE_GLOBAL_COMM 3
 #define SCOPE_UNDECLARED  4
+#define SCOPE_WEAK        5
 
 // Symbol table entry
 typedef struct SymbolS {

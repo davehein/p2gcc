@@ -1057,28 +1057,65 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
             return;
         }
 
+        case TYPE_WEAK:
+        {
+            if (pass == 2 && objflag)
+            {
+                int index = FindSymbol(tokens[1]);
+                if (index >= 0)
+                    SymbolTable[index].scope = SCOPE_WEAK;
+                else
+                    printf("ERROR WEAK %s not in symbol table\n", tokens[1]);
+            }
+            return;
+        }
+
         case TYPE_EQU:
         case TYPE_SET:
         {
-            if (pass == 1 && objflag)
+            if (objflag)
             {
                 int index;
+                int index1;
                 SymbolT *s;
+                SymbolT *s1;
                 if (i != num - 3)
                 {
                     PrintError("ERROR: Invalid number of parameters for .set directive\n", 0, 0);
                     return;
                 }
                 if (CheckExpected(",", i+1, tokens, num)) break;
+
+                index1 = FindSymbol(tokens[i]);
                 index = FindSymbol(tokens[i+2]);
-                if (index < 0)
+                if (pass == 1)
                 {
-                    PrintError("ERROR: %s is not defined\n", tokens[i+2], 0);
-                    return;
+                    if (index1 >= 0)
+                        PrintError("ERROR: %s already exists\n", tokens[i], 0);
+                    if (index < 0)
+                        AddSymbol2(tokens[i], 0x400, 0x400, TYPE_UNDEF, 0);
+                    else
+                    {
+                        s = &SymbolTable[index];
+                        AddSymbol2(tokens[i], s->value, s->value2, s->type, s->section);
+                    }
                 }
-                //printf(".set %s %s %s\n", tokens[i], tokens[i+1], tokens[i+2]);
-                s = &SymbolTable[index];
-                AddSymbol2(tokens[i], s->value, s->value2, s->type, s->section);
+                else if (index1 < 0)
+                    PrintError("ERROR: %s doesn't exist\n", tokens[i], 0);
+                else if (SymbolTable[index1].type == TYPE_UNDEF)
+                {
+                    if (index < 0)
+                        PrintError("ERROR: %s is not defined\n", tokens[i+2], 0);
+                    else
+                    {
+                        s = &SymbolTable[index];
+                        s1 = &SymbolTable[index1];
+                        s1->value = s->value;
+                        s1->value2 = s->value2;
+                        s1->type = s->type;
+                        s1->section = s->section;
+                    }
+                }
             }
             return;
         }
@@ -1976,6 +2013,11 @@ int main(int argc, char **argv)
                     {
                         if (debugflag) printf("GLOBAL UNDE %8.8x %s\n", s->value2, s->name);
                         WriteObjectEntry(OTYPE_UNINIT_DATA, s->value2, s->name);
+                    }
+                    else if (s->scope == SCOPE_WEAK)
+                    {
+                        if (debugflag) printf("WEAK LABEL %8.8x %s\n", s->value2, s->name);
+                        WriteObjectEntry(OTYPE_WEAK_LABEL, s->value2, s->name);
                     }
                     else if (s->section == 0)
                     {
