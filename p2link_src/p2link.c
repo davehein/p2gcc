@@ -5,9 +5,10 @@
 
 #define MAX_NAME_LEN 30
 #define MAX_OBJECTS 1000
-#define MAX_SYMBOLS 2000
+#define MAX_SYMBOLS 4000
 
-int FindGlobalLimits(char *str, int type, int first, int last);
+int FindSymbolLimits(char *str, int type, int first, int last);
+int FindSymbolLimitsMask(char *str, int mask, int first, int last);
 
 int addr = 0;
 int debugflag = 0;
@@ -21,7 +22,6 @@ int numsym = 0;
 char bigbuf[MAX_SYMBOLS*32];
 char *bufptr = bigbuf;
 int objnum = 0;
-int varcount = 0;
 int verbose = 0;
 int objstart[MAX_OBJECTS+1];
 char objname[MAX_OBJECTS][MAX_NAME_LEN];
@@ -91,7 +91,7 @@ void ComputeSymbolOffsets(int first, int last, int offset)
         {
             addr = symvalue[i];
             value1 = mem[addr>>2];
-            index = FindGlobalLimits(symname[i], OTYPE_LABEL, first, last);
+            index = FindSymbolLimitsMask(symname[i], OTYPE_LABEL_BIT, first, last);
             if (index < 0)
             {
                 printf("Couldn't find %s\n", symname[i]);
@@ -112,7 +112,7 @@ void ComputeSymbolOffsets(int first, int last, int offset)
             {
                 symoffset[i] = offset1;
                 if (debugflag || verbose)
-                    printf("Found offset of %d for symbol %s of type %c at location %x\n", offset1, symname[i], symtype[i], addr);
+                    printf("Found offset of %d for symbol %s of type %2.2x at location %x\n", offset1, symname[i], symtype[i], addr);
             }
         }
     }
@@ -158,7 +158,7 @@ int ReadObject(FILE *infile)
         symname[numsym] = bufptr;
         bufptr += len;
         if (debugflag)
-            printf("%d: %c %8.8x %s\n", numsym, symtype[numsym], symvalue[numsym], symname[numsym]);
+            printf("%d: %2.2x %8.8x %s\n", numsym, symtype[numsym], symvalue[numsym], symname[numsym]);
         numsym++;
     }
     objstart[objnum+1] = numsym;
@@ -216,25 +216,25 @@ int FindGlobal(char *str)
     return -1;
 }
 
-int FindVariable(char *str)
-{
-    int i;
-
-    for (i = 0; i < numsym; i++)
-    {
-        if (symtype[i] == OTYPE_LABEL && !strcmp(str, symname[i])) return i;
-    }
-
-    return -1;
-}
-
-int FindGlobalLimits(char *str, int type, int first, int last)
+int FindSymbolLimits(char *str, int type, int first, int last)
 {
     int i;
 
     for (i = first; i < last; i++)
     {
         if (symtype[i] == type && !strcmp(str, symname[i])) return i;
+    }
+
+    return -1;
+}
+
+int FindSymbolLimitsMask(char *str, int mask, int first, int last)
+{
+    int i;
+
+    for (i = first; i < last; i++)
+    {
+        if ((symtype[i] & mask) && !strcmp(str, symname[i])) return i;
     }
 
     return -1;
@@ -248,7 +248,7 @@ int Resolve(int num)
 
     for (i = 0; i < num; i++)
     {
-        if (symtype[i] == OTYPE_REF_FUNC_UND || symtype[i] == OTYPE_REF_LONG_UND)
+        if (symtype[i] & OTYPE_UNRESOLVED_BIT)
         {
             if (debugflag)
                 printf("Resolving %s at %8.8x\n", symname[i], symvalue[i]);
@@ -262,25 +262,20 @@ int Resolve(int num)
                 value_u = mem[addr_u>>2];
                 if (symtype[i] == OTYPE_REF_FUNC_UND)
                     value_r = (value_u & ~0xfffff) | ((addr_g - addr_u - 4) & 0xfffff);
-                else
+                else if (symtype[i] == OTYPE_REF_LONG_UND)
                     value_r = (addr_g & 0xfffff);
+                else
+                {
+                    printf("ERROR: Invalid unresolved type - %2.2x\n", symtype[i]);
+                    exit(1);
+                }
                 mem[addr_u>>2] = value_r;
-                symtype[i] = OTYPE_REF_LONG_REL;
+                symtype[i] &= ~OTYPE_UNRESOLVED_BIT;
                 resolved++;
             }
         }
     }
     return resolved;
-}
-
-void CountVariables(void)
-{
-    int i;
-
-    for (i = 0; i < numsym; i++)
-    {
-        if (symtype[i] == OTYPE_LABEL) varcount++;
-    }
 }
 
 void ModifyBits(int addr, int value, int mask, int shift);
@@ -344,14 +339,6 @@ int MergeGlobalVariables(int prev_num)
                     printf("Changing %8.8x to %8.8x\n", symvalue[i], symvalue[j]);
                 }
                 symvalue[i] = symvalue[j];
-                // Fix address in "V" list also
-                j = FindGlobalLimits(symname[i], OTYPE_LABEL, prev_num, numsym);
-                if (j >= 0)
-                {
-                    if (debugflag) printf("Also change entry %d\n", j);
-                    if (debugflag) printf("Changing %8.8x to %8.8x\n", symvalue[j], symvalue[i]);
-                    symvalue[j] = symvalue[i];
-                }
             }
         }
         else if (symtype[i] == OTYPE_INIT_DATA)
@@ -362,10 +349,10 @@ int MergeGlobalVariables(int prev_num)
             {
                 first = objstart[k];
                 last = objstart[k+1];
-                j = FindGlobalLimits(symname[i], OTYPE_UNINIT_DATA, first, last);
+                j = FindSymbolLimits(symname[i], OTYPE_UNINIT_DATA, first, last);
                 if (j < 0)
                 {
-                    j = FindGlobalLimits(symname[i], OTYPE_INIT_DATA, first, last);
+                    j = FindSymbolLimits(symname[i], OTYPE_INIT_DATA, first, last);
                     if (j >= 0) printf("WARNING: Global variable %s initialized in another object\n", symname[i]);
                 }
                 if (j < 0) continue;
@@ -373,14 +360,6 @@ int MergeGlobalVariables(int prev_num)
                 if (debugflag) printf("Changing %8.8x to %8.8x\n", symvalue[j], symvalue[i]);
                 FixUpRef(symname[i], symvalue[i], first, last);
                 symvalue[j] = symvalue[i];
-                // Fix address in "V" list also
-                j = FindGlobalLimits(symname[i], OTYPE_LABEL, first, last);
-                if (j >= 0)
-                {
-                    if (debugflag) printf("Also change entry %d\n", j);
-                    if (debugflag) printf("Changing %8.8x to %8.8x\n", symvalue[j], symvalue[i]);
-                    symvalue[j] = symvalue[i];
-                }
                 resolved++;
             }
         }
@@ -408,7 +387,7 @@ void FixVariableRef(int prev_num)
             int addr = symvalue[i];
             int oldval = mem[addr>>2];
             int offset = symoffset[i];
-            j = FindGlobalLimits(symname[i], OTYPE_LABEL, prev_num, numsym);
+            j = FindSymbolLimitsMask(symname[i], OTYPE_LABEL_BIT, prev_num, numsym);
             if (debugflag)
             {
                 printf("Found variable %s at %8.8x\n", symname[i], symvalue[i]);
@@ -446,7 +425,6 @@ void ReadFile(FILE *infile, int libflag)
     int vars_resolved = 0;
     int prev_addr = addr;
     int prev_numsym = numsym;
-    int prev_varcount = varcount;
 
     while (ReadObject(infile))
     {
@@ -455,20 +433,16 @@ void ReadFile(FILE *infile, int libflag)
             vars_resolved = MergeGlobalVariables(prev_numsym);
             FixVariableRef(prev_numsym);
         }
-        else
-            CountVariables();
         if (objnum > 1 && !Resolve(prev_numsym) && !vars_resolved && libflag)
         {
             addr = prev_addr;
             numsym = prev_numsym;
-            varcount = prev_varcount;
             objnum--;
         }
         else
         {
             prev_addr = addr;
             prev_numsym = numsym;
-            prev_varcount = varcount;
         }
     }
 }
@@ -485,24 +459,28 @@ int is_lib(char *str)
 void InitHeapAddress(void)
 {
     int i, hub_addr;
-    for (i = 0; i < numsym; i++)
+    i = FindSymbolLimitsMask("_heapaddr", OTYPE_LABEL_BIT, 0, numsym);
+    if (i >= 0)
     {
-        if (symtype[i] == OTYPE_LABEL)
-        {
-            if (!strcmp(symname[i], "_heapaddr") || !strcmp(symname[i], "_heapaddrlast"))
-            {
-                hub_addr = symvalue[i] & 0xfffff;
-                if (verbose) printf("Setting value of %s at location %x to %x\n", symname[i], hub_addr, addr);
-                mem[hub_addr>>2] = addr;
-            }
-        }
+        hub_addr = symvalue[i] & 0xfffff;
+        if (verbose) printf("Setting value of %s at location %x to %x\n", symname[i], hub_addr, addr);
+        mem[hub_addr>>2] = addr;
+    }
+    i = FindSymbolLimitsMask("_heapaddrlast", OTYPE_LABEL_BIT, 0, numsym);
+    if (i >= 0)
+    {
+        hub_addr = symvalue[i] & 0xfffff;
+        if (verbose) printf("Setting value of %s at location %x to %x\n", symname[i], hub_addr, addr);
+        mem[hub_addr>>2] = addr;
     }
 }
 
 int main(int argc, char **argv)
 {
     int i;
+#if 0
     char buffer[256];
+#endif
     char outfname[100];
     int unresolved = 0;
     FILE *infile, *outfile;
@@ -550,7 +528,7 @@ int main(int argc, char **argv)
     // Check if any remaining unresolves
     for (i = 0; i < numsym; i++)
     {
-        if (symtype[i] == OTYPE_REF_FUNC_UND)
+        if (symtype[i] & OTYPE_UNRESOLVED_BIT)
         {
             unresolved++;
             printf("%s is unresolved\n", symname[i]);
@@ -578,11 +556,11 @@ int main(int argc, char **argv)
             for (j = objstart[i]; j < objstart[i+1]; j++)
             {
                 if (symoffset[j] == 0)
-                    printf("%d: %c %8.8x %s\n", j, symtype[j], symvalue[j], symname[j]);
+                    printf("%d: %2.2x %8.8x %s\n", j, symtype[j], symvalue[j], symname[j]);
                 else if (symoffset[j] > 0)
-                    printf("%d: %c %8.8x %s+%d\n", j, symtype[j], symvalue[j], symname[j], symoffset[j]);
+                    printf("%d: %2.2x %8.8x %s+%d\n", j, symtype[j], symvalue[j], symname[j], symoffset[j]);
                 else
-                    printf("%d: %c %8.8x %s-%d\n", j, symtype[j], symvalue[j], symname[j], -symoffset[j]);
+                    printf("%d: %2.2x %8.8x %s-%d\n", j, symtype[j], symvalue[j], symname[j], -symoffset[j]);
             }
         }
     }

@@ -13,11 +13,13 @@ ObjectTypeT objtypes[] = {
     {OTYPE_REF_AUGS,     "Ref augs, s   "},
     {OTYPE_REF_AUGD,     "Ref augd, d   "},
     {OTYPE_REF_FUNC_UND, "Undef func ref"},
+    {OTYPE_REF_FUNC_RES, "Resol func ref"},
     {OTYPE_REF_LONG_REL, "Reloc long ref"},
-    {OTYPE_LABEL,        "Label         "},
+    {OTYPE_LOCAL_LABEL,  "Local Label   "},
     {OTYPE_INIT_DATA,    "Init data     "},
     {OTYPE_UNINIT_DATA,  "Uninit data   "},
     {OTYPE_REF_LONG_UND, "Undef long ref"},
+    {OTYPE_REF_LONG_REL, "Resol long ref"},
     {OTYPE_END_OF_CODE,  "End of code   "},
     {0,                  "Invalid type  "}};
 

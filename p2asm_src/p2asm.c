@@ -1959,45 +1959,43 @@ int main(int argc, char **argv)
         int num;
         SymbolT *s;
 
-        // Add globals to object file
-        for (i = 0; i < numsym; i++)
-        {
-            s = &SymbolTable[i];
-            if (s->type == TYPE_HUB_ADDR && s->scope >= 2)
-            {
-                if (s->scope == SCOPE_GLOBAL_COMM)
-                {
-                    if (debugflag) printf("GLOBAL COMM %8.8x %s\n", s->value2, s->name);
-                    WriteObjectEntry(OTYPE_UNINIT_DATA, s->value2, s->name);
-                }
-                else if (s->scope == SCOPE_UNDECLARED)
-                {
-                    if (debugflag) printf("GLOBAL UNDE %8.8x %s\n", s->value2, s->name);
-                    WriteObjectEntry(OTYPE_UNINIT_DATA, s->value2, s->name);
-                }
-                else if (s->section == 0)
-                {
-                    if (debugflag) printf("GLOBAL TEXT %8.8x %s\n", s->value2, s->name);
-                    WriteObjectEntry(OTYPE_GLOBAL_FUNC, s->value2, s->name);
-                }
-                else
-                {
-                    if (debugflag) printf("GLOBAL DATA %8.8x %s\n", s->value2, s->name);
-                    WriteObjectEntry(OTYPE_INIT_DATA, s->value2, s->name);
-                }
-            }
-        }
-
-        // Add labels to object file
+        // Add globals and labels to object file
         for (i = 0; i < numsym; i++)
         {
             s = &SymbolTable[i];
             if (s->type == TYPE_HUB_ADDR)
             {
-                if (debugflag) printf("VDEF %8.8x %s\n", s->value2, s->name);
-                WriteObjectEntry(OTYPE_LABEL, s->value2, s->name);
+                if (s->type == TYPE_HUB_ADDR && s->scope >= 2)
+                {
+                    if (s->scope == SCOPE_GLOBAL_COMM)
+                    {
+                        if (debugflag) printf("GLOBAL COMM %8.8x %s\n", s->value2, s->name);
+                        WriteObjectEntry(OTYPE_UNINIT_DATA, s->value2, s->name);
+                    }
+                    else if (s->scope == SCOPE_UNDECLARED)
+                    {
+                        if (debugflag) printf("GLOBAL UNDE %8.8x %s\n", s->value2, s->name);
+                        WriteObjectEntry(OTYPE_UNINIT_DATA, s->value2, s->name);
+                    }
+                    else if (s->section == 0)
+                    {
+                        if (debugflag) printf("GLOBAL TEXT %8.8x %s\n", s->value2, s->name);
+                        WriteObjectEntry(OTYPE_GLOBAL_FUNC, s->value2, s->name);
+                    }
+                    else
+                    {
+                        if (debugflag) printf("GLOBAL DATA %8.8x %s\n", s->value2, s->name);
+                        WriteObjectEntry(OTYPE_INIT_DATA, s->value2, s->name);
+                    }
+                }
+                else
+                {
+                    if (debugflag) printf("LOCAL LABEL %8.8x %s\n", s->value2, s->name);
+                    WriteObjectEntry(OTYPE_LOCAL_LABEL, s->value2, s->name);
+                }
             }
         }
+
         i = OTYPE_END_OF_CODE;
         fwrite(&i, 1, 1, objfile);
         fwrite(&hub_addr, 1, 4, objfile);
