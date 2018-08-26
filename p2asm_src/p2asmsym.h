@@ -515,4 +515,5 @@ char *p2asmsym[] = {
 "0 63 .comm",
 "0 64 .equ",
 "0 65 .weak",
+"0 67 .balign",
 0 };

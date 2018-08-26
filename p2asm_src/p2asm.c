@@ -1057,6 +1057,20 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
             break;
         }
 
+        case TYPE_BALIGN:
+        {
+            int value = 0;
+            if (EvaluateExpression(12, &i, tokens, num, &value, &is_float)) break;
+            if (value == 2 || value == 4 || value == 8 || value == 16)
+                hub_incr = (value - hub_addr) & (value - 1);
+            else
+                PrintError("ERROR: .balign %d is not valid\n", value, 0);
+            printflag = PRINT_NOCODE;
+            if (hub_incr && pass == 2) DumpIt(PRINT_CODE, &value, hub_incr);
+            ExpectDone(&i, tokens, num);
+            break;
+        }
+
         case TYPE_TEXT:
         {
             datamode = 0;

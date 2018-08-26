@@ -548,8 +548,8 @@ int main(int argc, char **argv)
         ReplaceString(" min\t", " fge\t");
         ReplaceString(" mins\t", " fges\t");
         //ReplaceString(".L", "_L");
-        ReplaceString(".balign\t4", "alignl");
-        ReplaceString(".balign\t2", "alignw");
+        //ReplaceString(".balign\t4", "alignl");
+        //ReplaceString(".balign\t2", "alignw");
         ReplaceString("0x", "$");
         ReplaceString("jmpret", "calld");
         ReplaceString("__MASK_", "##$");
