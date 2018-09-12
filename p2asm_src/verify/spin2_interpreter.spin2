@@ -1,0 +1,1310 @@
+CON	buff = 0
+
+DAT		org
+
+'
+'******************************************
+'*  Spin2 Interpreter - work in progress  *
+'******************************************
+'
+		org
+spin2
+'		hubset	#$FF
+
+		setq2	#$1FF		'load SKIPF table for bytecodes, plus interpreter
+		rdlong	$000,##@main
+
+		jmp	#beginit
+
+
+
+
+beginit		rdfast	#0,##@pgm	'point fifo to program
+
+		bmask	dira,#15	'make p7..p0 outputs
+		mov	outa,##$FCF0
+
+'		mov	x,##@sstring
+'		mov	y,##@tstring
+'		call	#str_cmp+1
+'		mov	outb,x
+'		bmask	dirb,#15
+'		jmp	#$
+
+		push	#$1FF		'execute program
+	_ret_	setq	#$0C1		'stack $Cx,$Dx,$Ex,$Fx, write flags
+'
+'
+' Start of interpreter code
+'
+		orgf	$0E0
+'
+'
+' CASE value
+'
+' entry:
+'
+'  x		value
+'  ptra[-1]	target
+'  ptra[-2]	address
+'
+' exit:
+'
+'  x		target
+'  ptra[-1]	address
+'
+casev		rfvar	w		'read address
+
+		mov	y,x		'value into y
+		popa	x		'pop target into x
+		cmp	y,x	wz	'value = target?
+
+  if_nz		ret			'if not equal, exit
+
+		jmp	#casex		'else, branch to address
+'
+'
+' CASE value1..value2
+'
+' entry:
+'
+'  x		value2		x
+'  ptra[-1]	value1		t
+'  ptra[-2]	target		u
+'  ptra[-3]	address
+'
+' exit:
+'
+'  x		target
+'  ptra[-1]	address
+'
+caser		rfvar	w		'read address
+
+		setq	#1		'pop value1+target into t+u
+		rdlong	t,--ptra[2]
+
+		cmps	x,t	wc	'z = (value1 > value2)
+		modcz	0,_c	wz
+
+  if_nz		cmps	u,t	wc	'if nz, nc = (value1 <= target <= value2)
+  if_nz_and_nc	cmps	x,u	wc
+  if_z		cmps	u,x	wc	'if z, nc = (value2 <= target <= value1)
+  if_z_and_nc	cmps	t,u	wc
+
+  if_nc		jmp	#casex		'if in range, branch to address
+
+  _ret_		mov	x,u		'else, get target on top of stack, exit
+'
+'
+' CASE done
+'
+' entry:
+'
+'  x		target
+'  ptra[-1]	address
+'  ptra[-2]	new_x
+'
+' exit:
+'
+'  x		new_x
+'  ptra[-1]
+'
+cased		setq	#1		'pop address+new_x into w+x
+		rdlong	x,--ptra[2]
+
+casex		add	w,pbase		'branch to address
+  _ret_		rdfast	#0,w
+'
+'
+' LOOKUP(target : ,,,value,,,)
+'
+'  if index == target
+'    result := value
+'    branch to address
+'  else index++
+'
+'
+'  x		value		x
+'  ptra[-1]	index		u
+'  ptra[-2]	target		v
+'  ptra[-3]	address		w
+'
+'
+lookupv		setq	#2		'pop index+target+address into u+v+w
+		rdlong	w,--ptra[3]
+
+		cmp	u,v	wz	'index == target?
+
+  if_z		jmp	#casex		'if index == target, branch to address
+
+		mov	x,u		'else, get index++ on stack top
+		add	x,#1
+
+  _ret_		add	ptra,#2*4	'..and unpop address+target
+'
+'
+' LOOKDOWN(target : ,,,value,,,)
+'
+'  if value == target
+'    result := index
+'    branch to address
+'  else index++
+'
+'
+'  x		value		x
+'  ptra[-1]	index		u
+'  ptra[-2]	target		v
+'  ptra[-3]	address		w
+'
+'
+lookdnv		setq	#2		'pop index+target+address into u+v+w
+		rdlong	w,--ptra[3]
+
+		cmp	x,v	wz	'value == target?
+
+		mov	x,u		'get index on stack top
+
+  if_z		jmp	#casex		'if value == target, branch to address
+
+		add	x,#1		'else, get index++ on stack top
+
+  _ret_		add	ptra,#2*4	'..and unpop address+target
+'
+'
+' LOOKUP(target : ,,,value1..value2,,,)
+'
+'  if value1 <= value2
+'    delta = value2 - value1
+'    if index <= target <= index + delta
+'      result = value1 - index + target
+'      branch to address
+'    else index += delta + 1
+'
+'  if value1 > value2
+'    delta = value1 - value2
+'    if index <= target <= index + delta
+'      result = value1 + index - target
+'      branch to address
+'    else index += delta + 1
+'
+'
+'  x		value2		x
+'  ptra[-1]	value1		t
+'  ptra[-2]	index		u
+'  ptra[-3]	target		v
+'  ptra[-4]	address		w
+'
+'
+lookupr		setq	#3		'pop value1+index+target+address into t+u+v+w
+		rdlong	w,--ptra[4]	'
+
+		subs	x,t	wc	'z = (value1 > value2)
+		modcz	0,_c	wz	'
+
+		negz	x		'x = delta
+
+		cmp	v,u	wc	'nc = (target >= index)
+		add	x,u		'x = index + delta
+  if_nc		cmp	x,v	wc	'&nc = (index + delta >= target)
+
+  if_nc		mov	x,t		'if target within range,
+  if_nc		sumnz	x,u		'..get result on stack top
+  if_nc		sumz	x,v		'
+  if_nc		jmp	#casex		'..and branch
+
+		add	x,#1		'else, get new index on stack top
+
+  _ret_		add	ptra,#2*4	'..and unpop address+target
+'
+'
+' LOOKDOWN(target : ,,,value1..value2,,,)
+'
+'  if value1 <= value2
+'    delta = value2 - value1
+'    if value1 <= target <= value2
+'      result = - value1 + index + target
+'      branch to address
+'    else index += delta + 1
+'
+'  if value1 > value2
+'    delta = value1 - value2
+'    if value2 <= target <= value1
+'      result = value1 + index - target
+'      branch to address
+'    else index += delta + 1
+'
+'
+'  x		value2		x
+'  ptra[-1]	value1		t
+'  ptra[-2]	index		u
+'  ptra[-3]	target		v
+'  ptra[-4]	address		w
+'
+'
+lookdnr		setq	#3		'pop value1+index+target+address into t+u+v+w
+		rdlong	w,--ptra[4]
+
+		cmps	x,t	wc	'z = (value1 > value2)
+		modcz	0,_c	wz
+
+  if_nz		cmps	v,t	wc	'if nz, nc = (value1 <= target <= value2)
+  if_nz_and_nc	cmps	x,v	wc
+  if_z		cmps	v,x	wc	'if z, nc = (value2 <= target <= value1)
+  if_z_and_nc	cmps	t,v	wc
+
+  if_nc		negnz	x,t		'if target within range,
+  if_nc		add	x,u		'..get result on stack top
+  if_nc		sumz	x,v
+  if_nc		jmp	#casex		'..and branch
+
+  if_nz		sub	x,t		'else, get new index on stack top
+  if_z		subr	x,t
+		addx	x,u		'(c=1, results in +1)
+
+  _ret_		add	ptra,#2*4	'..and unpop address+target
+'
+'
+' LOOKUP/LOOKDOWN done
+'
+'
+'  x		index
+'  ptra[-1]	target
+'  ptra[-2]	address
+'
+'
+lookd		mov	x,#0		'get zero on stack top
+
+  _ret_		sub	ptra,#2*4	'pop target+address
+'
+'
+' BYTEMOVE(dst,src,cnt)		z = 1
+' WORDMOVE(dst,src,cnt)		z = 1
+' LONGMOVE(dst,src,cnt)		z = 1
+'
+' BYTEFILL(dst,val,cnt)		z = 0
+' WORDFILL(dst,val,cnt)		z = 0
+' LONGFILL(dst,val,cnt)		z = 0
+'
+mov_fil		setq	#1		'a b c d e f	pop src/val into v	a: BYTEMOVE
+		rdlong	w,--ptra[2]	'a b c d e f	pop dst into w		b: WORDMOVE
+					'					c: LONGMOVE
+		shl	x,#1		'| b | | e |	if word, cnt*2
+		shl	x,#2		'| | c | | f	if long, cnt*4		d: BYTEFILL
+					'					e: WORDFILL
+		cmp	v,w	wc	'a b c | | |	reverse move?		f: LONGFILL
+	if_c	add	v,x		'a b c | | |
+	if_c	add	w,x		'a b c | | |
+
+		movbyts	v,#%%0000	'| | | d | |	byte fill
+		movbyts	v,#%%1010	'| | | | e |	word fill
+
+		rep	#2,#32		'| | | d e f	set fill pattern
+		altd	pa,.f		'| | | d e f
+		mov	buff,v		'| | | d e f
+
+		tjz	x,#.exit	'if cnt=0, exit
+
+		shr	x,#1	wc	'handle any stray byte
+	if_c	mov	a,#1
+	if_c	callpa	#%0111_0111,#.m
+
+		shr	x,#1	wc	'handle any stray word
+	if_c	mov	a,#2
+	if_c	callpa	#%1011_1011,#.m
+
+.loop		cmpsub	x,#32	wc	'handle longs in blocks of up to 32
+	if_c	mov	a,#32
+	if_nc	mov	a,x
+	if_nc	mov	x,#0
+		mov	pb,a
+		sub	pb,#1
+		shl	a,#2
+		callpa	#%1100_1100,#.m
+		jmp	#.loop
+
+.f		long	1<<9 + buff - (bytemove_ & $FF)
+
+
+.m		cmp	v,w	wc	'move/fill routine, reverse move?
+
+if_z_and_c	sub	v,a		'if reverse move, pre-dec pointers
+if_z_and_c	sub	w,a
+
+		skipf	pa		'set skip pattern for rdxxxx/wrxxxx
+
+if_z		setq	pb		'rdxxxx for move
+if_z		rdlong	buff,v
+if_z		rdword	buff,v
+if_z		rdbyte	buff,v
+
+		setq	pb		'wrxxxx for move/fill
+		wrlong	buff,w
+		wrword	buff,w
+		wrbyte	buff,w
+
+if_nz_or_nc	add	v,a		'if forward move/fill, post-inc pointers
+if_nz_or_nc	add	w,a
+
+	_ret_	tjz	x,#.done	'if not done, return to caller
+
+
+.done		pop	x		'done, pop call stack
+.exit	_ret_	popa	x		'pop top of stack into x, return to xbyte loop
+'
+'
+' STRSIZE(adr) - returns size
+'
+str_siz		mov	y,x		'copy initial address
+		mov	z,#0		'reset byte index
+
+.block		setq	#31		'read 128-byte block
+		rdlong	buff,x
+
+.byte		altgb	z,#buff		'get byte
+		getbyte	v
+
+		tjz	v,#.done	'if 0, done
+
+		incmod	z,#127	wc	'inc and check index
+	if_nc	jmp	#.byte		'next byte?
+
+		add	x,#128		'next block
+		jmp	#.block
+
+
+.done		sub	x,y		'done, top of stack = string size
+	_ret_	add	x,z
+'
+'
+' STRCOMP(adra,adrb) - returns true/false
+'
+str_cmp		popa	y		'y=adra, x=adrb
+		mov	z,#0		'reset byte index
+
+.block		setq	#15		'read 64-byte blocks
+		rdlong	buff+00,x
+		setq	#15
+		rdlong	buff+16,y
+
+.byte		altgb	z,#buff+00	'get bytes
+		getbyte	v
+		altgb	z,#buff+16
+		getbyte	w
+
+		cmp	v,w	wz	'bytes match?
+	if_z	tjz	v,#.yes		'if so, and both 0, strings match
+	if_nz	jmp	#.no		'if not, strings don't match
+
+		incmod	z,#63	wc	'inc and check index
+	if_nc	jmp	#.byte		'next byte?
+
+		add	x,#64		'next block
+		add	y,#64
+		jmp	#.block
+
+
+.yes	_ret_	neg	x,#1		'strings match, top of stack = -1
+
+.no	_ret_	mov	x,#0		'strings don't match, top of stack = 0
+'
+'
+' a: EXEC(hubadr)
+' b: CALL(cogadr)
+'
+cogx		rdbyte	y,x		'a	read start byte
+		add	x,#1		'a
+
+		setd	.reg,y		'a	set start register
+
+		rdbyte	w,x		'a	read length byte
+		add	x,#1		'a
+
+		setq	w		'a	read in code
+.reg		rdlong	0,x		'a
+
+cogc		mov	y,x		'| b	read jump address
+		popa	x		'a b	pop stack
+		jmp	y		'a b	jump to code
+'
+'
+' Miscellaneous
+'
+popx		rfbyte	x		'a		a: pop #rfbyte
+		sub	ptra,x		'a		b: LPIN(pin)
+lpin_		drvl	x		'| b		c: HPIN(pin)
+hpin_		drvh	x		'| | c		d: TPIN(pin)
+tpin_		drvnot	x		'| | | d	e: ZPIN(pin)
+zpin_		fltl	x		'| | | | e	f: AKPIN(pin)
+akpin_		akpin	x		'| | | | | f
+	_ret_	popa	x		'a b c d e f
+
+rpin_		testp	x	wc	'RPIN(pin)
+	_ret_	wrc	x
+
+rdpin_	_ret_	rdpin	x,x		'RDPIN(pin)
+
+rqpin_	_ret_	rqpin	x,x		'RQPIN(pin)
+
+wpin_		test	x,#1	wc	'a				a: WPIN(pin,val)
+pop2		mov	y,x		'| b c d e f			b: WRPIN(pin,val)
+		setq	#2-1		'a b c d e f			c: WXPIN(pin,val)
+		rdlong	x,--ptra[2]	'a b c d e f			d: WYPIN(pin,val)
+	_ret_	drvc	w		'a | | | | |			e: COGINIT(mode,pgm,ptr)	(push)
+	_ret_	wrpin	y,w		'  b | | | |			f: COGINIT(mode,pgm,ptr)	(no push)
+	_ret_	wxpin	y,w		'    c | | |			g: HUBSET(val)
+	_ret_	wypin	y,w		'      d | |			h: COGSTOP(cog)
+		setq	y		'        e f			i: LOCKRET(lock)
+		coginit	x,w	wc	'        e f			j: LOCKREL(lock)
+	_ret_	bitc	x,#31		'        e |			k: COGATN(mask)
+hubset_		hubset	x		'          | g
+cogstop_	cogstop	x		'          | | h
+lockret_	lockret	x		'          | | | i
+lockrel_	lockrel	x		'          | | | | j
+cogatn_		cogatn	x		'          | | | | | k
+	_ret_	popa	x		'          f g h i j k
+
+pushv		pusha	x		'a b c d e f g h		a: read INA
+	_ret_	mov	x,ina		'a | | | | | | |		b: read INB
+	_ret_	mov	x,inb		'  b | | | | | |		c: GETRND
+	_ret_	getrnd	x		'    c | | | | |		d: GETCT
+	_ret_	getct	x		'      d | | | |		e: COGID
+	_ret_	cogid	x		'        e | | |		f: LOCKNEW
+		locknew	x	wc	'          f | |		g: POLLATN
+		pollatn		wc	'          | g |		h: POLLPAT
+		pollpat		wc	'          | | h		i: LOCKCHK(lock)
+lockchk_	lockrel	x	wc	'          | | | i  		j: COGCHK(cog)
+	_ret_	bitc	x,#31		'          f | | i  		k: LOCKTRY(lock)
+cogchk_		cogid	x	wc	'            | |   j
+locktry_	locktry	x	wc	'            | |   | k
+	_ret_	muxc	x,_FFFFFFFF	'            g h   j k
+
+setpat_		mov	y,x		'SETPAT(equal,port,mask,data)
+		setq	#4-1
+		rdlong	x,--ptra[4]
+		testb	w,#31	wz
+		testb	v,#31	wc
+	_ret_	setpat	u,y
+
+cntp		getct	y		'a b		a: POLLCNT(tick)
+		cmpm	y,x	wc	'a b		b: WAITCNT(tick)
+	if_c	jmp	#cntp		'| b
+	_ret_	popa	x		'| b
+	_ret_	muxc	x,_FFFFFFFF	'a
+
+waitv	if_nz	pollatn		wc	'z=0: WAITATN
+	if_z	pollpat		wc	'z=1: WAITPAT
+	if_nc	jmp	#waitv
+		ret
+'
+'
+' Read bitfield
+'
+rdf		nop			'read variable into x
+		shr	x,fb		'lsb-justify bitfield
+
+		testb	fb,#5	wz	'reverse bitfield?
+	if_z	jmp	#.rev
+
+	_ret_	zerox	x,sz	wz	'no, trim it
+
+.rev		rev	x		'yes, reverse and shift it
+	_ret_	shr	x,fr	wz
+'
+'
+' Write bitfield
+'
+wrf		mov	fd,x		'get bitfield data
+
+		testb	fb,#5	wz	'reverse bitfield?
+	if_z	rev	fd
+	if_z	shr	fd,fr
+
+wrfs		shl	fd,fb		'position bitfield data
+
+		bmask	fm,sz		'make bitfield mask
+		shl	fm,fb
+
+		mov	fx,x		'preserve x
+		stalli			'protect variable
+wrf_rd		nop			'read variable into x
+		setq	fm		'set bitfield mask
+		muxq	x,fd		'mux bitfield data into x
+wrf_wr		nop			'write x back to variable
+		allowi			'unprotect variable
+	_ret_	mov	x,fx		'restore x
+'
+'
+' Read/write instructions
+'
+rd_byte		rdbyte	x,a	wz
+rd_word		rdword	x,a	wz
+rd_long		rdlong	x,a	wz
+rd_reg		mov	x,0	wz
+rd_lut		rdlut	x,a	wz
+rd_field	call	#\rdf
+
+wr_byte		wrbyte	x,a
+wr_word		wrword	x,a
+wr_long		wrlong	x,a
+wr_reg		mov	0,x
+wr_lut		wrlut	x,a
+wr_field	call	#\wrf
+'
+'
+' Data
+'
+_FFFFFFFF	long	$FFFFFFFF
+
+dcall		res	1	'call data
+
+rd		res	1	'variable data
+wr		res	1
+sz		res	1
+a		res	1
+
+fd		res	1	'bitfield data
+fb		res	1
+fr		res	1
+fx		res	1
+fm		res	1
+
+z		res	1	'z/pbase/vbase/dbase/y/x/w/v/u/t must remain in order
+pbase		res	1
+vbase		res	1
+dbase		res	1
+y		res	1
+x		res	1
+w		res	1
+v		res	1
+u		res	1
+t		res	1
+'
+'
+'*********
+'*  LUT  *
+'*********
+'
+		org	$200	'main bytecodes
+
+main
+
+		long	drop	|                           %0 << 10	'00	drop anchor, !try, !result	(must be bytecodes 0..3)
+		long	drop	|                           %0 << 10	'01	drop anchor, !try,  result
+		long	drop	|                           %0 << 10	'02	drop anchor,  try, !result
+		long	drop	|                           %0 << 10	'03	drop anchor,  try,  result
+
+		long	retn	|                        %0100 << 10	'04	ABORT result			(2 LSBs must be 0/1/2/3)
+		long	retn	|                         %010 << 10	'05	ABORT x
+		long	retn	|                        %0100 << 10	'06	RETURN result
+		long	retn	|                         %010 << 10	'07	RETURN x
+
+		long	callnin	|            %0110000000101100 << 10	'08	call obj.sub
+		long	callobj	|            %011000000000110_ << 10	'09	call obj.sub[]
+		long	callobj	|            %011000000010100_ << 10	'0A	call obj[].sub
+		long	callobj	|            %011000000000000_ << 10	'0B	call obj[].sub[]
+		long	callnin	|            %0110111111101110 << 10	'0C	call sub
+		long	callsub	|            %011011111100____ << 10	'0D	call sub[]
+		long	callptr	|            %0000____________ << 10	'0E	call @ptr
+
+jmp_vars	long	branch	|                  %0011111110 << 10	'0F	jmp  rfvars
+		long	branch	|                  %0011100100 << 10	'10	jz   rfvars
+		long	branch	|                  %0001110100 << 10	'11	jnz  rfvars
+		long	branch	|                  %0011110000 << 10	'12	tjz  rfvars
+		long	branch	|                  %0000011110 << 10	'13	djnz rfvars
+
+		long	casev	|                           %0 << 10	'14	CASE value
+		long	caser	|                           %0 << 10	'15	CASE value1..value2
+		long	cased	|                           %0 << 10	'16	CASE done
+
+		long	lookupv	|                           %0 << 10	'17	LOOKUP  (target : ,,,value,,,)
+		long	lookdnv	|                           %0 << 10	'18	LOOKDOWN(target : ,,,value,,,)
+		long	lookupr	|                           %0 << 10	'19	LOOKUP  (target : ,,,value1..value2,,,)
+		long	lookdnr	|                           %0 << 10	'1A	LOOKDOWN(target : ,,,value1..value2,,,)
+		long	lookd	|                           %0 << 10	'1B	LOOKUP/LOOKDOWN done
+
+		long	popx	|                    %01111100 << 10	'1C	pop #rfbyte
+
+		long	cogx	|                  %0010000000 << 10	'1D	EXEC(hubaddr)
+		long	cogc	|                         %000 << 10	'1E	CALL(cogaddr)
+
+		long	pop2	|            %0111111001111000 << 10	'1F	COGINIT(mode,pgm,ptr)	(no push)
+		long	pop2	|                  %0001111000 << 10	'20	COGINIT(mode,pgm,ptr)	(push)
+		long	cogstop_|                       %01110 << 10	'21	COGSTOP(cog)
+		long	pushv	|                      %011110 << 10	'22	COGID
+		long	cogchk_	|                         %010 << 10	'23	COGCHK(cog)
+
+		long	pushv	|                        %0110 << 10	'24	GETRND
+		long	pushv	|                       %01110 << 10	'25	GETCNT
+		long	cntp	|                       %01100 << 10	'26	POLLCNT(tick)
+		long	cntp	|                        %0000 << 10	'27	WAITCNT(tick)
+
+		long	wpin_	|                       %00010 << 10	'28	WPIN(pin,val)
+		long	lpin_	|                      %011110 << 10	'29	LPIN(pin)
+		long	hpin_	|                       %01110 << 10	'2A	HPIN(pin)
+		long	tpin_	|                        %0110 << 10	'2B	TPIN(pin)
+		long	zpin_	|                         %010 << 10	'2C	ZPIN(pin)
+		long	rpin_	|                           %0 << 10	'2D	RPIN(pin)
+
+		long	pop2	|                       %01000 << 10	'2E	WRPIN(pin,val)
+		long	pop2	|                      %011000 << 10	'2F	WXPIN(pin,val)
+		long	pop2	|                     %0111000 << 10	'30	WYPIN(pin,val)
+		long	akpin_	|                          %00 << 10	'31	AKPIN(pin)
+		long	rdpin_	|                           %0 << 10	'32	RDPIN(pin)
+		long	rqpin_	|                           %0 << 10	'33	RQPIN(pin)
+
+con_byte	long	const	|                        %0110 << 10	'34	constant rfbyte
+		long	const	|                 %01111101110 << 10	'35	constant rfbyte!
+		long	const	|                      %011110 << 10	'36	constant rfword
+		long	const	|                 %01110111110 << 10	'37	constant rfword!
+		long	const	|                    %01111110 << 10	'38	constant rflong
+con_decod	long	const	|                   %011101110 << 10	'39	constant rfbyte + decod
+		long	const	|                 %00111101110 << 10	'3A	constant rfbyte + decod + not
+		long	const	|                %010111101110 << 10	'3B	constant rfbyte + decod + dec
+		long	const	|               %0110111101110 << 10	'3c	constant rfbyte + decod + neg
+
+		long	pushv	|	                   %00 << 10	'3D	read reg[$1FE]
+		long	pushv	|	                  %010 << 10	'3E	read reg[$1FF]
+
+reg_1FA		long	var_reg	|          %0_11_00_00_11_1_00 << 10	'3F	setup reg[$1FA]
+		long	var_reg	|          %0_11_00_00_11_1_00 << 10	'40	setup reg[$1FB]
+		long	var_reg	|          %0_11_00_00_11_1_00 << 10	'41	setup reg[$1FC]
+		long	var_reg	|          %0_11_00_00_11_1_00 << 10	'42	setup reg[$1FD]
+		long	var_reg	|          %0_11_00_00_11_1_00 << 10	'43	setup reg[$1FE]
+		long	var_reg	|          %0_11_00_00_11_1_00 << 10	'44	setup reg[$1FF]
+
+setup_reg	long	var_cog	|             %0_11_00_00_11_0 << 10	'45	setup reg[rfvars]
+		long	var_cog	|             %0_11_00_00_00_0 << 10	'46	setup reg[rfvars][pop index]
+
+		long	var_cog	|             %0_00_11_11_11_0 << 10	'47	setup lut[rfvars]
+		long	var_cog	|             %0_00_11_11_00_0 << 10	'48	setup lut[rfvars][pop index]
+
+		long	var_b	|       %0_110_110_11111_110_0 << 10	'49	setup byte[pbase + rfvar]
+		long	var_b	|       %0_110_110_11111_101_0 << 10	'4A	setup byte[vbase + rfvar]
+		long	var_b	|       %0_110_110_11111_011_0 << 10	'4B	setup byte[dbase + rfvar]
+
+		long	var_b	|       %0_110_110_01110_110_0 << 10	'4C	setup byte[pbase + rfvar][pop index]
+		long	var_b	|       %0_110_110_01110_101_0 << 10	'4D	setup byte[vbase + rfvar][pop index]
+		long	var_b	|       %0_110_110_01110_011_0 << 10	'4E	setup byte[dbase + rfvar][pop index]
+
+		long	var_b	|      %01_101_101_11111_110_0 << 10	'4F	setup word[pbase + rfvar]
+		long	var_b	|      %01_101_101_11111_101_0 << 10	'50	setup word[vbase + rfvar]
+		long	var_b	|      %01_101_101_11111_011_0 << 10	'51	setup word[dbase + rfvar]
+
+		long	var_b	|      %01_101_101_01100_110_0 << 10	'52	setup word[pbase + rfvar][pop index]
+		long	var_b	|      %01_101_101_01100_101_0 << 10	'53	setup word[vbase + rfvar][pop index]
+		long	var_b	|      %01_101_101_01100_011_0 << 10	'54	setup word[dbase + rfvar][pop index]
+
+		long	var_b	|     %011_011_011_11111_110_0 << 10	'55	setup long[pbase + rfvar]
+		long	var_b	|     %011_011_011_11111_101_0 << 10	'56	setup long[vbase + rfvar]
+		long	var_b	|     %011_011_011_11111_011_0 << 10	'57	setup long[dbase + rfvar]
+
+		long	var_b	|     %011_011_011_01010_110_0 << 10	'58	setup long[pbase + rfvar][pop index]
+		long	var_b	|     %011_011_011_01010_101_0 << 10	'59	setup long[vbase + rfvar][pop index]
+		long	var_b	|     %011_011_011_01010_011_0 << 10	'5A	setup long[dbase + rfvar][pop index]
+
+		long	var_a	|                %0_110_110_10 << 10	'5B	setup byte[pop address]
+		long	var_a	|               %01_101_101_10 << 10	'5C	setup word[pop address]
+		long	var_a	|              %011_011_011_10 << 10	'5D	setup long[pop address]
+
+		long	var_i	|             %0_110_110_00110 << 10	'5E	setup byte[pop base][pop index]
+		long	var_i	|            %01_101_101_00100 << 10	'5F	setup word[pop base][pop index]
+		long	var_i	|           %011_011_011_00010 << 10	'60	setup long[pop base][pop index]
+
+setup_bfm	long	bfield	|                      %010000 << 10	'61	setup multi-bit field, pop bottom and top bits
+setup_bfs	long	bfield	|            %0111100000001100 << 10	'62	setup single-bit field, pop bit
+
+		long	var_rd	|                          %00 << 10	'63	@var		(push)
+		long	var_rd	|                    %01110010 << 10	'64	var		(push)
+		long	var_wr	|                         %000 << 10	'65	var := exp	(isolated)
+		long	var_wr	|                        %0100 << 10	'66	var := exp	(push)
+
+mod_inc		long	mod_iso	|             %000111110110010 << 10	'67	++var, var++	(isolated)
+mod_dec		long	mod_iso	|             %000111101110010 << 10	'68	--var, var--	(isolated)
+		long	mod_psh	|           %0110011101011000_ << 10	'69	++var		(push)
+		long	mod_psh	|           %0110011100111000_ << 10	'6A	--var		(push)
+		long	mod_psh	|            %010011111001000_ << 10	'6B	var++		(push)
+		long	mod_psh	|            %010011110101000_ << 10	'6C	var--		(push)
+		long	mod_iso	|             %000110111110010 << 10	'6D	var!!		(isolated)
+		long	mod_psh	|            %010011011101000_ << 10	'6E	var!!		(push)
+		long	mod_iso	|             %000101111110010 << 10	'6F	var!		(isolated)
+		long	mod_psh	|            %010010111101000_ << 10	'70	var!		(push)
+		long	mod_iso	|            %0100011111010010 << 10	'71	var\new	(swap)
+		long	mod_iso	|             %000111111000010 << 10	'72	??var		(isolated)
+		long	mod_psh	|            %010011111100000_ << 10	'73	??var		(push)
+
+		long	op_rel	|                        %0100 << 10	'74	exp <   exp
+		long	op_rel	|                       %01010 << 10	'75	exp <=  exp
+		long	op_rel	|                      %011100 << 10	'76	exp ==  exp
+		long	op_rel	|                     %0111100 << 10	'77	exp <>  exp
+		long	op_rel	|                       %01100 << 10	'78	exp >=  exp
+		long	op_rel	|                        %0010 << 10	'79	exp >   exp
+		long	op_rel	|                   %001111100 << 10	'7A	exp <=> exp
+
+		long	op_notb	|              %01111111101110 << 10	'7B	!!exp
+		long	op_not	|              %011111110_____ << 10	'7C	!exp
+		long	op_neg	|              %01111110______ << 10	'7D	-exp
+		long	op_abs	|              %0111110_______ << 10	'7E	ABS exp
+		long	op_ncod	|              %011110________ << 10	'7F	ENCOD exp
+		long	op_dcod	|              %01110_________ << 10	'80	DECOD exp
+		long	op_ones	|              %0110__________ << 10	'81	ONES exp
+		long	op_sqrt	|              %0101111111110_ << 10	'82	SQRT exp
+		long	op_log	|              %010111111110__ << 10	'83	LOG exp
+		long	op_exp	|              %01011111110___ << 10	'84	EXP exp
+
+		long	sha_mod	|              %01111110110110 << 10	'85	exp >> exp
+		long	sha_mod	|              %01111111010110 << 10	'86	exp << exp
+		long	sha_mod	|              %01111101110110 << 10	'87	exp SAR exp
+		long	sha_mod	|              %01111011110110 << 10	'88	exp ROR exp
+		long	sha_mod	|              %01110111110110 << 10	'89	exp ROL exp
+		long	rev_mod	|              %0111111010010_ << 10	'8A	exp REV exp
+		long	rev_mod	|              %0111111001010_ << 10	'8B	exp ZEROX exp
+		long	rev_mod	|              %0111110101010_ << 10	'8C	exp SIGNX exp
+		long	sha_mod	|              %01101111110110 << 10	'8D	exp + exp
+		long	sha_mod	|              %01011111110110 << 10	'8E	exp - exp
+
+		long	log_mod	|                %011111000100 << 10	'8F	exp && exp
+		long	log_mod	|                %011110100100 << 10	'90	exp ^^ exp
+		long	log_mod	|                %011101100100 << 10	'91	exp || exp
+		long	log_mod	|                %011111010110 << 10	'92	exp & exp
+		long	log_mod	|                %011110110110 << 10	'93	exp ^ exp
+		long	log_mod	|                %011101110110 << 10	'94	exp | exp
+		long	log_mod	|                %011011110110 << 10	'95	exp #> exp
+		long	log_mod	|                %010111110110 << 10	'96	exp <# exp
+
+		long	muu_mod	|            %011111011011010_ << 10	'97	exp * exp
+		long	mul_mod	|            %0111100101000110 << 10	'98	exp / exp
+		long	mul_mod	|            %0110011101000110 << 10	'99	exp // exp
+		long	muu_mod	|            %011101111011010_ << 10	'9A	exp SCA exp
+		long	mul_mod	|            %0101011110000110 << 10	'9B	exp SCAS exp
+		long	muu_mod	|            %011111001111010_ << 10	'9C	exp FRAC exp
+
+		long	una_iso	|          %000111111101110010 << 10	'9D	!!= var		(isolated)
+		long	una_iso	|          %000111111011110010 << 10	'9E	!= var		(isolated)
+		long	una_iso	|          %000111110111110010 << 10	'9F	-= var		(isolated)
+		long	una_iso	|          %000111101111110010 << 10	'A0	ABS= var	(isolated)
+		long	una_iso	|          %000111011111110010 << 10	'A1	ENCOD= var	(isolated)
+		long	una_iso	|          %000110111111110010 << 10	'A2	DECOD= var	(isolated)
+		long	una_iso	|          %000101111111110010 << 10	'A3	ONES= var	(isolated)
+		long	una_iso	|          %000011111111100010 << 10	'A4	SQRT= var	(isolated)
+		long	una_iso	|          %000011111111010010 << 10	'A5	LOG= var	(isolated)
+		long	una_iso	|          %000011111110110010 << 10	'A6	EXP= var	(isolated)
+
+		long	sha_mod	|             %000111110110010 << 10	'A7	var >>= exp	(isolated)
+		long	sha_mod	|             %000111111010010 << 10	'A8	var <<= exp	(isolated)
+		long	sha_mod	|             %000111101110010 << 10	'A9	var SAR= exp	(isolated)
+		long	sha_mod	|             %000111011110010 << 10	'AA	var ROR= exp	(isolated)
+		long	sha_mod	|             %000110111110010 << 10	'AB	var ROL= exp	(isolated)
+		long	rev_mod	|             %00011111010000_ << 10	'AC	var REV= exp	(isolated)
+		long	rev_mod	|             %00011111001000_ << 10	'AD	var ZEROX= exp	(isolated)
+		long	rev_mod	|             %00011110101000_ << 10	'AE	var SIGNX= exp	(isolated)
+		long	sha_mod	|             %000101111110010 << 10	'AF	var += exp	(isolated)
+		long	sha_mod	|             %000011111110010 << 10	'B0	var -= exp	(isolated)
+
+		long	log_mod	|               %0001111000000 << 10	'B1	var &&= exp	(isolated)
+		long	log_mod	|               %0001110100000 << 10	'B2	var ^^= exp	(isolated)
+		long	log_mod	|               %0001101100000 << 10	'B3	var ||= exp	(isolated)
+		long	log_mod	|               %0001111010010 << 10	'B4	var &= exp	(isolated)
+		long	log_mod	|               %0001110110010 << 10	'B5	var ^= exp	(isolated)
+		long	log_mod	|               %0001101110010 << 10	'B6	var |= exp	(isolated)
+		long	log_mod	|               %0001011110010 << 10	'B7	var #>= exp	(isolated)
+		long	log_mod	|               %0000111110010 << 10	'B8	var <#= exp	(isolated)
+
+		long	muu_mod	|           %0001111011011010_ << 10	'B9	var *= exp	(isolated)
+		long	mul_mod	|           %00011100101000110 << 10	'BA	var /= exp	(isolated)
+		long	mul_mod	|           %00010011101000110 << 10	'BB	var //= exp	(isolated)
+		long	muu_mod	|           %0001101111011010_ << 10	'BC	var SCA= exp	(isolated)
+		long	mul_mod	|           %00001011110000110 << 10	'BD	var SCAS= exp	(isolated)
+		long	muu_mod	|           %0001111001111010_ << 10	'BE	var FRAC= exp	(isolated)
+
+altcode		long	alt_cod	|                           %0 << 10	'BF	alternate bytecode
+
+				'these bytecodes C0..C3 are expanded at runtime to Cx/Dx/Ex/Fx
+
+n1		long	const	|                         %000 << 10	'C0/Cx	constant -1..14
+		long	var_loc	|                      %00_000 << 10	'C1/Dx	read  long[dbase][0..15]
+		long	var_loc	|                   %00_11_000 << 10	'C2/Ex	write long[dbase][0..15]	(isolated)
+		long	var_loc	|               %000_11_11_000 << 10	'C3/Fx	setup long[dbase][0..15]
+
+				'these bytecodes C4..FF are alternate and use setq #$001 (not setq #$0C1)
+
+alt_codes	long	una_psh	|          %010011111110111000 << 10	'C4*	!!= var		(push)
+		long	una_psh	|          %010011111101111000 << 10	'C5*	!= var		(push)
+		long	una_psh	|          %010011111011111000 << 10	'C6*	-= var		(push)
+		long	una_psh	|          %010011110111111000 << 10	'C7*	ABS= var	(push)
+		long	una_psh	|          %010011101111111000 << 10	'C8*	ENCOD= var	(push)
+		long	una_psh	|          %010011011111111000 << 10	'C9*	DECOD= var	(push)
+		long	una_psh	|          %010010111111111000 << 10	'CA*	ONES= var	(push)
+		long	una_psh	|          %010001111111110000 << 10	'CB*	SQRT= var	(push)
+		long	una_psh	|          %010001111111101000 << 10	'CC*	LOG= var	(push)
+		long	una_psh	|          %010001111111011000 << 10	'CD*	EXP= var	(push)
+
+		long	sha_mod	|            %0100111110110010 << 10	'CE*	var >>= exp	(push)
+		long	sha_mod	|            %0100111111010010 << 10	'CF*	var <<= exp	(push)
+		long	sha_mod	|            %0100111101110010 << 10	'D0*	var SAR= exp	(push)
+		long	sha_mod	|            %0100111011110010 << 10	'D1*	var ROR= exp	(push)
+		long	sha_mod	|            %0100110111110010 << 10	'D2*	var ROL= exp	(push)
+		long	rev_mod	|            %010011111010000_ << 10	'D3*	var REV= exp	(push)
+		long	rev_mod	|            %010011111001000_ << 10	'D4*	var ZEROX= exp	(push)
+		long	rev_mod	|            %010011110101000_ << 10	'D5*	var SIGNX= exp	(push)
+		long	sha_mod	|            %0100101111110010 << 10	'D6*	var += exp	(push)
+		long	sha_mod	|            %0100011111110010 << 10	'D7*	var -= exp	(push)
+
+		long	log_mod	|              %01001111000000 << 10	'D8*	var &&= exp	(push)
+		long	log_mod	|              %01001110100000 << 10	'D9*	var ^^= exp	(push)
+		long	log_mod	|              %01001101100000 << 10	'DA*	var ||= exp	(push)
+		long	log_mod	|              %01001111010010 << 10	'DB*	var &= exp	(push)
+		long	log_mod	|              %01001110110010 << 10	'DC*	var ^= exp	(push)
+		long	log_mod	|              %01001101110010 << 10	'DD*	var |= exp	(push)
+		long	log_mod	|              %01001011110010 << 10	'DE*	var #>= exp	(push)
+		long	log_mod	|              %01000111110010 << 10	'DF*	var <#= exp	(push)
+
+		long	muu_mod	|          %01001111011011010_ << 10	'E0*	var *= exp	(push)
+		long	mul_mod	|          %010011100101000110 << 10	'E1*	var /= exp	(push)
+		long	mul_mod	|          %010010011101000110 << 10	'E2*	var //= exp	(push)
+		long	muu_mod	|          %01001101111011010_ << 10	'E3*	var SCA= exp	(push)
+		long	mul_mod	|          %010001011110000110 << 10	'E4*	var SCAS= exp	(push)
+		long	muu_mod	|          %01001111001111010_ << 10	'E5*	var FRAC= exp	(push)
+
+		long	rotxy	|                  %0001100000 << 10	'E6*	ROTXY(x,y,t)			(returns x,y)
+		long	polxy	|                  %00010110__ << 10	'E7*	POLXY(r,t)			(returns x,y)
+		long	polxy	|                  %00001110__ << 10	'E8*	XYPOL(x,y)			(returns r,t)
+
+bytemove_	long	mov_fil	|               %0111110001100 << 10	'E9*	BYTEMOVE(dst,src,cnt)		(LSB must be 1/0/1/0/1/0)
+		long	mov_fil	|               %0000101111100 << 10	'EA*	BYTEFILL(dst,val,cnt)
+		long	mov_fil	|               %0111110001000 << 10	'EB*	WORDMOVE(dst,src,cnt)
+		long	mov_fil	|               %0000011111000 << 10	'EC*	WORDFILL(dst,val,cnt)
+		long	mov_fil	|               %0111110000100 << 10	'ED*	LONGMOVE(dst,src,cnt)
+		long	mov_fil	|               %0000111110100 << 10	'EE*	LONGFILL(dst,val,cnt)
+
+		long	str_siz	|                           %0 << 10	'EF*	STRSIZE(adr)
+		long	str_cmp	|                           %0 << 10	'F0*	STRCOMP(adra,adrb)
+
+		long	hubset_	|                      %011110 << 10	'F1*	HUBSET(val)
+
+		long	pushv	|                 %01110111110 << 10	'F2*	LOCKNEW
+		long	lockret_|                        %0110 << 10	'F3*	LOCKRET(lock)
+		long	locktry_|                          %00 << 10	'F4*	LOCKTRY(lock)
+		long	lockrel_|                         %010 << 10	'F5*	LOCKREL(lock)
+		long	lockchk_|                          %00 << 10	'F5*	LOCKCHK(lock)
+
+		long	cogatn_	|                          %00 << 10	'F7*	COGATN(mask)
+		long	pushv	|              %01111101111110 << 10	'F8*	POLLATN
+		long	waitv	|                           %0 << 10	'F9*	WAITATN			(LSB=0)
+
+		long	setpat_	|                           %0 << 10	'FA*	SETPAT(equal,port,mask,data)
+		long	pushv	|              %01111011111110 << 10	'FB*	POLLPAT
+		long	waitv	|                           %0 << 10	'FC*	WAITPAT			(LSB=1)
+
+		long	mt	|                           %0 << 10	'FD*	run
+
+		long	mt	|                           %0 << 10	'FE*	<empty>
+		long	mt	|                           %0 << 10	'FF*	<empty>
+j1
+'
+'
+'*****************
+'*  Interpreter  *
+'*****************
+'
+'
+' Drop anchor - push x/pbase/vbase/dbase/dcall/0
+'
+'  push x
+'  push pbase | flags
+'  push vbase
+'  push dbase
+'  push dcall
+'  push 0 (new dcall)
+'
+drop		or	pbase,pa	'or flags into pbase (%tp)
+
+		mov	z,x		'get x (top of stack) into z
+		mov	y,dcall		'get dcall (prior dbase) into y
+		mov	x,#0		'get initial 'result' into x
+
+		setq	#6-1		'push z/pbase/vbase/dbase/y/x
+		wrlong	z,ptra++[5]	'ptra points to 'result' afterwards
+
+		mov	dcall,ptra	'update dcall (next dbase)
+
+	_ret_	xor	pbase,pa	'xor flags from pbase
+'
+'
+' call obj.sub		a
+' call obj.sub[]	b
+' call obj[].sub	c
+' call obj[].sub[]	d
+' call sub		e
+' call sub[]		f
+' call @ptr		g
+'
+callnin		pusha	x		'a       e		if no index, push x to save parameter
+callobj		rfvar	y		'a b c d |		get obj into y
+		add	y,x		'| | c d |		add obj index
+		popa	x		'| | | d |		if dual index, pop x
+callsub		rfvar	z		'a b c d e f		get sub into z
+		add	z,x		'| b | d | f		add sub index
+
+		shl	y,#2		'a b c d | |		get obj offsets from y
+		add	y,pbase		'a b c d | |
+		setq	#2-1		'a b c d | |
+		rdlong	y,y		'a b c d | |
+
+		add	pbase,y		'a b c d | |		add offsets into pbase/vbase
+		add	vbase,x		'a b c d | |
+
+callptr		mov	dbase,dcall	'a b c d e f g		set dbase to dcall
+
+		setq	#3-1		'| | | | | | g		read ptr into z/pbase/vbase
+		rdlong	z,x		'| | | | | | g
+
+		shl	z,#2		'a b c d e f g		get sub offsets from z
+		add	z,pbase		'a b c d e f g
+		setq	#2-1		'a b c d e f g
+		rdlong	y,z		'a b c d e f g
+
+		mov	ptra,dbase	'a b c d e f g		read prior dcall from stack
+		rdlong	dcall,ptra[-1]	'a b c d e f g
+
+		getptr	z		'a b c d e f g		write return address into stack
+		wrlong	z,ptra[-1]	'a b c d e f g
+
+		add	y,pbase		'a b c d e f g		start new bytecode read
+		rdfast	#0,y		'a b c d e f g
+
+	_ret_	add	ptra,x		'a b c d e f g		point stack past result/params/locals
+'
+'
+' ABORT	result		a	C=0
+' ABORT x		b	C=0
+' RETURN result		c	C=1
+' RETURN x		d	C=1
+'
+' (pop result)
+'  pop return
+'  pop dbase
+'  pop vbase
+'  pop pbase | flags
+'  pop <old top>
+'
+retn		mov	ptra,dbase	'	a b c d		ptra points to dbase
+		setq	#6-1		'	a | c |		pop z/pbase/vbase/dbase/y/x (1st pass only)
+		setq	#5-1		'	| b | d		pop z/pbase/vbase/dbase/y
+		rdlong	z,--ptra[5]	'	a   c  		ptra points to top of stack after pop
+
+	if_nc	bitl	pbase,#1  wcz	'			if abort and !try, return again
+	if_nc	jmp	#retn
+
+		bitl	pbase,#0  wcz	'			result?
+	if_nc	mov	x,z		'  a: ABORT result	if not, get z (top of stack) into x
+	if_c	wrlong	x,++ptra	'  b: ABORT x		if so, x holds 'result', push x
+					'  c: RETURN result
+	_ret_	rdfast	#0,y		'  d: RETURN x		start new bytecode read
+'
+'
+' Branches - jmp, jz, jnz, tjz, djnz
+'
+branch		rfvars	y		'	a b c d e	a: branch
+		test	x	wz	'	| b c d |	b: test, pop, branch if z
+	if_nz	ret			'	| | | d |	c: test, pop, branch if nz
+		popa	x		'	| b c d |	d: test, if z then pop and branch
+	if_nz	ret			'	| b | | |	e: dec, if z then pop, else branch
+		sub	x,#1	wz	'	| | | | e
+	if_z	popa	x		'	| | | | e
+	if_z	ret			'	| | c | e
+		add	pb,y		'	a b c d e
+	_ret_	rdfast	#0,pb		'	a b c d e
+'
+'
+' Constants
+'
+const		pusha	x		'push	a b c d e f g h i j	a: constant -1..14
+		mov	x,pa		'	a | | | | | | | | |	b: byte
+	_ret_	sub	x,#n1+1-$200	'	a | | | | | | | | |	c: !byte
+	_ret_	rfbyte	x		'	  b | | | | | | | |	d: word
+		rfbyte	x		'	    c | | | g h i j	e: !word
+	_ret_	rfword	x		'	    | d | | | | | |	f: long
+		rfword	x		'	    |   e | | | | |	g: byte + decode
+	_ret_	rflong	x		'           |   | f | | | |	h: byte + decode + not
+	_ret_	decod	x		'	    |   |   g | | |	i: byte + decode + decrement
+		decod	x		'	    |   |     h i j	j: byte + decode + negate
+	_ret_	not	x		'	    c   e     h | |
+	_ret_	sub	x,#1		'                       i |
+	_ret_	neg	x		'	                  j
+'
+'
+' Read/write/setup local variable
+'
+var_loc		getnib	a,pa,#0		'	a b c			a: read local
+		shl	a,#2		'	a b c			b: write local
+		add	a,vbase		'	a b c			c: setup local
+
+		pusha	x		'read	a | |
+	_ret_	rdlong	x,a		'read	a | |
+
+		wrlong	x,a		'write	  b |
+	_ret_	popa	x		'write	  b |
+
+		mov	rd,rd_long	'setup	    c
+		mov	wr,wr_long	'setup	    c
+	_ret_	mov	sz,#31		'setup	    c
+'
+'
+' Setup hub variable
+'
+var_b		rfvar	a		'	x x x
+
+		add	a,pbase		'base	p | |
+		add	a,vbase		'	| v |
+		add	a,dbase		'	| | d
+
+var_i		popa	y		'index	b w l |
+		shl	y,#1		'	| w | |
+		shl	y,#2		'	| | l |
+var_a		popa	a		'addr	| | | | i a
+		add	a,y		'	b w l | i |
+
+		mov	rd,rd_byte	'rd	b | |
+		mov	rd,rd_word	'	| w |
+		mov	rd,rd_long	'	| | l
+
+		mov	wr,wr_byte	'wr	b | |
+		mov	wr,wr_word	'	| w |
+		mov	wr,wr_long	'	| | l
+
+	_ret_	mov	sz,#7		'size	b | |
+	_ret_	mov	sz,#15		'	  w |
+	_ret_	mov	sz,#31		'	    l
+'
+'
+' Setup reg/lut variable
+'
+var_reg		mov	a,pa		'$1Fx	a			a: reg $1Fx
+		add	a,#$3FA-reg_1FA	'$1Fx	a			b: reg $xxx
+					'				c: reg $xxx [index]
+var_cog		rfvars	a		'$xxx	| b c d e		d: lut $xxx
+					'				e: lut $xxx [index]
+		popa	y		'index	| | c | e
+		add	a,y		'index	| | c | e
+
+		mov	rd,rd_reg	'reg	a b c | |
+		mov	wr,wr_reg	'reg	a b c | |
+
+		sets	rd,a		'reg	a b c | |
+		setd	wr,a		'reg	a b c | |
+
+		mov	rd,rd_lut	'lut	| | | d e
+		mov	wr,wr_lut	'lut	| | | d e
+
+	_ret_	mov	sz,#31		'long	a b c d e
+'
+'
+' Setup bitfield
+'
+bfield		mov	fb,x		'get bottom/single bit			a b	a: multi-bit field
+		zerox	fb,#4		'					a b	b: single-bit field
+
+		popa	sz		'get top bit				a |
+		zerox	sz,#4		'					a |
+
+		mov	sz,#0	wc	'single bit, c=0			| b
+
+		popa	x		'pop stack				a b
+
+		mov	rdf,rd		'copy rd into field reader		a b
+		mov	wrf_rd,rd	'copy rd into field writer		a b
+		mov	wrf_wr,wr	'copy wr into field writer		a b
+
+		mov	rd,rd_field	'replace rd with 'call #\rdf'		a b
+		mov	wr,wr_field	'replace wr with 'call #\wrf'		a b
+
+		sub	sz,fb	wc	'set bitfield size (top - bot)		a |
+
+	if_c	add	fb,sz		'set reverse base (top)			a |
+	if_c	neg	sz		'set reverse size (bot - top)		a |
+	if_c	not	fr,sz		'set reverse shift			a |
+
+	_ret_	bitc	fb,#5		'set reverse flag			a b
+'
+'
+' Variable address/read/write
+'
+var_rd		pusha	x		'push	a b			a: @var		(push)
+	_ret_	mov	x,a		'addr	a |			b: var		(push)
+		alti	rd		'read	  b			c: var := exp	(isolated)
+		nop			'read	  b			d: var := exp	(push)
+var_wr		alti	wr		'write	  | c d
+		nop			'write	  | c d
+	_ret_	popa	x		'pop	  | c |
+	_ret_	zerox	x,sz		'trim	  b   d			(zerox provides ret for b)
+'
+'
+' Variable pre/post modifiers
+'
+mod_iso		mov	y,x		'iso	a b         g   i   k l		a: ++var, var++	(isolated)
+mod_psh		pusha	x		'push	| | c d e f | h | j | | m	b: --var, var--	(isolated)
+		alti	rd		'rd	a b c d e f g h i j k l m	c: ++var	(push)
+		nop			'rd	a b c d e f g h i j k l m	d: --var	(push)
+		xoro32	x		'??	| | | | | | | | | | | l m	e: var++	(push)	
+		mov	z,x		'post	| | | | e f | h | j k l m	f: var--	(push)
+		add	x,#1		'++	a | c | e | | | | | | | |	g: var!!	(isolated)
+		sub	x,#1		'--	| b | d | f | | | | | | |	h: var!!	(push)
+		zerox	x,sz		'ptr	| | c d | | | | | | | | |	i: var!		(isolated)
+		muxz	x,_FFFFFFFF	'!!	| | | | | | g h | | | | |	j: var!		(push)
+		not	x		'!	| | | | | | | | i j | | |	k: var\new	(swap)
+		mov	x,y		'swap	| | | | | | | | | | k | |	l: ??var	(isolated)
+		alti	wr		'wr	a b c d e f g h i j k l m	m: ??var	(push)
+		nop			'wr	a b c d e f g h i j k l m
+	_ret_	mov	x,y		'iso	a b | | | | g | i | | l |
+	_ret_	mov	x,z		'iso	    | | e f   h   j k   m
+		ret			'main	    c d
+'
+'
+' Variable assignments / math operators
+'
+una_iso		mov	y,x		'	m			a: !!
+una_psh		pusha	y		'push	| n			b: !			
+		alti	rd		'rd	m n			c: - (neg)
+op_notb		test	x	wz	'rd,!!	m n a			d: ABS
+op_sqrt		qsqrt	x,#0		'SQRT	x x |             h	e: ENCOD
+op_log		qlog	x		'LOG	x x |             | i	f: DECOD
+op_exp		qexp	x		'EXP	x x |             | | j	g: ONES
+		muxz	x,_FFFFFFFF	'!!	x x a             | | |	h: SQRT
+op_not		not	x		'!	x x | b           | | |	i: LOG
+op_neg		neg	x		'-	x x | | c         | | |	j: EXP
+op_abs		abs	x		'ABS	x x | | | d       | | |
+op_ncod		encod	x		'ENCOD	x x | | | | e     | | |
+op_dcod		decod	x		'DECOD	x x | | | | | f   | | |
+op_ones		ones	x		'ONES	x x | | | | | | g | | |
+		getqx	x		'	x x | | | | | | | h i j
+		alti	wr		'wr	m n | | | | | | | | | |
+		ret			'wr,op	m n a b c d e f g h i j	m: ?= var	(isolated)
+	_ret_	mov	x,y		'iso	m |			n: ?= var	(push)
+	_ret_	zerox	x,sz		'push	  n			x: use a..j
+
+sha_mod		mov	y,x		'	x x a b c d e       i j	a: >>
+rev_mod		not	y,x		'	x x | | | | | f g h | |	b: <<
+		alti	rd		'rd	m n | | | | | | | | | |	c: SAR
+		popa	x		'rd,op	m n a b c d e f g h i j	d: ROR
+		rev	x		'REV	x x | | | | | f | | | |	e: ROL
+		shl	x,y		'<<	x x | b | | | | g h | |	f: REV
+		shr	x,y		'>>	x x a | | | | f g | | |	g: ZEROX
+		sar	x,y		'SAR	x x | | c | | | | h | |	h: SIGNX
+		ror	x,y		'ROR	x x | | | d | | | | | |	i: +
+		rol	x,y		'ROL	x x | | | | e | | | | |	j: -
+		add	x,y		'+	x x | | | | | | | | i |
+		sub	x,y		'-	x x | | | | | | | | | j
+		alti	wr		'wr	m n | | | | | | | | | |
+		ret			'wr,op	m n a b c d e f g h i j	m: var ?= exp	(isolated)
+	_ret_	popa	x		'iso	m |			n: var ?= exp	(push)
+	_ret_	zerox	x,sz		'push	  n			x: use a..j
+
+log_mod		mov	y,x	wz	'	x x a b c d e f g h	a: &&
+		muxnz	y,_FFFFFFFF	'bool	x x a b c | | | | |	b: ^^
+		alti	rd		'rd	m n | | | | | | | |	c: ||
+		popa	x	wz	'rd,op	m n a b c d e f g h	d: &
+		muxnz	x,_FFFFFFFF	'bool	x x a b c | | | | |	e: ^
+		and	x,y		'&&,&	x x a | | d | | | |	f: |
+		xor	x,y		'^^,^	x x | b | | e | | |	g: #>
+		or	x,y		'||,|	x x | | c | | f | |	h: <#
+		fges	x,y		'#>	x x | | | | | | g |
+		fles	x,y		'<#	x x | | | | | | | h
+		alti	wr		'wr	m n | | | | | | | |
+		ret			'wr,op	m n a b c d e f g h	m: var ?= exp	(isolated)
+	_ret_	popa	x		'iso	m |			n: var ?= exp	(push)
+	_ret_	zerox	x,sz		'push	  n			x: use a..h
+
+mul_mod		abs	y,x	wc	'c=ys	x x   b c   e		a: *
+muu_mod		mov	y,x		'	x x a | | d | f		b: /
+		alti	rd		'rd	m n | | | | | |		c: //
+		popa	x		'rd,op	m n a b c d e f		d: SCA
+		testb	x,#31	wz	'z=xs	x x | b c | e |		e: SCAS
+		abs	x		'	x x | b c | e |		f: FRAC
+		qmul	x,y		'*,SCAx	x x a | | d e |
+		qdiv	x,y		'/,//	x x | b c | | |
+		qfrac	x,y		'FRAC	x x | | | | | f
+		getqx	x		'	x x a b | | | f
+    if_c_ne_z	neg	x		'*,/	x x | b | | | |
+		getqy	x		'	x x | | c d e |
+    if_z	neg	x		'//	x x | | c | | |
+		call	#.scas		'SCAS	x x | | | | e |
+		alti	wr		'wr	m n | | | | | |
+		ret			'wr,op	m n a b c d e f		m: var ?= exp	(isolated)
+	_ret_	popa	x		'iso	m |			n: var ?= exp	(push)
+	_ret_	zerox	x,sz		'push	  n			x: use a..f
+
+.scas		getqx	y		'adjust 64-bit product for SCAS
+    if_c_eq_z	jmp	#.scas2		'conditionally negate {x,y}
+		not	y
+		not	x
+		add	y,#1	wc
+		addx	x,#0
+.scas2		shl	x,#2		'x = {x,y}[61:30]
+		shr	y,#32-2
+	_ret_	or	x,y
+'
+'
+' ROTXY(x,y,t)
+' POLXY(r,t)
+' XYPOL(x,y)
+'
+rotxy		sub	ptra,#1*4	'a		a: ROTXY(x,y,t)
+		setq	#2-1		'a		b: POLXY(r,t)
+polxy		rdlong	w,ptra[-1]	'a b c		c: XYPOL(x,y)
+		setq	x		'a | |
+		qrotate	w,v		'a | |
+		qrotate	w,x		'| b |
+		qvector	w,x		'| | c
+		getqx	x		'a b c
+		wrlong	x,ptra[-1]	'a b c
+	_ret_	getqy	x		'a b c
+'
+'
+' Relational operators
+'
+op_rel		popa	y		'a b c d e f g		a: <
+		cmps	y,x	wcz	'a | c d e | g		b: <=
+		cmps	x,y	wcz	'| b | | | f |		c: ==
+	_ret_	muxc	x,_FFFFFFFF	'a | | | | f |		d: <>
+	_ret_	muxnc	x,_FFFFFFFF	'  b | | e   |		e: >=
+	_ret_	muxz	x,_FFFFFFFF	'    c |     |		f: >
+	_ret_	muxnz	x,_FFFFFFFF	'      d     |		g: <=>
+		muxc	x,_FFFFFFFF	'            g
+	_ret_	muxnz	x,#1		'            g
+'
+'
+' Alternate bytecode
+'
+alt_cod	_ret_	setq2	#$001		'no stacking, allows bytecodes above $C3 to have discrete lut entries
+
+mt
+j2
+'
+'
+'**********************
+'*  bytecode program  *
+'**********************
+'
+		orgh
+'
+'
+' repeat
+'   outa[7:2]++
+'
+pgm
+		byte	setup_reg	& $FF,	$7C		'setup reg $1FC
+		byte	n1+1+0		& $FF
+		byte	n1+1+7		& $FF
+		byte	setup_bfm	& $FF
+		byte	mod_inc		& $FF			'var++
+
+	'	byte	con_decod	& $FF,	12
+	'	byte	con_decod	& $FF,	0
+	'	byte	con_decod	& $FF,	16
+	'	byte	(bytemove_ + 0)	& $FF
+
+		byte	jmp_vars	& $FF,	(pgm-$) & $7F	'jmp #pgm
+
+
+'sstring		byte	1[25],4,0
+'tstring		byte	1[25],4,0

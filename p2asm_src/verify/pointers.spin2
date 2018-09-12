@@ -1,0 +1,40 @@
+DAT
+        org     0
+        rdbyte  x, ptra
+        rdword  x, ptrb
+        rdlong  x, ptra++
+        wrbyte  x, ptrb++
+        wrword  x, ptra--
+        wrlong  x, ptrb--
+        rdbyte  x, ++ptra
+        rdword  x, ++ptrb
+        rdlong  x, --ptra
+        wrbyte  x, --ptrb
+        wrword  x, ptra--
+        wrlong  x, ptrb--
+        rdbyte  x, ptra[1]
+        rdword  x, ptrb[-2]
+        rdlong  x, ptra++[3]
+        wrbyte  x, ptrb++[4]
+        wrword  x, ptra--[5]
+        wrlong  x, ptrb--[6]
+        rdbyte  x, ++ptra[7]
+        rdword  x, ++ptrb[8]
+        rdlong  x, --ptra[9]
+        wrbyte  x, --ptrb[10]
+        wrword  x, ptra--[11]
+        wrlong  x, ptrb--[12]
+        rdbyte  x, ptra[##10000]
+        rdword  x, ptrb[##-20000]
+        rdlong  x, ptra++[##30000]
+        wrbyte  x, ptrb++[##40000]
+        wrword  x, ptra--[##50000]
+        wrlong  x, ptrb--[##60000]
+        rdbyte  x, ++ptra[##70000]
+        rdword  x, ++ptrb[##80000]
+        rdlong  x, --ptra[##90000]
+        wrbyte  x, --ptrb[##100000]
+        wrword  x, ptra--[##110000]
+        wrlong  x, ptrb--[##120000]
+
+x       long    0

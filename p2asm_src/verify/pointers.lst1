@@ -1,0 +1,52 @@
+                   DAT
+00000 000                  org     0
+00000 000 fac46100         rdbyte  x, ptra
+00004 001 fae46180         rdword  x, ptrb
+00008 002 fb046161         rdlong  x, ptra++
+0000c 003 fc4461e1         wrbyte  x, ptrb++
+00010 004 fc54617f         wrword  x, ptra--
+00014 005 fc6461ff         wrlong  x, ptrb--
+00018 006 fac46141         rdbyte  x, ++ptra
+0001c 007 fae461c1         rdword  x, ++ptrb
+00020 008 fb04615f         rdlong  x, --ptra
+00024 009 fc4461df         wrbyte  x, --ptrb
+00028 00a fc54617f         wrword  x, ptra--
+0002c 00b fc6461ff         wrlong  x, ptrb--
+00030 00c fac46101         rdbyte  x, ptra[1]
+00034 00d fae4619e         rdword  x, ptrb[-2]
+00038 00e fb046163         rdlong  x, ptra++[3]
+0003c 00f fc4461e4         wrbyte  x, ptrb++[4]
+00040 010 fc54617b         wrword  x, ptra--[5]
+00044 011 fc6461fa         wrlong  x, ptrb--[6]
+00048 012 fac46147         rdbyte  x, ++ptra[7]
+0004c 013 fae461c8         rdword  x, ++ptrb[8]
+00050 014 fb046157         rdlong  x, --ptra[9]
+00054 015 fc4461d6         wrbyte  x, --ptrb[10]
+00058 016 fc546175         wrword  x, ptra--[11]
+0005c 017 fc6461f4         wrlong  x, ptrb--[12]
+00060 018 ff004013         rdbyte  x, ptra[##10000]
+00064 019 fac46110 
+00068 01a ff0067d8         rdword  x, ptrb[##-20000]
+0006c 01b fae461e0 
+00070 01c ff00583a         rdlong  x, ptra++[##30000]
+00074 01d fb046130 
+00078 01e ff00784e         wrbyte  x, ptrb++[##40000]
+0007c 01f fc446040 
+00080 020 ff005f9e         wrword  x, ptra--[##50000]
+00084 021 fc5460b0 
+00088 022 ff007f8a         wrlong  x, ptrb--[##60000]
+0008c 023 fc6461a0 
+00090 024 ff005088         rdbyte  x, ++ptra[##70000]
+00094 025 fac46170 
+00098 026 ff00709c         rdword  x, ++ptrb[##80000]
+0009c 027 fae46080 
+000a0 028 ff005750         rdlong  x, --ptra[##90000]
+000a4 029 fb046070 
+000a8 02a ff00773c         wrbyte  x, --ptrb[##100000]
+000ac 02b fc446160 
+000b0 02c ff005f29         wrword  x, ptra--[##110000]
+000b4 02d fc546050 
+000b8 02e ff007f15         wrlong  x, ptrb--[##120000]
+000bc 02f fc646140 
+                   
+000c0 030 00000000 x       long    0

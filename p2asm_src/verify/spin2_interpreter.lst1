@@ -1,0 +1,1313 @@
+                   CON	buff = 0
+                   
+00000 000          DAT		org
+                   
+                   '
+                   '******************************************
+                   '*  Spin2 Interpreter - work in progress  *
+                   '******************************************
+                   '
+00000 000          		org
+00000 000          spin2
+                   '		hubset	#$FF
+                   
+00000 000 fd67fe29 		setq2	#$1FF		'load SKIPF table for bytecodes, plus interpreter
+00004 001 ff000003 		rdlong	$000,##@main
+00008 002 fb040164 
+                   
+0000c 003 fd900000 		jmp	#beginit
+                   
+                   
+                   
+                   
+00010 004 ff000007 beginit		rdfast	#0,##@pgm	'point fifo to program
+00014 005 fc7c0134 
+                   
+00018 006 f9cff40f 		bmask	dira,#15	'make p7..p0 outputs
+0001c 007 ff00007e 		mov	outa,##$FCF0
+00020 008 f607f8f0 
+                   
+                   '		mov	x,##@sstring
+                   '		mov	y,##@tstring
+                   '		call	#str_cmp+1
+                   '		mov	outb,x
+                   '		bmask	dirb,#15
+                   '		jmp	#$
+                   
+00024 009 fd67fe2a 		push	#$1FF		'execute program
+00028 00a 0d658228 	_ret_	setq	#$0C1		'stack $Cx,$Dx,$Ex,$Fx, write flags
+                   '
+                   '
+                   ' Start of interpreter code
+                   '
+00380 0e0          		orgf	$0E0
+                   '
+                   '
+                   ' CASE value
+                   '
+                   ' entry:
+                   '
+                   '  x		value
+                   '  ptra[-1]	target
+                   '  ptra[-2]	address
+                   '
+                   ' exit:
+                   '
+                   '  x		target
+                   '  ptra[-1]	address
+                   '
+00380 0e0 fd63d213 casev		rfvar	w		'read address
+                   
+00384 0e1 f603cfe8 		mov	y,x		'value into y
+00388 0e2 fb07d15f 		popa	x		'pop target into x
+0038c 0e3 f20bcfe8 		cmp	y,x	wz	'value = target?
+                   
+00390 0e4 5d64002d   if_nz		ret			'if not equal, exit
+                   
+00394 0e5 fd900034 		jmp	#casex		'else, branch to address
+                   '
+                   '
+                   ' CASE value1..value2
+                   '
+                   ' entry:
+                   '
+                   '  x		value2		x
+                   '  ptra[-1]	value1		t
+                   '  ptra[-2]	target		u
+                   '  ptra[-3]	address
+                   '
+                   ' exit:
+                   '
+                   '  x		target
+                   '  ptra[-1]	address
+                   '
+00398 0e6 fd63d213 caser		rfvar	w		'read address
+                   
+0039c 0e7 fd640228 		setq	#1		'pop value1+target into t+u
+003a0 0e8 fb07d95e 		rdlong	t,--ptra[2]
+                   
+003a4 0e9 f253d1ec 		cmps	x,t	wc	'z = (value1 > value2)
+003a8 0ea fd6c186f 		modcz	0,_c	wz
+                   
+003ac 0eb 5253d7ec   if_nz		cmps	u,t	wc	'if nz, nc = (value1 <= target <= value2)
+003b0 0ec 1253d1eb   if_nz_and_nc	cmps	x,u	wc
+003b4 0ed a253d7e8   if_z		cmps	u,x	wc	'if z, nc = (value2 <= target <= value1)
+003b8 0ee 2253d9eb   if_z_and_nc	cmps	t,u	wc
+                   
+003bc 0ef 3d90000c   if_nc		jmp	#casex		'if in range, branch to address
+                   
+003c0 0f0 0603d1eb   _ret_		mov	x,u		'else, get target on top of stack, exit
+                   '
+                   '
+                   ' CASE done
+                   '
+                   ' entry:
+                   '
+                   '  x		target
+                   '  ptra[-1]	address
+                   '  ptra[-2]	new_x
+                   '
+                   ' exit:
+                   '
+                   '  x		new_x
+                   '  ptra[-1]
+                   '
+003c4 0f1 fd640228 cased		setq	#1		'pop address+new_x into w+x
+003c8 0f2 fb07d15e 		rdlong	x,--ptra[2]
+                   
+003cc 0f3 f103d3e4 casex		add	w,pbase		'branch to address
+003d0 0f4 0c7801e9   _ret_		rdfast	#0,w
+                   '
+                   '
+                   ' LOOKUP(target : ,,,value,,,)
+                   '
+                   '  if index == target
+                   '    result := value
+                   '    branch to address
+                   '  else index++
+                   '
+                   '
+                   '  x		value		x
+                   '  ptra[-1]	index		u
+                   '  ptra[-2]	target		v
+                   '  ptra[-3]	address		w
+                   '
+                   '
+003d4 0f5 fd640428 lookupv		setq	#2		'pop index+target+address into u+v+w
+003d8 0f6 fb07d35d 		rdlong	w,--ptra[3]
+                   
+003dc 0f7 f20bd7ea 		cmp	u,v	wz	'index == target?
+                   
+003e0 0f8 ad9fffe8   if_z		jmp	#casex		'if index == target, branch to address
+                   
+003e4 0f9 f603d1eb 		mov	x,u		'else, get index++ on stack top
+003e8 0fa f107d001 		add	x,#1
+                   
+003ec 0fb 0107f008   _ret_		add	ptra,#2*4	'..and unpop address+target
+                   '
+                   '
+                   ' LOOKDOWN(target : ,,,value,,,)
+                   '
+                   '  if value == target
+                   '    result := index
+                   '    branch to address
+                   '  else index++
+                   '
+                   '
+                   '  x		value		x
+                   '  ptra[-1]	index		u
+                   '  ptra[-2]	target		v
+                   '  ptra[-3]	address		w
+                   '
+                   '
+003f0 0fc fd640428 lookdnv		setq	#2		'pop index+target+address into u+v+w
+003f4 0fd fb07d35d 		rdlong	w,--ptra[3]
+                   
+003f8 0fe f20bd1ea 		cmp	x,v	wz	'value == target?
+                   
+003fc 0ff f603d1eb 		mov	x,u		'get index on stack top
+                   
+00400 100 ad9fffc8   if_z		jmp	#casex		'if value == target, branch to address
+                   
+00404 101 f107d001 		add	x,#1		'else, get index++ on stack top
+                   
+00408 102 0107f008   _ret_		add	ptra,#2*4	'..and unpop address+target
+                   '
+                   '
+                   ' LOOKUP(target : ,,,value1..value2,,,)
+                   '
+                   '  if value1 <= value2
+                   '    delta = value2 - value1
+                   '    if index <= target <= index + delta
+                   '      result = value1 - index + target
+                   '      branch to address
+                   '    else index += delta + 1
+                   '
+                   '  if value1 > value2
+                   '    delta = value1 - value2
+                   '    if index <= target <= index + delta
+                   '      result = value1 + index - target
+                   '      branch to address
+                   '    else index += delta + 1
+                   '
+                   '
+                   '  x		value2		x
+                   '  ptra[-1]	value1		t
+                   '  ptra[-2]	index		u
+                   '  ptra[-3]	target		v
+                   '  ptra[-4]	address		w
+                   '
+                   '
+0040c 103 fd640628 lookupr		setq	#3		'pop value1+index+target+address into t+u+v+w
+00410 104 fb07d35c 		rdlong	w,--ptra[4]	'
+                   
+00414 105 f1d3d1ec 		subs	x,t	wc	'z = (value1 > value2)
+00418 106 fd6c186f 		modcz	0,_c	wz	'
+                   
+0041c 107 f6c3d1e8 		negz	x		'x = delta
+                   
+00420 108 f213d5eb 		cmp	v,u	wc	'nc = (target >= index)
+00424 109 f103d1eb 		add	x,u		'x = index + delta
+00428 10a 3213d1ea   if_nc		cmp	x,v	wc	'&nc = (index + delta >= target)
+                   
+0042c 10b 3603d1ec   if_nc		mov	x,t		'if target within range,
+00430 10c 33e3d1eb   if_nc		sumnz	x,u		'..get result on stack top
+00434 10d 33c3d1ea   if_nc		sumz	x,v		'
+00438 10e 3d9fff90   if_nc		jmp	#casex		'..and branch
+                   
+0043c 10f f107d001 		add	x,#1		'else, get new index on stack top
+                   
+00440 110 0107f008   _ret_		add	ptra,#2*4	'..and unpop address+target
+                   '
+                   '
+                   ' LOOKDOWN(target : ,,,value1..value2,,,)
+                   '
+                   '  if value1 <= value2
+                   '    delta = value2 - value1
+                   '    if value1 <= target <= value2
+                   '      result = - value1 + index + target
+                   '      branch to address
+                   '    else index += delta + 1
+                   '
+                   '  if value1 > value2
+                   '    delta = value1 - value2
+                   '    if value2 <= target <= value1
+                   '      result = value1 + index - target
+                   '      branch to address
+                   '    else index += delta + 1
+                   '
+                   '
+                   '  x		value2		x
+                   '  ptra[-1]	value1		t
+                   '  ptra[-2]	index		u
+                   '  ptra[-3]	target		v
+                   '  ptra[-4]	address		w
+                   '
+                   '
+00444 111 fd640628 lookdnr		setq	#3		'pop value1+index+target+address into t+u+v+w
+00448 112 fb07d35c 		rdlong	w,--ptra[4]
+                   
+0044c 113 f253d1ec 		cmps	x,t	wc	'z = (value1 > value2)
+00450 114 fd6c186f 		modcz	0,_c	wz
+                   
+00454 115 5253d5ec   if_nz		cmps	v,t	wc	'if nz, nc = (value1 <= target <= value2)
+00458 116 1253d1ea   if_nz_and_nc	cmps	x,v	wc
+0045c 117 a253d5e8   if_z		cmps	v,x	wc	'if z, nc = (value2 <= target <= value1)
+00460 118 2253d9ea   if_z_and_nc	cmps	t,v	wc
+                   
+00464 119 36e3d1ec   if_nc		negnz	x,t		'if target within range,
+00468 11a 3103d1eb   if_nc		add	x,u		'..get result on stack top
+0046c 11b 33c3d1ea   if_nc		sumz	x,v
+00470 11c 3d9fff58   if_nc		jmp	#casex		'..and branch
+                   
+00474 11d 5183d1ec   if_nz		sub	x,t		'else, get new index on stack top
+00478 11e a2c3d1ec   if_z		subr	x,t
+0047c 11f f123d1eb 		addx	x,u		'(c=1, results in +1)
+                   
+00480 120 0107f008   _ret_		add	ptra,#2*4	'..and unpop address+target
+                   '
+                   '
+                   ' LOOKUP/LOOKDOWN done
+                   '
+                   '
+                   '  x		index
+                   '  ptra[-1]	target
+                   '  ptra[-2]	address
+                   '
+                   '
+00484 121 f607d000 lookd		mov	x,#0		'get zero on stack top
+                   
+00488 122 0187f008   _ret_		sub	ptra,#2*4	'pop target+address
+                   '
+                   '
+                   ' BYTEMOVE(dst,src,cnt)		z = 1
+                   ' WORDMOVE(dst,src,cnt)		z = 1
+                   ' LONGMOVE(dst,src,cnt)		z = 1
+                   '
+                   ' BYTEFILL(dst,val,cnt)		z = 0
+                   ' WORDFILL(dst,val,cnt)		z = 0
+                   ' LONGFILL(dst,val,cnt)		z = 0
+                   '
+0048c 123 fd640228 mov_fil		setq	#1		'a b c d e f	pop src/val into v	a: BYTEMOVE
+00490 124 fb07d35e 		rdlong	w,--ptra[2]	'a b c d e f	pop dst into w		b: WORDMOVE
+                   					'					c: LONGMOVE
+00494 125 f067d001 		shl	x,#1		'| b | | e |	if word, cnt*2
+00498 126 f067d002 		shl	x,#2		'| | c | | f	if long, cnt*4		d: BYTEFILL
+                   					'					e: WORDFILL
+0049c 127 f213d5e9 		cmp	v,w	wc	'a b c | | |	reverse move?		f: LONGFILL
+004a0 128 c103d5e8 	if_c	add	v,x		'a b c | | |
+004a4 129 c103d3e8 	if_c	add	w,x		'a b c | | |
+                   
+004a8 12a f9ffd400 		movbyts	v,#%%0000	'| | | d | |	byte fill
+004ac 12b f9ffd444 		movbyts	v,#%%1010	'| | | | e |	word fill
+                   
+004b0 12c fcdc0420 		rep	#2,#32		'| | | d e f	set fill pattern
+004b4 12d f98bed3f 		altd	pa,.f		'| | | d e f
+004b8 12e f60001ea 		mov	buff,v		'| | | d e f
+                   
+004bc 12f fb97d020 		tjz	x,#.exit	'if cnt=0, exit
+                   
+004c0 130 f057d001 		shr	x,#1	wc	'handle any stray byte
+004c4 131 c607ba01 	if_c	mov	a,#1
+004c8 132 cb4cee0d 	if_c	callpa	#%0111_0111,#.m
+                   
+004cc 133 f057d001 		shr	x,#1	wc	'handle any stray word
+004d0 134 c607ba02 	if_c	mov	a,#2
+004d4 135 cb4d760a 	if_c	callpa	#%1011_1011,#.m
+                   
+004d8 136 f2f7d020 .loop		cmpsub	x,#32	wc	'handle longs in blocks of up to 32
+004dc 137 c607ba20 	if_c	mov	a,#32
+004e0 138 3603bbe8 	if_nc	mov	a,x
+004e4 139 3607d000 	if_nc	mov	x,#0
+004e8 13a f603efdd 		mov	pb,a
+004ec 13b f187ee01 		sub	pb,#1
+004f0 13c f067ba02 		shl	a,#2
+004f4 13d fb4d9802 		callpa	#%1100_1100,#.m
+004f8 13e fd9fffdc 		jmp	#.loop
+                   
+004fc 13f 00000117 .f		long	1<<9 + buff - (bytemove_ & $FF)
+                   
+                   
+00500 140 f213d5e9 .m		cmp	v,w	wc	'move/fill routine, reverse move?
+                   
+00504 141 8183d5dd if_z_and_c	sub	v,a		'if reverse move, pre-dec pointers
+00508 142 8183d3dd if_z_and_c	sub	w,a
+                   
+0050c 143 fd63ec32 		skipf	pa		'set skip pattern for rdxxxx/wrxxxx
+                   
+00510 144 ad63ee28 if_z		setq	pb		'rdxxxx for move
+00514 145 ab0001ea if_z		rdlong	buff,v
+00518 146 aae001ea if_z		rdword	buff,v
+0051c 147 aac001ea if_z		rdbyte	buff,v
+                   
+00520 148 fd63ee28 		setq	pb		'wrxxxx for move/fill
+00524 149 fc6001e9 		wrlong	buff,w
+00528 14a fc5001e9 		wrword	buff,w
+0052c 14b fc4001e9 		wrbyte	buff,w
+                   
+00530 14c 7103d5dd if_nz_or_nc	add	v,a		'if forward move/fill, post-inc pointers
+00534 14d 7103d3dd if_nz_or_nc	add	w,a
+                   
+00538 14e 0b97d000 	_ret_	tjz	x,#.done	'if not done, return to caller
+                   
+                   
+0053c 14f fd63d02b .done		pop	x		'done, pop call stack
+00540 150 0b07d15f .exit	_ret_	popa	x		'pop top of stack into x, return to xbyte loop
+                   '
+                   '
+                   ' STRSIZE(adr) - returns size
+                   '
+00544 151 f603cfe8 str_siz		mov	y,x		'copy initial address
+00548 152 f607c600 		mov	z,#0		'reset byte index
+                   
+0054c 153 fd643e28 .block		setq	#31		'read 128-byte block
+00550 154 fb0001e8 		rdlong	buff,x
+                   
+00554 155 f96fc600 .byte		altgb	z,#buff		'get byte
+00558 156 f8e3d400 		getbyte	v
+                   
+0055c 157 fb97d404 		tjz	v,#.done	'if 0, done
+                   
+00560 158 f717c67f 		incmod	z,#127	wc	'inc and check index
+00564 159 3d9fffec 	if_nc	jmp	#.byte		'next byte?
+                   
+00568 15a f107d080 		add	x,#128		'next block
+0056c 15b fd9fffdc 		jmp	#.block
+                   
+                   
+00570 15c f183d1e7 .done		sub	x,y		'done, top of stack = string size
+00574 15d 0103d1e3 	_ret_	add	x,z
+                   '
+                   '
+                   ' STRCOMP(adra,adrb) - returns true/false
+                   '
+00578 15e fb07cf5f str_cmp		popa	y		'y=adra, x=adrb
+0057c 15f f607c600 		mov	z,#0		'reset byte index
+                   
+00580 160 fd641e28 .block		setq	#15		'read 64-byte blocks
+00584 161 fb0001e8 		rdlong	buff+00,x
+00588 162 fd641e28 		setq	#15
+0058c 163 fb0021e7 		rdlong	buff+16,y
+                   
+00590 164 f96fc600 .byte		altgb	z,#buff+00	'get bytes
+00594 165 f8e3d400 		getbyte	v
+00598 166 f96fc610 		altgb	z,#buff+16
+0059c 167 f8e3d200 		getbyte	w
+                   
+005a0 168 f20bd5e9 		cmp	v,w	wz	'bytes match?
+005a4 169 ab97d406 	if_z	tjz	v,#.yes		'if so, and both 0, strings match
+005a8 16a 5d900018 	if_nz	jmp	#.no		'if not, strings don't match
+                   
+005ac 16b f717c63f 		incmod	z,#63	wc	'inc and check index
+005b0 16c 3d9fffdc 	if_nc	jmp	#.byte		'next byte?
+                   
+005b4 16d f107d040 		add	x,#64		'next block
+005b8 16e f107ce40 		add	y,#64
+005bc 16f fd9fffc0 		jmp	#.block
+                   
+                   
+005c0 170 0667d001 .yes	_ret_	neg	x,#1		'strings match, top of stack = -1
+                   
+005c4 171 0607d000 .no	_ret_	mov	x,#0		'strings don't match, top of stack = 0
+                   '
+                   '
+                   ' a: EXEC(hubadr)
+                   ' b: CALL(cogadr)
+                   '
+005c8 172 fac3cfe8 cogx		rdbyte	y,x		'a	read start byte
+005cc 173 f107d001 		add	x,#1		'a
+                   
+005d0 174 f9b2f1e7 		setd	.reg,y		'a	set start register
+                   
+005d4 175 fac3d3e8 		rdbyte	w,x		'a	read length byte
+005d8 176 f107d001 		add	x,#1		'a
+                   
+005dc 177 fd63d228 		setq	w		'a	read in code
+005e0 178 fb0001e8 .reg		rdlong	0,x		'a
+                   
+005e4 179 f603cfe8 cogc		mov	y,x		'| b	read jump address
+005e8 17a fb07d15f 		popa	x		'a b	pop stack
+005ec 17b fd63ce2c 		jmp	y		'a b	jump to code
+                   '
+                   '
+                   ' Miscellaneous
+                   '
+005f0 17c fd63d010 popx		rfbyte	x		'a		a: pop #rfbyte
+005f4 17d f183f1e8 		sub	ptra,x		'a		b: LPIN(pin)
+005f8 17e fd63d058 lpin_		drvl	x		'| b		c: HPIN(pin)
+005fc 17f fd63d059 hpin_		drvh	x		'| | c		d: TPIN(pin)
+00600 180 fd63d05f tpin_		drvnot	x		'| | | d	e: ZPIN(pin)
+00604 181 fd63d050 zpin_		fltl	x		'| | | | e	f: AKPIN(pin)
+00608 182 fc0803e8 akpin_		akpin	x		'| | | | | f
+0060c 183 0b07d15f 	_ret_	popa	x		'a b c d e f
+                   
+00610 184 fd73d040 rpin_		testp	x	wc	'RPIN(pin)
+00614 185 0d63d06c 	_ret_	wrc	x
+                   
+00618 186 0a8bd1e8 rdpin_	_ret_	rdpin	x,x		'RDPIN(pin)
+                   
+0061c 187 0a83d1e8 rqpin_	_ret_	rqpin	x,x		'RQPIN(pin)
+                   
+00620 188 f7d7d001 wpin_		test	x,#1	wc	'a				a: WPIN(pin,val)
+00624 189 f603cfe8 pop2		mov	y,x		'| b c d e f			b: WRPIN(pin,val)
+00628 18a fd640228 		setq	#2-1		'a b c d e f			c: WXPIN(pin,val)
+0062c 18b fb07d15e 		rdlong	x,--ptra[2]	'a b c d e f			d: WYPIN(pin,val)
+00630 18c 0d63d25a 	_ret_	drvc	w		'a | | | | |			e: COGINIT(mode,pgm,ptr)	(push)
+00634 18d 0c03cfe9 	_ret_	wrpin	y,w		'  b | | | |			f: COGINIT(mode,pgm,ptr)	(no push)
+00638 18e 0c13cfe9 	_ret_	wxpin	y,w		'    c | | |			g: HUBSET(val)
+0063c 18f 0c23cfe9 	_ret_	wypin	y,w		'      d | |			h: COGSTOP(cog)
+00640 190 fd63ce28 		setq	y		'        e f			i: LOCKRET(lock)
+00644 191 fcf3d1e9 		coginit	x,w	wc	'        e f			j: LOCKREL(lock)
+00648 192 0447d01f 	_ret_	bitc	x,#31		'        e |			k: COGATN(mask)
+0064c 193 fd63d000 hubset_		hubset	x		'          | g
+00650 194 fd63d003 cogstop_	cogstop	x		'          | | h
+00654 195 fd63d005 lockret_	lockret	x		'          | | | i
+00658 196 fd63d007 lockrel_	lockrel	x		'          | | | | j
+0065c 197 fd63d03f cogatn_		cogatn	x		'          | | | | | k
+00660 198 0b07d15f 	_ret_	popa	x		'          f g h i j k
+                   
+00664 199 fc67d161 pushv		pusha	x		'a b c d e f g h		a: read INA
+00668 19a 0603d1fe 	_ret_	mov	x,ina		'a | | | | | | |		b: read INB
+0066c 19b 0603d1ff 	_ret_	mov	x,inb		'  b | | | | | |		c: GETRND
+00670 19c 0d63d01b 	_ret_	getrnd	x		'    c | | | | |		d: GETCT
+00674 19d 0d63d01a 	_ret_	getct	x		'      d | | | |		e: COGID
+00678 19e 0d63d001 	_ret_	cogid	x		'        e | | |		f: LOCKNEW
+0067c 19f fd73d004 		locknew	x	wc	'          f | |		g: POLLATN
+00680 1a0 fd701c24 		pollatn		wc	'          | g |		h: POLLPAT
+00684 1a1 fd701024 		pollpat		wc	'          | | h		i: LOCKCHK(lock)
+00688 1a2 fd73d007 lockchk_	lockrel	x	wc	'          | | | i  		j: COGCHK(cog)
+0068c 1a3 0447d01f 	_ret_	bitc	x,#31		'          f | | i  		k: LOCKTRY(lock)
+00690 1a4 fd73d001 cogchk_		cogid	x	wc	'            | |   j
+00694 1a5 fd73d006 locktry_	locktry	x	wc	'            | |   | k
+00698 1a6 0583d1d8 	_ret_	muxc	x,_FFFFFFFF	'            g h   j k
+                   
+0069c 1a7 f603cfe8 setpat_		mov	y,x		'SETPAT(equal,port,mask,data)
+006a0 1a8 fd640628 		setq	#4-1
+006a4 1a9 fb07d15c 		rdlong	x,--ptra[4]
+006a8 1aa f40fd21f 		testb	w,#31	wz
+006ac 1ab f417d41f 		testb	v,#31	wc
+006b0 1ac 0bf3d7e7 	_ret_	setpat	u,y
+                   
+006b4 1ad fd63ce1a cntp		getct	y		'a b		a: POLLCNT(tick)
+006b8 1ae f2b3cfe8 		cmpm	y,x	wc	'a b		b: WAITCNT(tick)
+006bc 1af cd9ffff4 	if_c	jmp	#cntp		'| b
+006c0 1b0 0b07d15f 	_ret_	popa	x		'| b
+006c4 1b1 0583d1d8 	_ret_	muxc	x,_FFFFFFFF	'a
+                   
+006c8 1b2 5d701c24 waitv	if_nz	pollatn		wc	'z=0: WAITATN
+006cc 1b3 ad701024 	if_z	pollpat		wc	'z=1: WAITPAT
+006d0 1b4 3d9ffff4 	if_nc	jmp	#waitv
+006d4 1b5 fd64002d 		ret
+                   '
+                   '
+                   ' Read bitfield
+                   '
+006d8 1b6 00000000 rdf		nop			'read variable into x
+006dc 1b7 f043d1df 		shr	x,fb		'lsb-justify bitfield
+                   
+006e0 1b8 f40fbe05 		testb	fb,#5	wz	'reverse bitfield?
+006e4 1b9 ad900004 	if_z	jmp	#.rev
+                   
+006e8 1ba 074bd1dc 	_ret_	zerox	x,sz	wz	'no, trim it
+                   
+006ec 1bb fd63d069 .rev		rev	x		'yes, reverse and shift it
+006f0 1bc 004bd1e0 	_ret_	shr	x,fr	wz
+                   '
+                   '
+                   ' Write bitfield
+                   '
+006f4 1bd f603bde8 wrf		mov	fd,x		'get bitfield data
+                   
+006f8 1be f40fbe05 		testb	fb,#5	wz	'reverse bitfield?
+006fc 1bf ad63bc69 	if_z	rev	fd
+00700 1c0 a043bde0 	if_z	shr	fd,fr
+                   
+00704 1c1 f063bddf wrfs		shl	fd,fb		'position bitfield data
+                   
+00708 1c2 f9cbc5dc 		bmask	fm,sz		'make bitfield mask
+0070c 1c3 f063c5df 		shl	fm,fb
+                   
+00710 1c4 f603c3e8 		mov	fx,x		'preserve x
+00714 1c5 fd604224 		stalli			'protect variable
+00718 1c6 00000000 wrf_rd		nop			'read variable into x
+0071c 1c7 fd63c428 		setq	fm		'set bitfield mask
+00720 1c8 f9f3d1de 		muxq	x,fd		'mux bitfield data into x
+00724 1c9 00000000 wrf_wr		nop			'write x back to variable
+00728 1ca fd604024 		allowi			'unprotect variable
+0072c 1cb 0603d1e1 	_ret_	mov	x,fx		'restore x
+                   '
+                   '
+                   ' Read/write instructions
+                   '
+00730 1cc facbd1dd rd_byte		rdbyte	x,a	wz
+00734 1cd faebd1dd rd_word		rdword	x,a	wz
+00738 1ce fb0bd1dd rd_long		rdlong	x,a	wz
+0073c 1cf f60bd000 rd_reg		mov	x,0	wz
+00740 1d0 faabd1dd rd_lut		rdlut	x,a	wz
+00744 1d1 fda001b6 rd_field	call	#\rdf
+                   
+00748 1d2 fc43d1dd wr_byte		wrbyte	x,a
+0074c 1d3 fc53d1dd wr_word		wrword	x,a
+00750 1d4 fc63d1dd wr_long		wrlong	x,a
+00754 1d5 f60001e8 wr_reg		mov	0,x
+00758 1d6 fc33d1dd wr_lut		wrlut	x,a
+0075c 1d7 fda001bd wr_field	call	#\wrf
+                   '
+                   '
+                   ' Data
+                   '
+00760 1d8 ffffffff _FFFFFFFF	long	$FFFFFFFF
+                   
+00764 1d9          dcall		res	1	'call data
+                   
+00764 1da          rd		res	1	'variable data
+00764 1db          wr		res	1
+00764 1dc          sz		res	1
+00764 1dd          a		res	1
+                   
+00764 1de          fd		res	1	'bitfield data
+00764 1df          fb		res	1
+00764 1e0          fr		res	1
+00764 1e1          fx		res	1
+00764 1e2          fm		res	1
+                   
+00764 1e3          z		res	1	'z/pbase/vbase/dbase/y/x/w/v/u/t must remain in order
+00764 1e4          pbase		res	1
+00764 1e5          vbase		res	1
+00764 1e6          dbase		res	1
+00764 1e7          y		res	1
+00764 1e8          x		res	1
+00764 1e9          w		res	1
+00764 1ea          v		res	1
+00764 1eb          u		res	1
+00764 1ec          t		res	1
+                   '
+                   '
+                   '*********
+                   '*  LUT  *
+                   '*********
+                   '
+00764 200          		org	$200	'main bytecodes
+                   
+00764 200          main
+                   
+00764 200 00000300 		long	drop	|                           %0 << 10	'00	drop anchor, !try, !result	(must be bytecodes 0..3)
+00768 201 00000300 		long	drop	|                           %0 << 10	'01	drop anchor, !try,  result
+0076c 202 00000300 		long	drop	|                           %0 << 10	'02	drop anchor,  try, !result
+00770 203 00000300 		long	drop	|                           %0 << 10	'03	drop anchor,  try,  result
+                   
+00774 204 00001322 		long	retn	|                        %0100 << 10	'04	ABORT result			(2 LSBs must be 0/1/2/3)
+00778 205 00000b22 		long	retn	|                         %010 << 10	'05	ABORT x
+0077c 206 00001322 		long	retn	|                        %0100 << 10	'06	RETURN result
+00780 207 00000b22 		long	retn	|                         %010 << 10	'07	RETURN x
+                   
+00784 208 0180b308 		long	callnin	|            %0110000000101100 << 10	'08	call obj.sub
+00788 209 00c01b09 		long	callobj	|            %011000000000110_ << 10	'09	call obj.sub[]
+0078c 20a 00c05309 		long	callobj	|            %011000000010100_ << 10	'0A	call obj[].sub
+00790 20b 00c00309 		long	callobj	|            %011000000000000_ << 10	'0B	call obj[].sub[]
+00794 20c 01bfbb08 		long	callnin	|            %0110111111101110 << 10	'0C	call sub
+00798 20d 001bf30c 		long	callsub	|            %011011111100____ << 10	'0D	call sub[]
+0079c 20e 00000314 		long	callptr	|            %0000____________ << 10	'0E	call @ptr
+                   
+007a0 20f 0003fb2c jmp_vars	long	branch	|                  %0011111110 << 10	'0F	jmp  rfvars
+007a4 210 0003932c 		long	branch	|                  %0011100100 << 10	'10	jz   rfvars
+007a8 211 0001d32c 		long	branch	|                  %0001110100 << 10	'11	jnz  rfvars
+007ac 212 0003c32c 		long	branch	|                  %0011110000 << 10	'12	tjz  rfvars
+007b0 213 00007b2c 		long	branch	|                  %0000011110 << 10	'13	djnz rfvars
+                   
+007b4 214 000000e0 		long	casev	|                           %0 << 10	'14	CASE value
+007b8 215 000000e6 		long	caser	|                           %0 << 10	'15	CASE value1..value2
+007bc 216 000000f1 		long	cased	|                           %0 << 10	'16	CASE done
+                   
+007c0 217 000000f5 		long	lookupv	|                           %0 << 10	'17	LOOKUP  (target : ,,,value,,,)
+007c4 218 000000fc 		long	lookdnv	|                           %0 << 10	'18	LOOKDOWN(target : ,,,value,,,)
+007c8 219 00000103 		long	lookupr	|                           %0 << 10	'19	LOOKUP  (target : ,,,value1..value2,,,)
+007cc 21a 00000111 		long	lookdnr	|                           %0 << 10	'1A	LOOKDOWN(target : ,,,value1..value2,,,)
+007d0 21b 00000121 		long	lookd	|                           %0 << 10	'1B	LOOKUP/LOOKDOWN done
+                   
+007d4 21c 0001f17c 		long	popx	|                    %01111100 << 10	'1C	pop #rfbyte
+                   
+007d8 21d 00020172 		long	cogx	|                  %0010000000 << 10	'1D	EXEC(hubaddr)
+007dc 21e 00000179 		long	cogc	|                         %000 << 10	'1E	CALL(cogaddr)
+                   
+007e0 21f 01f9e189 		long	pop2	|            %0111111001111000 << 10	'1F	COGINIT(mode,pgm,ptr)	(no push)
+007e4 220 0001e189 		long	pop2	|                  %0001111000 << 10	'20	COGINIT(mode,pgm,ptr)	(push)
+007e8 221 00003994 		long	cogstop_|                       %01110 << 10	'21	COGSTOP(cog)
+007ec 222 00007999 		long	pushv	|                      %011110 << 10	'22	COGID
+007f0 223 000009a4 		long	cogchk_	|                         %010 << 10	'23	COGCHK(cog)
+                   
+007f4 224 00001999 		long	pushv	|                        %0110 << 10	'24	GETRND
+007f8 225 00003999 		long	pushv	|                       %01110 << 10	'25	GETCNT
+007fc 226 000031ad 		long	cntp	|                       %01100 << 10	'26	POLLCNT(tick)
+00800 227 000001ad 		long	cntp	|                        %0000 << 10	'27	WAITCNT(tick)
+                   
+00804 228 00000988 		long	wpin_	|                       %00010 << 10	'28	WPIN(pin,val)
+00808 229 0000797e 		long	lpin_	|                      %011110 << 10	'29	LPIN(pin)
+0080c 22a 0000397f 		long	hpin_	|                       %01110 << 10	'2A	HPIN(pin)
+00810 22b 00001980 		long	tpin_	|                        %0110 << 10	'2B	TPIN(pin)
+00814 22c 00000981 		long	zpin_	|                         %010 << 10	'2C	ZPIN(pin)
+00818 22d 00000184 		long	rpin_	|                           %0 << 10	'2D	RPIN(pin)
+                   
+0081c 22e 00002189 		long	pop2	|                       %01000 << 10	'2E	WRPIN(pin,val)
+00820 22f 00006189 		long	pop2	|                      %011000 << 10	'2F	WXPIN(pin,val)
+00824 230 0000e189 		long	pop2	|                     %0111000 << 10	'30	WYPIN(pin,val)
+00828 231 00000182 		long	akpin_	|                          %00 << 10	'31	AKPIN(pin)
+0082c 232 00000186 		long	rdpin_	|                           %0 << 10	'32	RDPIN(pin)
+00830 233 00000187 		long	rqpin_	|                           %0 << 10	'33	RQPIN(pin)
+                   
+00834 234 00001b36 con_byte	long	const	|                        %0110 << 10	'34	constant rfbyte
+00838 235 000fbb36 		long	const	|                 %01111101110 << 10	'35	constant rfbyte!
+0083c 236 00007b36 		long	const	|                      %011110 << 10	'36	constant rfword
+00840 237 000efb36 		long	const	|                 %01110111110 << 10	'37	constant rfword!
+00844 238 0001fb36 		long	const	|                    %01111110 << 10	'38	constant rflong
+00848 239 0003bb36 con_decod	long	const	|                   %011101110 << 10	'39	constant rfbyte + decod
+0084c 23a 0007bb36 		long	const	|                 %00111101110 << 10	'3A	constant rfbyte + decod + not
+00850 23b 0017bb36 		long	const	|                %010111101110 << 10	'3B	constant rfbyte + decod + dec
+00854 23c 0037bb36 		long	const	|               %0110111101110 << 10	'3c	constant rfbyte + decod + neg
+                   
+00858 23d 00000199 		long	pushv	|	                   %00 << 10	'3D	read reg[$1FE]
+0085c 23e 00000999 		long	pushv	|	                  %010 << 10	'3E	read reg[$1FF]
+                   
+00860 23f 0018735f reg_1FA		long	var_reg	|          %0_11_00_00_11_1_00 << 10	'3F	setup reg[$1FA]
+00864 240 0018735f 		long	var_reg	|          %0_11_00_00_11_1_00 << 10	'40	setup reg[$1FB]
+00868 241 0018735f 		long	var_reg	|          %0_11_00_00_11_1_00 << 10	'41	setup reg[$1FC]
+0086c 242 0018735f 		long	var_reg	|          %0_11_00_00_11_1_00 << 10	'42	setup reg[$1FD]
+00870 243 0018735f 		long	var_reg	|          %0_11_00_00_11_1_00 << 10	'43	setup reg[$1FE]
+00874 244 0018735f 		long	var_reg	|          %0_11_00_00_11_1_00 << 10	'44	setup reg[$1FF]
+                   
+00878 245 00061b61 setup_reg	long	var_cog	|             %0_11_00_00_11_0 << 10	'45	setup reg[rfvars]
+0087c 246 00060361 		long	var_cog	|             %0_11_00_00_00_0 << 10	'46	setup reg[rfvars][pop index]
+                   
+00880 247 0001fb61 		long	var_cog	|             %0_00_11_11_11_0 << 10	'47	setup lut[rfvars]
+00884 248 0001e361 		long	var_cog	|             %0_00_11_11_00_0 << 10	'48	setup lut[rfvars][pop index]
+                   
+00888 249 01b7f34d 		long	var_b	|       %0_110_110_11111_110_0 << 10	'49	setup byte[pbase + rfvar]
+0088c 24a 01b7eb4d 		long	var_b	|       %0_110_110_11111_101_0 << 10	'4A	setup byte[vbase + rfvar]
+00890 24b 01b7db4d 		long	var_b	|       %0_110_110_11111_011_0 << 10	'4B	setup byte[dbase + rfvar]
+                   
+00894 24c 01b3b34d 		long	var_b	|       %0_110_110_01110_110_0 << 10	'4C	setup byte[pbase + rfvar][pop index]
+00898 24d 01b3ab4d 		long	var_b	|       %0_110_110_01110_101_0 << 10	'4D	setup byte[vbase + rfvar][pop index]
+0089c 24e 01b39b4d 		long	var_b	|       %0_110_110_01110_011_0 << 10	'4E	setup byte[dbase + rfvar][pop index]
+                   
+008a0 24f 036ff34d 		long	var_b	|      %01_101_101_11111_110_0 << 10	'4F	setup word[pbase + rfvar]
+008a4 250 036feb4d 		long	var_b	|      %01_101_101_11111_101_0 << 10	'50	setup word[vbase + rfvar]
+008a8 251 036fdb4d 		long	var_b	|      %01_101_101_11111_011_0 << 10	'51	setup word[dbase + rfvar]
+                   
+008ac 252 036b334d 		long	var_b	|      %01_101_101_01100_110_0 << 10	'52	setup word[pbase + rfvar][pop index]
+008b0 253 036b2b4d 		long	var_b	|      %01_101_101_01100_101_0 << 10	'53	setup word[vbase + rfvar][pop index]
+008b4 254 036b1b4d 		long	var_b	|      %01_101_101_01100_011_0 << 10	'54	setup word[dbase + rfvar][pop index]
+                   
+008b8 255 06dff34d 		long	var_b	|     %011_011_011_11111_110_0 << 10	'55	setup long[pbase + rfvar]
+008bc 256 06dfeb4d 		long	var_b	|     %011_011_011_11111_101_0 << 10	'56	setup long[vbase + rfvar]
+008c0 257 06dfdb4d 		long	var_b	|     %011_011_011_11111_011_0 << 10	'57	setup long[dbase + rfvar]
+                   
+008c4 258 06dab34d 		long	var_b	|     %011_011_011_01010_110_0 << 10	'58	setup long[pbase + rfvar][pop index]
+008c8 259 06daab4d 		long	var_b	|     %011_011_011_01010_101_0 << 10	'59	setup long[vbase + rfvar][pop index]
+008cc 25a 06da9b4d 		long	var_b	|     %011_011_011_01010_011_0 << 10	'5A	setup long[dbase + rfvar][pop index]
+                   
+008d0 25b 00036b54 		long	var_a	|                %0_110_110_10 << 10	'5B	setup byte[pop address]
+008d4 25c 0006db54 		long	var_a	|               %01_101_101_10 << 10	'5C	setup word[pop address]
+008d8 25d 000dbb54 		long	var_a	|              %011_011_011_10 << 10	'5D	setup long[pop address]
+                   
+008dc 25e 001b1b51 		long	var_i	|             %0_110_110_00110 << 10	'5E	setup byte[pop base][pop index]
+008e0 25f 00369351 		long	var_i	|            %01_101_101_00100 << 10	'5F	setup word[pop base][pop index]
+008e4 260 006d8b51 		long	var_i	|           %011_011_011_00010 << 10	'60	setup long[pop base][pop index]
+                   
+008e8 261 0000436b setup_bfm	long	bfield	|                      %010000 << 10	'61	setup multi-bit field, pop bottom and top bits
+008ec 262 01e0336b setup_bfs	long	bfield	|            %0111100000001100 << 10	'62	setup single-bit field, pop bit
+                   
+008f0 263 0000037b 		long	var_rd	|                          %00 << 10	'63	@var		(push)
+008f4 264 0001cb7b 		long	var_rd	|                    %01110010 << 10	'64	var		(push)
+008f8 265 0000037f 		long	var_wr	|                         %000 << 10	'65	var := exp	(isolated)
+008fc 266 0000137f 		long	var_wr	|                        %0100 << 10	'66	var := exp	(push)
+                   
+00900 267 003ecb83 mod_inc		long	mod_iso	|             %000111110110010 << 10	'67	++var, var++	(isolated)
+00904 268 003dcb83 mod_dec		long	mod_iso	|             %000111101110010 << 10	'68	--var, var--	(isolated)
+00908 269 019d6384 		long	mod_psh	|           %0110011101011000_ << 10	'69	++var		(push)
+0090c 26a 019ce384 		long	mod_psh	|           %0110011100111000_ << 10	'6A	--var		(push)
+00910 26b 009f2384 		long	mod_psh	|            %010011111001000_ << 10	'6B	var++		(push)
+00914 26c 009ea384 		long	mod_psh	|            %010011110101000_ << 10	'6C	var--		(push)
+00918 26d 0037cb83 		long	mod_iso	|             %000110111110010 << 10	'6D	var!!		(isolated)
+0091c 26e 009ba384 		long	mod_psh	|            %010011011101000_ << 10	'6E	var!!		(push)
+00920 26f 002fcb83 		long	mod_iso	|             %000101111110010 << 10	'6F	var!		(isolated)
+00924 270 0097a384 		long	mod_psh	|            %010010111101000_ << 10	'70	var!		(push)
+00928 271 011f4b83 		long	mod_iso	|            %0100011111010010 << 10	'71	var\new	(swap)
+0092c 272 003f0b83 		long	mod_iso	|             %000111111000010 << 10	'72	??var		(isolated)
+00930 273 009f8384 		long	mod_psh	|            %010011111100000_ << 10	'73	??var		(push)
+                   
+00934 274 000013ea 		long	op_rel	|                        %0100 << 10	'74	exp <   exp
+00938 275 00002bea 		long	op_rel	|                       %01010 << 10	'75	exp <=  exp
+0093c 276 000073ea 		long	op_rel	|                      %011100 << 10	'76	exp ==  exp
+00940 277 0000f3ea 		long	op_rel	|                     %0111100 << 10	'77	exp <>  exp
+00944 278 000033ea 		long	op_rel	|                       %01100 << 10	'78	exp >=  exp
+00948 279 00000bea 		long	op_rel	|                        %0010 << 10	'79	exp >   exp
+0094c 27a 0001f3ea 		long	op_rel	|                   %001111100 << 10	'7A	exp <=> exp
+                   
+00950 27b 007fbb97 		long	op_notb	|              %01111111101110 << 10	'7B	!!exp
+00954 27c 0003fb9c 		long	op_not	|              %011111110_____ << 10	'7C	!exp
+00958 27d 0001fb9d 		long	op_neg	|              %01111110______ << 10	'7D	-exp
+0095c 27e 0000fb9e 		long	op_abs	|              %0111110_______ << 10	'7E	ABS exp
+00960 27f 00007b9f 		long	op_ncod	|              %011110________ << 10	'7F	ENCOD exp
+00964 280 00003ba0 		long	op_dcod	|              %01110_________ << 10	'80	DECOD exp
+00968 281 00001ba1 		long	op_ones	|              %0110__________ << 10	'81	ONES exp
+0096c 282 002ffb98 		long	op_sqrt	|              %0101111111110_ << 10	'82	SQRT exp
+00970 283 0017fb99 		long	op_log	|              %010111111110__ << 10	'83	LOG exp
+00974 284 000bfb9a 		long	op_exp	|              %01011111110___ << 10	'84	EXP exp
+                   
+00978 285 007edba7 		long	sha_mod	|              %01111110110110 << 10	'85	exp >> exp
+0097c 286 007f5ba7 		long	sha_mod	|              %01111111010110 << 10	'86	exp << exp
+00980 287 007ddba7 		long	sha_mod	|              %01111101110110 << 10	'87	exp SAR exp
+00984 288 007bdba7 		long	sha_mod	|              %01111011110110 << 10	'88	exp ROR exp
+00988 289 0077dba7 		long	sha_mod	|              %01110111110110 << 10	'89	exp ROL exp
+0098c 28a 003f4ba8 		long	rev_mod	|              %0111111010010_ << 10	'8A	exp REV exp
+00990 28b 003f2ba8 		long	rev_mod	|              %0111111001010_ << 10	'8B	exp ZEROX exp
+00994 28c 003eaba8 		long	rev_mod	|              %0111110101010_ << 10	'8C	exp SIGNX exp
+00998 28d 006fdba7 		long	sha_mod	|              %01101111110110 << 10	'8D	exp + exp
+0099c 28e 005fdba7 		long	sha_mod	|              %01011111110110 << 10	'8E	exp - exp
+                   
+009a0 28f 001f13b7 		long	log_mod	|                %011111000100 << 10	'8F	exp && exp
+009a4 290 001e93b7 		long	log_mod	|                %011110100100 << 10	'90	exp ^^ exp
+009a8 291 001d93b7 		long	log_mod	|                %011101100100 << 10	'91	exp || exp
+009ac 292 001f5bb7 		long	log_mod	|                %011111010110 << 10	'92	exp & exp
+009b0 293 001edbb7 		long	log_mod	|                %011110110110 << 10	'93	exp ^ exp
+009b4 294 001ddbb7 		long	log_mod	|                %011101110110 << 10	'94	exp | exp
+009b8 295 001bdbb7 		long	log_mod	|                %011011110110 << 10	'95	exp #> exp
+009bc 296 0017dbb7 		long	log_mod	|                %010111110110 << 10	'96	exp <# exp
+                   
+009c0 297 00fb6bc6 		long	muu_mod	|            %011111011011010_ << 10	'97	exp * exp
+009c4 298 01e51bc5 		long	mul_mod	|            %0111100101000110 << 10	'98	exp / exp
+009c8 299 019d1bc5 		long	mul_mod	|            %0110011101000110 << 10	'99	exp // exp
+009cc 29a 00ef6bc6 		long	muu_mod	|            %011101111011010_ << 10	'9A	exp SCA exp
+009d0 29b 015e1bc5 		long	mul_mod	|            %0101011110000110 << 10	'9B	exp SCAS exp
+009d4 29c 00f9ebc6 		long	muu_mod	|            %011111001111010_ << 10	'9C	exp FRAC exp
+                   
+009d8 29d 01fdcb94 		long	una_iso	|          %000111111101110010 << 10	'9D	!!= var		(isolated)
+009dc 29e 01fbcb94 		long	una_iso	|          %000111111011110010 << 10	'9E	!= var		(isolated)
+009e0 29f 01f7cb94 		long	una_iso	|          %000111110111110010 << 10	'9F	-= var		(isolated)
+009e4 2a0 01efcb94 		long	una_iso	|          %000111101111110010 << 10	'A0	ABS= var	(isolated)
+009e8 2a1 01dfcb94 		long	una_iso	|          %000111011111110010 << 10	'A1	ENCOD= var	(isolated)
+009ec 2a2 01bfcb94 		long	una_iso	|          %000110111111110010 << 10	'A2	DECOD= var	(isolated)
+009f0 2a3 017fcb94 		long	una_iso	|          %000101111111110010 << 10	'A3	ONES= var	(isolated)
+009f4 2a4 00ff8b94 		long	una_iso	|          %000011111111100010 << 10	'A4	SQRT= var	(isolated)
+009f8 2a5 00ff4b94 		long	una_iso	|          %000011111111010010 << 10	'A5	LOG= var	(isolated)
+009fc 2a6 00fecb94 		long	una_iso	|          %000011111110110010 << 10	'A6	EXP= var	(isolated)
+                   
+00a00 2a7 003ecba7 		long	sha_mod	|             %000111110110010 << 10	'A7	var >>= exp	(isolated)
+00a04 2a8 003f4ba7 		long	sha_mod	|             %000111111010010 << 10	'A8	var <<= exp	(isolated)
+00a08 2a9 003dcba7 		long	sha_mod	|             %000111101110010 << 10	'A9	var SAR= exp	(isolated)
+00a0c 2aa 003bcba7 		long	sha_mod	|             %000111011110010 << 10	'AA	var ROR= exp	(isolated)
+00a10 2ab 0037cba7 		long	sha_mod	|             %000110111110010 << 10	'AB	var ROL= exp	(isolated)
+00a14 2ac 001f43a8 		long	rev_mod	|             %00011111010000_ << 10	'AC	var REV= exp	(isolated)
+00a18 2ad 001f23a8 		long	rev_mod	|             %00011111001000_ << 10	'AD	var ZEROX= exp	(isolated)
+00a1c 2ae 001ea3a8 		long	rev_mod	|             %00011110101000_ << 10	'AE	var SIGNX= exp	(isolated)
+00a20 2af 002fcba7 		long	sha_mod	|             %000101111110010 << 10	'AF	var += exp	(isolated)
+00a24 2b0 001fcba7 		long	sha_mod	|             %000011111110010 << 10	'B0	var -= exp	(isolated)
+                   
+00a28 2b1 000f03b7 		long	log_mod	|               %0001111000000 << 10	'B1	var &&= exp	(isolated)
+00a2c 2b2 000e83b7 		long	log_mod	|               %0001110100000 << 10	'B2	var ^^= exp	(isolated)
+00a30 2b3 000d83b7 		long	log_mod	|               %0001101100000 << 10	'B3	var ||= exp	(isolated)
+00a34 2b4 000f4bb7 		long	log_mod	|               %0001111010010 << 10	'B4	var &= exp	(isolated)
+00a38 2b5 000ecbb7 		long	log_mod	|               %0001110110010 << 10	'B5	var ^= exp	(isolated)
+00a3c 2b6 000dcbb7 		long	log_mod	|               %0001101110010 << 10	'B6	var |= exp	(isolated)
+00a40 2b7 000bcbb7 		long	log_mod	|               %0001011110010 << 10	'B7	var #>= exp	(isolated)
+00a44 2b8 0007cbb7 		long	log_mod	|               %0000111110010 << 10	'B8	var <#= exp	(isolated)
+                   
+00a48 2b9 007b6bc6 		long	muu_mod	|           %0001111011011010_ << 10	'B9	var *= exp	(isolated)
+00a4c 2ba 00e51bc5 		long	mul_mod	|           %00011100101000110 << 10	'BA	var /= exp	(isolated)
+00a50 2bb 009d1bc5 		long	mul_mod	|           %00010011101000110 << 10	'BB	var //= exp	(isolated)
+00a54 2bc 006f6bc6 		long	muu_mod	|           %0001101111011010_ << 10	'BC	var SCA= exp	(isolated)
+00a58 2bd 005e1bc5 		long	mul_mod	|           %00001011110000110 << 10	'BD	var SCAS= exp	(isolated)
+00a5c 2be 0079ebc6 		long	muu_mod	|           %0001111001111010_ << 10	'BE	var FRAC= exp	(isolated)
+                   
+00a60 2bf 000003f3 altcode		long	alt_cod	|                           %0 << 10	'BF	alternate bytecode
+                   
+                   				'these bytecodes C0..C3 are expanded at runtime to Cx/Dx/Ex/Fx
+                   
+00a64 2c0 00000336 n1		long	const	|                         %000 << 10	'C0/Cx	constant -1..14
+00a68 2c1 00000343 		long	var_loc	|                      %00_000 << 10	'C1/Dx	read  long[dbase][0..15]
+00a6c 2c2 00006343 		long	var_loc	|                   %00_11_000 << 10	'C2/Ex	write long[dbase][0..15]	(isolated)
+00a70 2c3 0001e343 		long	var_loc	|               %000_11_11_000 << 10	'C3/Fx	setup long[dbase][0..15]
+                   
+                   				'these bytecodes C4..FF are alternate and use setq #$001 (not setq #$0C1)
+                   
+00a74 2c4 04fee395 alt_codes	long	una_psh	|          %010011111110111000 << 10	'C4*	!!= var		(push)
+00a78 2c5 04fde395 		long	una_psh	|          %010011111101111000 << 10	'C5*	!= var		(push)
+00a7c 2c6 04fbe395 		long	una_psh	|          %010011111011111000 << 10	'C6*	-= var		(push)
+00a80 2c7 04f7e395 		long	una_psh	|          %010011110111111000 << 10	'C7*	ABS= var	(push)
+00a84 2c8 04efe395 		long	una_psh	|          %010011101111111000 << 10	'C8*	ENCOD= var	(push)
+00a88 2c9 04dfe395 		long	una_psh	|          %010011011111111000 << 10	'C9*	DECOD= var	(push)
+00a8c 2ca 04bfe395 		long	una_psh	|          %010010111111111000 << 10	'CA*	ONES= var	(push)
+00a90 2cb 047fc395 		long	una_psh	|          %010001111111110000 << 10	'CB*	SQRT= var	(push)
+00a94 2cc 047fa395 		long	una_psh	|          %010001111111101000 << 10	'CC*	LOG= var	(push)
+00a98 2cd 047f6395 		long	una_psh	|          %010001111111011000 << 10	'CD*	EXP= var	(push)
+                   
+00a9c 2ce 013ecba7 		long	sha_mod	|            %0100111110110010 << 10	'CE*	var >>= exp	(push)
+00aa0 2cf 013f4ba7 		long	sha_mod	|            %0100111111010010 << 10	'CF*	var <<= exp	(push)
+00aa4 2d0 013dcba7 		long	sha_mod	|            %0100111101110010 << 10	'D0*	var SAR= exp	(push)
+00aa8 2d1 013bcba7 		long	sha_mod	|            %0100111011110010 << 10	'D1*	var ROR= exp	(push)
+00aac 2d2 0137cba7 		long	sha_mod	|            %0100110111110010 << 10	'D2*	var ROL= exp	(push)
+00ab0 2d3 009f43a8 		long	rev_mod	|            %010011111010000_ << 10	'D3*	var REV= exp	(push)
+00ab4 2d4 009f23a8 		long	rev_mod	|            %010011111001000_ << 10	'D4*	var ZEROX= exp	(push)
+00ab8 2d5 009ea3a8 		long	rev_mod	|            %010011110101000_ << 10	'D5*	var SIGNX= exp	(push)
+00abc 2d6 012fcba7 		long	sha_mod	|            %0100101111110010 << 10	'D6*	var += exp	(push)
+00ac0 2d7 011fcba7 		long	sha_mod	|            %0100011111110010 << 10	'D7*	var -= exp	(push)
+                   
+00ac4 2d8 004f03b7 		long	log_mod	|              %01001111000000 << 10	'D8*	var &&= exp	(push)
+00ac8 2d9 004e83b7 		long	log_mod	|              %01001110100000 << 10	'D9*	var ^^= exp	(push)
+00acc 2da 004d83b7 		long	log_mod	|              %01001101100000 << 10	'DA*	var ||= exp	(push)
+00ad0 2db 004f4bb7 		long	log_mod	|              %01001111010010 << 10	'DB*	var &= exp	(push)
+00ad4 2dc 004ecbb7 		long	log_mod	|              %01001110110010 << 10	'DC*	var ^= exp	(push)
+00ad8 2dd 004dcbb7 		long	log_mod	|              %01001101110010 << 10	'DD*	var |= exp	(push)
+00adc 2de 004bcbb7 		long	log_mod	|              %01001011110010 << 10	'DE*	var #>= exp	(push)
+00ae0 2df 0047cbb7 		long	log_mod	|              %01000111110010 << 10	'DF*	var <#= exp	(push)
+                   
+00ae4 2e0 027b6bc6 		long	muu_mod	|          %01001111011011010_ << 10	'E0*	var *= exp	(push)
+00ae8 2e1 04e51bc5 		long	mul_mod	|          %010011100101000110 << 10	'E1*	var /= exp	(push)
+00aec 2e2 049d1bc5 		long	mul_mod	|          %010010011101000110 << 10	'E2*	var //= exp	(push)
+00af0 2e3 026f6bc6 		long	muu_mod	|          %01001101111011010_ << 10	'E3*	var SCA= exp	(push)
+00af4 2e4 045e1bc5 		long	mul_mod	|          %010001011110000110 << 10	'E4*	var SCAS= exp	(push)
+00af8 2e5 0279ebc6 		long	muu_mod	|          %01001111001111010_ << 10	'E5*	var FRAC= exp	(push)
+                   
+00afc 2e6 000183e0 		long	rotxy	|                  %0001100000 << 10	'E6*	ROTXY(x,y,t)			(returns x,y)
+00b00 2e7 00005be2 		long	polxy	|                  %00010110__ << 10	'E7*	POLXY(r,t)			(returns x,y)
+00b04 2e8 00003be2 		long	polxy	|                  %00001110__ << 10	'E8*	XYPOL(x,y)			(returns r,t)
+                   
+00b08 2e9 003e3123 bytemove_	long	mov_fil	|               %0111110001100 << 10	'E9*	BYTEMOVE(dst,src,cnt)		(LSB must be 1/0/1/0/1/0)
+00b0c 2ea 0005f123 		long	mov_fil	|               %0000101111100 << 10	'EA*	BYTEFILL(dst,val,cnt)
+00b10 2eb 003e2123 		long	mov_fil	|               %0111110001000 << 10	'EB*	WORDMOVE(dst,src,cnt)
+00b14 2ec 0003e123 		long	mov_fil	|               %0000011111000 << 10	'EC*	WORDFILL(dst,val,cnt)
+00b18 2ed 003e1123 		long	mov_fil	|               %0111110000100 << 10	'ED*	LONGMOVE(dst,src,cnt)
+00b1c 2ee 0007d123 		long	mov_fil	|               %0000111110100 << 10	'EE*	LONGFILL(dst,val,cnt)
+                   
+00b20 2ef 00000151 		long	str_siz	|                           %0 << 10	'EF*	STRSIZE(adr)
+00b24 2f0 0000015e 		long	str_cmp	|                           %0 << 10	'F0*	STRCOMP(adra,adrb)
+                   
+00b28 2f1 00007993 		long	hubset_	|                      %011110 << 10	'F1*	HUBSET(val)
+                   
+00b2c 2f2 000ef999 		long	pushv	|                 %01110111110 << 10	'F2*	LOCKNEW
+00b30 2f3 00001995 		long	lockret_|                        %0110 << 10	'F3*	LOCKRET(lock)
+00b34 2f4 000001a5 		long	locktry_|                          %00 << 10	'F4*	LOCKTRY(lock)
+00b38 2f5 00000996 		long	lockrel_|                         %010 << 10	'F5*	LOCKREL(lock)
+00b3c 2f6 000001a2 		long	lockchk_|                          %00 << 10	'F5*	LOCKCHK(lock)
+                   
+00b40 2f7 00000197 		long	cogatn_	|                          %00 << 10	'F7*	COGATN(mask)
+00b44 2f8 007df999 		long	pushv	|              %01111101111110 << 10	'F8*	POLLATN
+00b48 2f9 000001b2 		long	waitv	|                           %0 << 10	'F9*	WAITATN			(LSB=0)
+                   
+00b4c 2fa 000001a7 		long	setpat_	|                           %0 << 10	'FA*	SETPAT(equal,port,mask,data)
+00b50 2fb 007bf999 		long	pushv	|              %01111011111110 << 10	'FB*	POLLPAT
+00b54 2fc 000001b2 		long	waitv	|                           %0 << 10	'FC*	WAITPAT			(LSB=1)
+                   
+00b58 2fd 000003f4 		long	mt	|                           %0 << 10	'FD*	run
+                   
+00b5c 2fe 000003f4 		long	mt	|                           %0 << 10	'FE*	<empty>
+00b60 2ff 000003f4 		long	mt	|                           %0 << 10	'FF*	<empty>
+00b64 300          j1
+                   '
+                   '
+                   '*****************
+                   '*  Interpreter  *
+                   '*****************
+                   '
+                   '
+                   ' Drop anchor - push x/pbase/vbase/dbase/dcall/0
+                   '
+                   '  push x
+                   '  push pbase | flags
+                   '  push vbase
+                   '  push dbase
+                   '  push dcall
+                   '  push 0 (new dcall)
+                   '
+00b64 300 f543c9f6 drop		or	pbase,pa	'or flags into pbase (%tp)
+                   
+00b68 301 f603c7e8 		mov	z,x		'get x (top of stack) into z
+00b6c 302 f603cfd9 		mov	y,dcall		'get dcall (prior dbase) into y
+00b70 303 f607d000 		mov	x,#0		'get initial 'result' into x
+                   
+00b74 304 fd640a28 		setq	#6-1		'push z/pbase/vbase/dbase/y/x
+00b78 305 fc67c765 		wrlong	z,ptra++[5]	'ptra points to 'result' afterwards
+                   
+00b7c 306 f603b3f8 		mov	dcall,ptra	'update dcall (next dbase)
+                   
+00b80 307 0563c9f6 	_ret_	xor	pbase,pa	'xor flags from pbase
+                   '
+                   '
+                   ' call obj.sub		a
+                   ' call obj.sub[]	b
+                   ' call obj[].sub	c
+                   ' call obj[].sub[]	d
+                   ' call sub		e
+                   ' call sub[]		f
+                   ' call @ptr		g
+                   '
+00b84 308 fc67d161 callnin		pusha	x		'a       e		if no index, push x to save parameter
+00b88 309 fd63ce13 callobj		rfvar	y		'a b c d |		get obj into y
+00b8c 30a f103cfe8 		add	y,x		'| | c d |		add obj index
+00b90 30b fb07d15f 		popa	x		'| | | d |		if dual index, pop x
+00b94 30c fd63c613 callsub		rfvar	z		'a b c d e f		get sub into z
+00b98 30d f103c7e8 		add	z,x		'| b | d | f		add sub index
+                   
+00b9c 30e f067ce02 		shl	y,#2		'a b c d | |		get obj offsets from y
+00ba0 30f f103cfe4 		add	y,pbase		'a b c d | |
+00ba4 310 fd640228 		setq	#2-1		'a b c d | |
+00ba8 311 fb03cfe7 		rdlong	y,y		'a b c d | |
+                   
+00bac 312 f103c9e7 		add	pbase,y		'a b c d | |		add offsets into pbase/vbase
+00bb0 313 f103cbe8 		add	vbase,x		'a b c d | |
+                   
+00bb4 314 f603cdd9 callptr		mov	dbase,dcall	'a b c d e f g		set dbase to dcall
+                   
+00bb8 315 fd640428 		setq	#3-1		'| | | | | | g		read ptr into z/pbase/vbase
+00bbc 316 fb03c7e8 		rdlong	z,x		'| | | | | | g
+                   
+00bc0 317 f067c602 		shl	z,#2		'a b c d e f g		get sub offsets from z
+00bc4 318 f103c7e4 		add	z,pbase		'a b c d e f g
+00bc8 319 fd640228 		setq	#2-1		'a b c d e f g
+00bcc 31a fb03cfe3 		rdlong	y,z		'a b c d e f g
+                   
+00bd0 31b f603f1e6 		mov	ptra,dbase	'a b c d e f g		read prior dcall from stack
+00bd4 31c fb07b31f 		rdlong	dcall,ptra[-1]	'a b c d e f g
+                   
+00bd8 31d fd63c634 		getptr	z		'a b c d e f g		write return address into stack
+00bdc 31e fc67c71f 		wrlong	z,ptra[-1]	'a b c d e f g
+                   
+00be0 31f f103cfe4 		add	y,pbase		'a b c d e f g		start new bytecode read
+00be4 320 fc7801e7 		rdfast	#0,y		'a b c d e f g
+                   
+00be8 321 0103f1e8 	_ret_	add	ptra,x		'a b c d e f g		point stack past result/params/locals
+                   '
+                   '
+                   ' ABORT	result		a	C=0
+                   ' ABORT x		b	C=0
+                   ' RETURN result		c	C=1
+                   ' RETURN x		d	C=1
+                   '
+                   ' (pop result)
+                   '  pop return
+                   '  pop dbase
+                   '  pop vbase
+                   '  pop pbase | flags
+                   '  pop <old top>
+                   '
+00bec 322 f603f1e6 retn		mov	ptra,dbase	'	a b c d		ptra points to dbase
+00bf0 323 fd640a28 		setq	#6-1		'	a | c |		pop z/pbase/vbase/dbase/y/x (1st pass only)
+00bf4 324 fd640828 		setq	#5-1		'	| b | d		pop z/pbase/vbase/dbase/y
+00bf8 325 fb07c75b 		rdlong	z,--ptra[5]	'	a   c  		ptra points to top of stack after pop
+                   
+00bfc 326 341fc801 	if_nc	bitl	pbase,#1  wcz	'			if abort and !try, return again
+00c00 327 3d9fffe8 	if_nc	jmp	#retn
+                   
+00c04 328 f41fc800 		bitl	pbase,#0  wcz	'			result?
+00c08 329 3603d1e3 	if_nc	mov	x,z		'  a: ABORT result	if not, get z (top of stack) into x
+00c0c 32a cc67d141 	if_c	wrlong	x,++ptra	'  b: ABORT x		if so, x holds 'result', push x
+                   					'  c: RETURN result
+00c10 32b 0c7801e7 	_ret_	rdfast	#0,y		'  d: RETURN x		start new bytecode read
+                   '
+                   '
+                   ' Branches - jmp, jz, jnz, tjz, djnz
+                   '
+00c14 32c fd63ce14 branch		rfvars	y		'	a b c d e	a: branch
+00c18 32d f7cbd1e8 		test	x	wz	'	| b c d |	b: test, pop, branch if z
+00c1c 32e 5d64002d 	if_nz	ret			'	| | | d |	c: test, pop, branch if nz
+00c20 32f fb07d15f 		popa	x		'	| b c d |	d: test, if z then pop and branch
+00c24 330 5d64002d 	if_nz	ret			'	| b | | |	e: dec, if z then pop, else branch
+00c28 331 f18fd001 		sub	x,#1	wz	'	| | | | e
+00c2c 332 ab07d15f 	if_z	popa	x		'	| | | | e
+00c30 333 ad64002d 	if_z	ret			'	| | c | e
+00c34 334 f103efe7 		add	pb,y		'	a b c d e
+00c38 335 0c7801f7 	_ret_	rdfast	#0,pb		'	a b c d e
+                   '
+                   '
+                   ' Constants
+                   '
+00c3c 336 fc67d161 const		pusha	x		'push	a b c d e f g h i j	a: constant -1..14
+00c40 337 f603d1f6 		mov	x,pa		'	a | | | | | | | | |	b: byte
+00c44 338 0187d0c1 	_ret_	sub	x,#n1+1-$200	'	a | | | | | | | | |	c: !byte
+00c48 339 0d63d010 	_ret_	rfbyte	x		'	  b | | | | | | | |	d: word
+00c4c 33a fd63d010 		rfbyte	x		'	    c | | | g h i j	e: !word
+00c50 33b 0d63d011 	_ret_	rfword	x		'	    | d | | | | | |	f: long
+00c54 33c fd63d011 		rfword	x		'	    |   e | | | | |	g: byte + decode
+00c58 33d 0d63d012 	_ret_	rflong	x		'           |   | f | | | |	h: byte + decode + not
+00c5c 33e 09c3d1e8 	_ret_	decod	x		'	    |   |   g | | |	i: byte + decode + decrement
+00c60 33f f9c3d1e8 		decod	x		'	    |   |     h i j	j: byte + decode + negate
+00c64 340 0623d1e8 	_ret_	not	x		'	    c   e     h | |
+00c68 341 0187d001 	_ret_	sub	x,#1		'                       i |
+00c6c 342 0663d1e8 	_ret_	neg	x		'	                  j
+                   '
+                   '
+                   ' Read/write/setup local variable
+                   '
+00c70 343 f843bbf6 var_loc		getnib	a,pa,#0		'	a b c			a: read local
+00c74 344 f067ba02 		shl	a,#2		'	a b c			b: write local
+00c78 345 f103bbe5 		add	a,vbase		'	a b c			c: setup local
+                   
+00c7c 346 fc67d161 		pusha	x		'read	a | |
+00c80 347 0b03d1dd 	_ret_	rdlong	x,a		'read	a | |
+                   
+00c84 348 fc63d1dd 		wrlong	x,a		'write	  b |
+00c88 349 0b07d15f 	_ret_	popa	x		'write	  b |
+                   
+00c8c 34a f603b5ce 		mov	rd,rd_long	'setup	    c
+00c90 34b f603b7d4 		mov	wr,wr_long	'setup	    c
+00c94 34c 0607b81f 	_ret_	mov	sz,#31		'setup	    c
+                   '
+                   '
+                   ' Setup hub variable
+                   '
+00c98 34d fd63ba13 var_b		rfvar	a		'	x x x
+                   
+00c9c 34e f103bbe4 		add	a,pbase		'base	p | |
+00ca0 34f f103bbe5 		add	a,vbase		'	| v |
+00ca4 350 f103bbe6 		add	a,dbase		'	| | d
+                   
+00ca8 351 fb07cf5f var_i		popa	y		'index	b w l |
+00cac 352 f067ce01 		shl	y,#1		'	| w | |
+00cb0 353 f067ce02 		shl	y,#2		'	| | l |
+00cb4 354 fb07bb5f var_a		popa	a		'addr	| | | | i a
+00cb8 355 f103bbe7 		add	a,y		'	b w l | i |
+                   
+00cbc 356 f603b5cc 		mov	rd,rd_byte	'rd	b | |
+00cc0 357 f603b5cd 		mov	rd,rd_word	'	| w |
+00cc4 358 f603b5ce 		mov	rd,rd_long	'	| | l
+                   
+00cc8 359 f603b7d2 		mov	wr,wr_byte	'wr	b | |
+00ccc 35a f603b7d3 		mov	wr,wr_word	'	| w |
+00cd0 35b f603b7d4 		mov	wr,wr_long	'	| | l
+                   
+00cd4 35c 0607b807 	_ret_	mov	sz,#7		'size	b | |
+00cd8 35d 0607b80f 	_ret_	mov	sz,#15		'	  w |
+00cdc 35e 0607b81f 	_ret_	mov	sz,#31		'	    l
+                   '
+                   '
+                   ' Setup reg/lut variable
+                   '
+00ce0 35f f603bbf6 var_reg		mov	a,pa		'$1Fx	a			a: reg $1Fx
+00ce4 360 f107bbbb 		add	a,#$3FA-reg_1FA	'$1Fx	a			b: reg $xxx
+                   					'				c: reg $xxx [index]
+00ce8 361 fd63ba14 var_cog		rfvars	a		'$xxx	| b c d e		d: lut $xxx
+                   					'				e: lut $xxx [index]
+00cec 362 fb07cf5f 		popa	y		'index	| | c | e
+00cf0 363 f103bbe7 		add	a,y		'index	| | c | e
+                   
+00cf4 364 f603b5cf 		mov	rd,rd_reg	'reg	a b c | |
+00cf8 365 f603b7d5 		mov	wr,wr_reg	'reg	a b c | |
+                   
+00cfc 366 f9bbb5dd 		sets	rd,a		'reg	a b c | |
+00d00 367 f9b3b7dd 		setd	wr,a		'reg	a b c | |
+                   
+00d04 368 f603b5d0 		mov	rd,rd_lut	'lut	| | | d e
+00d08 369 f603b7d6 		mov	wr,wr_lut	'lut	| | | d e
+                   
+00d0c 36a 0607b81f 	_ret_	mov	sz,#31		'long	a b c d e
+                   '
+                   '
+                   ' Setup bitfield
+                   '
+00d10 36b f603bfe8 bfield		mov	fb,x		'get bottom/single bit			a b	a: multi-bit field
+00d14 36c f747be04 		zerox	fb,#4		'					a b	b: single-bit field
+                   
+00d18 36d fb07b95f 		popa	sz		'get top bit				a |
+00d1c 36e f747b804 		zerox	sz,#4		'					a |
+                   
+00d20 36f f617b800 		mov	sz,#0	wc	'single bit, c=0			| b
+                   
+00d24 370 fb07d15f 		popa	x		'pop stack				a b
+                   
+00d28 371 f6036dda 		mov	rdf,rd		'copy rd into field reader		a b
+00d2c 372 f6038dda 		mov	wrf_rd,rd	'copy rd into field writer		a b
+00d30 373 f60393db 		mov	wrf_wr,wr	'copy wr into field writer		a b
+                   
+00d34 374 f603b5d1 		mov	rd,rd_field	'replace rd with 'call #\rdf'		a b
+00d38 375 f603b7d7 		mov	wr,wr_field	'replace wr with 'call #\wrf'		a b
+                   
+00d3c 376 f193b9df 		sub	sz,fb	wc	'set bitfield size (top - bot)		a |
+                   
+00d40 377 c103bfdc 	if_c	add	fb,sz		'set reverse base (top)			a |
+00d44 378 c663b9dc 	if_c	neg	sz		'set reverse size (bot - top)		a |
+00d48 379 c623c1dc 	if_c	not	fr,sz		'set reverse shift			a |
+                   
+00d4c 37a 0447be05 	_ret_	bitc	fb,#5		'set reverse flag			a b
+                   '
+                   '
+                   ' Variable address/read/write
+                   '
+00d50 37b fc67d161 var_rd		pusha	x		'push	a b			a: @var		(push)
+00d54 37c 0603d1dd 	_ret_	mov	x,a		'addr	a |			b: var		(push)
+00d58 37d f9a7b564 		alti	rd		'read	  b			c: var := exp	(isolated)
+00d5c 37e 00000000 		nop			'read	  b			d: var := exp	(push)
+00d60 37f f9a7b764 var_wr		alti	wr		'write	  | c d
+00d64 380 00000000 		nop			'write	  | c d
+00d68 381 0b07d15f 	_ret_	popa	x		'pop	  | c |
+00d6c 382 0743d1dc 	_ret_	zerox	x,sz		'trim	  b   d			(zerox provides ret for b)
+                   '
+                   '
+                   ' Variable pre/post modifiers
+                   '
+00d70 383 f603cfe8 mod_iso		mov	y,x		'iso	a b         g   i   k l		a: ++var, var++	(isolated)
+00d74 384 fc67d161 mod_psh		pusha	x		'push	| | c d e f | h | j | | m	b: --var, var--	(isolated)
+00d78 385 f9a7b564 		alti	rd		'rd	a b c d e f g h i j k l m	c: ++var	(push)
+00d7c 386 00000000 		nop			'rd	a b c d e f g h i j k l m	d: --var	(push)
+00d80 387 fd63d068 		xoro32	x		'??	| | | | | | | | | | | l m	e: var++	(push)	
+00d84 388 f603c7e8 		mov	z,x		'post	| | | | e f | h | j k l m	f: var--	(push)
+00d88 389 f107d001 		add	x,#1		'++	a | c | e | | | | | | | |	g: var!!	(isolated)
+00d8c 38a f187d001 		sub	x,#1		'--	| b | d | f | | | | | | |	h: var!!	(push)
+00d90 38b f743d1dc 		zerox	x,sz		'ptr	| | c d | | | | | | | | |	i: var!		(isolated)
+00d94 38c f5c3d1d8 		muxz	x,_FFFFFFFF	'!!	| | | | | | g h | | | | |	j: var!		(push)
+00d98 38d f623d1e8 		not	x		'!	| | | | | | | | i j | | |	k: var\new	(swap)
+00d9c 38e f603d1e7 		mov	x,y		'swap	| | | | | | | | | | k | |	l: ??var	(isolated)
+00da0 38f f9a7b764 		alti	wr		'wr	a b c d e f g h i j k l m	m: ??var	(push)
+00da4 390 00000000 		nop			'wr	a b c d e f g h i j k l m
+00da8 391 0603d1e7 	_ret_	mov	x,y		'iso	a b | | | | g | i | | l |
+00dac 392 0603d1e3 	_ret_	mov	x,z		'iso	    | | e f   h   j k   m
+00db0 393 fd64002d 		ret			'main	    c d
+                   '
+                   '
+                   ' Variable assignments / math operators
+                   '
+00db4 394 f603cfe8 una_iso		mov	y,x		'	m			a: !!
+00db8 395 fc67cf61 una_psh		pusha	y		'push	| n			b: !			
+00dbc 396 f9a7b564 		alti	rd		'rd	m n			c: - (neg)
+00dc0 397 f7cbd1e8 op_notb		test	x	wz	'rd,!!	m n a			d: ABS
+00dc4 398 fd37d000 op_sqrt		qsqrt	x,#0		'SQRT	x x |             h	e: ENCOD
+00dc8 399 fd63d00e op_log		qlog	x		'LOG	x x |             | i	f: DECOD
+00dcc 39a fd63d00f op_exp		qexp	x		'EXP	x x |             | | j	g: ONES
+00dd0 39b f5c3d1d8 		muxz	x,_FFFFFFFF	'!!	x x a             | | |	h: SQRT
+00dd4 39c f623d1e8 op_not		not	x		'!	x x | b           | | |	i: LOG
+00dd8 39d f663d1e8 op_neg		neg	x		'-	x x | | c         | | |	j: EXP
+00ddc 39e f643d1e8 op_abs		abs	x		'ABS	x x | | | d       | | |
+00de0 39f f783d1e8 op_ncod		encod	x		'ENCOD	x x | | | | e     | | |
+00de4 3a0 f9c3d1e8 op_dcod		decod	x		'DECOD	x x | | | | | f   | | |
+00de8 3a1 f7a3d1e8 op_ones		ones	x		'ONES	x x | | | | | | g | | |
+00dec 3a2 fd63d018 		getqx	x		'	x x | | | | | | | h i j
+00df0 3a3 f9a7b764 		alti	wr		'wr	m n | | | | | | | | | |
+00df4 3a4 fd64002d 		ret			'wr,op	m n a b c d e f g h i j	m: ?= var	(isolated)
+00df8 3a5 0603d1e7 	_ret_	mov	x,y		'iso	m |			n: ?= var	(push)
+00dfc 3a6 0743d1dc 	_ret_	zerox	x,sz		'push	  n			x: use a..j
+                   
+00e00 3a7 f603cfe8 sha_mod		mov	y,x		'	x x a b c d e       i j	a: >>
+00e04 3a8 f623cfe8 rev_mod		not	y,x		'	x x | | | | | f g h | |	b: <<
+00e08 3a9 f9a7b564 		alti	rd		'rd	m n | | | | | | | | | |	c: SAR
+00e0c 3aa fb07d15f 		popa	x		'rd,op	m n a b c d e f g h i j	d: ROR
+00e10 3ab fd63d069 		rev	x		'REV	x x | | | | | f | | | |	e: ROL
+00e14 3ac f063d1e7 		shl	x,y		'<<	x x | b | | | | g h | |	f: REV
+00e18 3ad f043d1e7 		shr	x,y		'>>	x x a | | | | f g | | |	g: ZEROX
+00e1c 3ae f0c3d1e7 		sar	x,y		'SAR	x x | | c | | | | h | |	h: SIGNX
+00e20 3af f003d1e7 		ror	x,y		'ROR	x x | | | d | | | | | |	i: +
+00e24 3b0 f023d1e7 		rol	x,y		'ROL	x x | | | | e | | | | |	j: -
+00e28 3b1 f103d1e7 		add	x,y		'+	x x | | | | | | | | i |
+00e2c 3b2 f183d1e7 		sub	x,y		'-	x x | | | | | | | | | j
+00e30 3b3 f9a7b764 		alti	wr		'wr	m n | | | | | | | | | |
+00e34 3b4 fd64002d 		ret			'wr,op	m n a b c d e f g h i j	m: var ?= exp	(isolated)
+00e38 3b5 0b07d15f 	_ret_	popa	x		'iso	m |			n: var ?= exp	(push)
+00e3c 3b6 0743d1dc 	_ret_	zerox	x,sz		'push	  n			x: use a..j
+                   
+00e40 3b7 f60bcfe8 log_mod		mov	y,x	wz	'	x x a b c d e f g h	a: &&
+00e44 3b8 f5e3cfd8 		muxnz	y,_FFFFFFFF	'bool	x x a b c | | | | |	b: ^^
+00e48 3b9 f9a7b564 		alti	rd		'rd	m n | | | | | | | |	c: ||
+00e4c 3ba fb0fd15f 		popa	x	wz	'rd,op	m n a b c d e f g h	d: &
+00e50 3bb f5e3d1d8 		muxnz	x,_FFFFFFFF	'bool	x x a b c | | | | |	e: ^
+00e54 3bc f503d1e7 		and	x,y		'&&,&	x x a | | d | | | |	f: |
+00e58 3bd f563d1e7 		xor	x,y		'^^,^	x x | b | | e | | |	g: #>
+00e5c 3be f543d1e7 		or	x,y		'||,|	x x | | c | | f | |	h: <#
+00e60 3bf f343d1e7 		fges	x,y		'#>	x x | | | | | | g |
+00e64 3c0 f363d1e7 		fles	x,y		'<#	x x | | | | | | | h
+00e68 3c1 f9a7b764 		alti	wr		'wr	m n | | | | | | | |
+00e6c 3c2 fd64002d 		ret			'wr,op	m n a b c d e f g h	m: var ?= exp	(isolated)
+00e70 3c3 0b07d15f 	_ret_	popa	x		'iso	m |			n: var ?= exp	(push)
+00e74 3c4 0743d1dc 	_ret_	zerox	x,sz		'push	  n			x: use a..h
+                   
+00e78 3c5 f653cfe8 mul_mod		abs	y,x	wc	'c=ys	x x   b c   e		a: *
+00e7c 3c6 f603cfe8 muu_mod		mov	y,x		'	x x a | | d | f		b: /
+00e80 3c7 f9a7b564 		alti	rd		'rd	m n | | | | | |		c: //
+00e84 3c8 fb07d15f 		popa	x		'rd,op	m n a b c d e f		d: SCA
+00e88 3c9 f40fd01f 		testb	x,#31	wz	'z=xs	x x | b c | e |		e: SCAS
+00e8c 3ca f643d1e8 		abs	x		'	x x | b c | e |		f: FRAC
+00e90 3cb fd03d1e7 		qmul	x,y		'*,SCAx	x x a | | d e |
+00e94 3cc fd13d1e7 		qdiv	x,y		'/,//	x x | b c | | |
+00e98 3cd fd23d1e7 		qfrac	x,y		'FRAC	x x | | | | | f
+00e9c 3ce fd63d018 		getqx	x		'	x x a b | | | f
+00ea0 3cf 6663d1e8     if_c_ne_z	neg	x		'*,/	x x | b | | | |
+00ea4 3d0 fd63d019 		getqy	x		'	x x | | c d e |
+00ea8 3d1 a663d1e8     if_z	neg	x		'//	x x | | c | | |
+00eac 3d2 fdb00010 		call	#.scas		'SCAS	x x | | | | e |
+00eb0 3d3 f9a7b764 		alti	wr		'wr	m n | | | | | |
+00eb4 3d4 fd64002d 		ret			'wr,op	m n a b c d e f		m: var ?= exp	(isolated)
+00eb8 3d5 0b07d15f 	_ret_	popa	x		'iso	m |			n: var ?= exp	(push)
+00ebc 3d6 0743d1dc 	_ret_	zerox	x,sz		'push	  n			x: use a..f
+                   
+00ec0 3d7 fd63ce18 .scas		getqx	y		'adjust 64-bit product for SCAS
+00ec4 3d8 9d900010     if_c_eq_z	jmp	#.scas2		'conditionally negate {x,y}
+00ec8 3d9 f623cfe7 		not	y
+00ecc 3da f623d1e8 		not	x
+00ed0 3db f117ce01 		add	y,#1	wc
+00ed4 3dc f127d000 		addx	x,#0
+00ed8 3dd f067d002 .scas2		shl	x,#2		'x = {x,y}[61:30]
+00edc 3de f047ce1e 		shr	y,#32-2
+00ee0 3df 0543d1e7 	_ret_	or	x,y
+                   '
+                   '
+                   ' ROTXY(x,y,t)
+                   ' POLXY(r,t)
+                   ' XYPOL(x,y)
+                   '
+00ee4 3e0 f187f004 rotxy		sub	ptra,#1*4	'a		a: ROTXY(x,y,t)
+00ee8 3e1 fd640228 		setq	#2-1		'a		b: POLXY(r,t)
+00eec 3e2 fb07d31f polxy		rdlong	w,ptra[-1]	'a b c		c: XYPOL(x,y)
+00ef0 3e3 fd63d028 		setq	x		'a | |
+00ef4 3e4 fd43d3ea 		qrotate	w,v		'a | |
+00ef8 3e5 fd43d3e8 		qrotate	w,x		'| b |
+00efc 3e6 fd53d3e8 		qvector	w,x		'| | c
+00f00 3e7 fd63d018 		getqx	x		'a b c
+00f04 3e8 fc67d11f 		wrlong	x,ptra[-1]	'a b c
+00f08 3e9 0d63d019 	_ret_	getqy	x		'a b c
+                   '
+                   '
+                   ' Relational operators
+                   '
+00f0c 3ea fb07cf5f op_rel		popa	y		'a b c d e f g		a: <
+00f10 3eb f25bcfe8 		cmps	y,x	wcz	'a | c d e | g		b: <=
+00f14 3ec f25bd1e7 		cmps	x,y	wcz	'| b | | | f |		c: ==
+00f18 3ed 0583d1d8 	_ret_	muxc	x,_FFFFFFFF	'a | | | | f |		d: <>
+00f1c 3ee 05a3d1d8 	_ret_	muxnc	x,_FFFFFFFF	'  b | | e   |		e: >=
+00f20 3ef 05c3d1d8 	_ret_	muxz	x,_FFFFFFFF	'    c |     |		f: >
+00f24 3f0 05e3d1d8 	_ret_	muxnz	x,_FFFFFFFF	'      d     |		g: <=>
+00f28 3f1 f583d1d8 		muxc	x,_FFFFFFFF	'            g
+00f2c 3f2 05e7d001 	_ret_	muxnz	x,#1		'            g
+                   '
+                   '
+                   ' Alternate bytecode
+                   '
+00f30 3f3 0d640229 alt_cod	_ret_	setq2	#$001		'no stacking, allows bytecodes above $C3 to have discrete lut entries
+                   
+00f34 3f4          mt
+00f34 3f4          j2
+                   '
+                   '
+                   '**********************
+                   '*  bytecode program  *
+                   '**********************
+                   '
+00f34              		orgh
+                   '
+                   '
+                   ' repeat
+                   '   outa[7:2]++
+                   '
+00f34              pgm
+00f34     7c45     		byte	setup_reg	& $FF,	$7C		'setup reg $1FC
+00f36     c1       		byte	n1+1+0		& $FF
+00f37     c8       		byte	n1+1+7		& $FF
+00f38     61       		byte	setup_bfm	& $FF
+00f39     67       		byte	mod_inc		& $FF			'var++
+                   
+                   	'	byte	con_decod	& $FF,	12
+                   	'	byte	con_decod	& $FF,	0
+                   	'	byte	con_decod	& $FF,	16
+                   	'	byte	(bytemove_ + 0)	& $FF
+                   
+00f3a     790f     		byte	jmp_vars	& $FF,	(pgm-$) & $7F	'jmp #pgm
+                   
+                   
+                   'sstring		byte	1[25],4,0
+                   'tstring		byte	1[25],4,0

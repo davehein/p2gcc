@@ -38,3 +38,5 @@
 ./testit ROM_137PBJ
 ./testit SD2_test_121a
 ./testit USBHost
+./testit pointers
+./testit spin2_interpreter
