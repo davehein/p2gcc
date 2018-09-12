@@ -80,6 +80,7 @@ int addifmissing = 0;
 static int finalpass = 0;
 
 void DumpIt(int printflag, void *ptr, int num);
+void GenerateAugx(int opcode, int value, int dfield);
 void PrintIt(int printflag, int hub_addr, int cog_addr, int data_size, char *buffer2, void *ptr);
 
 void PrintError(char *str, ...)
@@ -123,7 +124,7 @@ int CheckForEOL(int i, int num)
 }
 
 // This routine handles the P2 pointer syntax
-int EncodePointerField(int *pindex, char **tokens, int num)
+int EncodePointerField(int *pindex, char **tokens, int num, int opcode)
 {
     int value;
     int negate = 0;
@@ -170,7 +171,37 @@ int EncodePointerField(int *pindex, char **tokens, int num)
 	return -1;
     }
 
-    i++;
+    // Check for long offset
+    if (!strcmp(tokens[++i], "##"))
+    {
+        i++;
+        EvaluateExpression(12, &i, tokens, num, &value, &is_float);
+        if (negate) value = -value;
+        if (++i >= num)
+        {
+	    *pindex = i;
+	    return -1;
+        }
+        if (value < -0x80000 || value > 0x7ffff)
+        {
+            fprintf(lstfile, "Warning: pointer index %d is out of bounds\n", value);
+        }
+
+        retval = ((retval & 0x1e0) << 15) | (value & 0xfffff);
+
+        if (CheckExpected("]", i, tokens, num))
+        {
+            *pindex = i;
+            return -1;
+        }
+
+        GenerateAugx(opcode, retval, 0);
+        retval &= 0x1ff;
+
+        *pindex = i;
+        return retval;
+    }
+
     EvaluateExpression(12, &i, tokens, num, &value, &is_float);
     if (negate) value = -value;
 
@@ -186,12 +217,6 @@ int EncodePointerField(int *pindex, char **tokens, int num)
     }
 
     retval = (retval & ~31) | (value & 31);
-
-    if (i >= num)
-    {
-        *pindex = i;
-	return -1;
-    }
 
     if (CheckExpected("]", i, tokens, num))
     {
@@ -238,7 +263,7 @@ int EncodeAddressField(int *pindex, char **tokens, int num, int type, int opcode
     {
 	if (type >= 2)
 	{
-            value = EncodePointerField(&i, tokens, num);
+            value = EncodePointerField(&i, tokens, num, opcode);
 	    if (value >= 0) value |= 0x200;
 	}
 	else
