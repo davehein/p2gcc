@@ -76,6 +76,7 @@ int hubonly = 0;
 int undefined = 0;
 int allow_undefined = 0;
 int addifmissing = 0;
+int line_number = 0;
 
 static int finalpass = 0;
 
@@ -86,6 +87,8 @@ void PrintIt(int printflag, int hub_addr, int cog_addr, int data_size, char *buf
 void PrintError(char *str, ...)
 {
     va_list ap;
+    printf("%d: ", line_number);
+    fprintf(lstfile, "%d: ", line_number);
     va_start(ap, str);
     vprintf(str, ap);
     vfprintf(lstfile, str, ap);
@@ -102,7 +105,7 @@ int CheckExpected(char *ptr1, int i, char **tokens, int num)
 {
     if (i >= num)
     {
-        PrintError("ERROR: Expected \"%s\", but found EOL\n", ptr1, 0);
+        PrintError("ERROR: Expected \"%s\", but found EOL\n", ptr1);
         return 1;
     }
     if (strcmp(ptr1, tokens[i]))
@@ -117,7 +120,7 @@ int CheckForEOL(int i, int num)
 {
     if (i >= num)
     {
-        PrintError("ERROR: Unexpected EOL\n", 0, 0);
+        PrintError("ERROR: Unexpected EOL\n");
         return 1;
     }
     return 0;
@@ -184,7 +187,7 @@ int EncodePointerField(int *pindex, char **tokens, int num, int opcode)
         }
         if (value < -0x80000 || value > 0x7ffff)
         {
-            fprintf(lstfile, "Warning: pointer index %d is out of bounds\n", value);
+            PrintError("Warning: pointer index %d is out of bounds\n", value);
         }
 
         retval = ((retval & 0x1e0) << 15) | (value & 0xfffff);
@@ -213,7 +216,7 @@ int EncodePointerField(int *pindex, char **tokens, int num, int opcode)
 
     if (value < -16 || value > 15)
     {
-        fprintf(lstfile, "Warning: pointer index %d is out of bounds\n", value);
+        PrintError("Warning: pointer index %d is out of bounds\n", value);
     }
 
     retval = (retval & ~31) | (value & 31);
@@ -268,7 +271,7 @@ int EncodeAddressField(int *pindex, char **tokens, int num, int type, int opcode
 	}
 	else
 	{
-	    PrintError("ERROR: PTR not allowed\n", 0, 0);
+	    PrintError("ERROR: PTR not allowed\n");
 	    value = -1;
 	}
 	*pindex = i;
@@ -280,7 +283,7 @@ int EncodeAddressField(int *pindex, char **tokens, int num, int type, int opcode
         if (!strcmp(name, "##")) extended = 1;
 	if (type < 1)
 	{
-            PrintError("ERROR: Bad symbol type - %d\n", type, 0);
+            PrintError("ERROR: Bad symbol type - %d\n", type);
 	    *pindex = i;
 	    return -1;
 	}
@@ -296,11 +299,11 @@ int EncodeAddressField(int *pindex, char **tokens, int num, int type, int opcode
         else if (type == 2)
         {
             if (value & (~255))
-                PrintError("ERROR: Immediate value must be between 0 and 255\n", 0, 0);
+                PrintError("ERROR: Immediate value must be between 0 and 255\n");
             value &= 255;
         }
         else if (value & (~511))
-            PrintError("ERROR: Immediate value must be between 0 and 511\n", 0, 0);
+            PrintError("ERROR: Immediate value must be between 0 and 511\n");
     }
     else
     {
@@ -593,7 +596,7 @@ int GetData(int i, char **tokens, int num, int datasize)
             {
                 if (j + datasize > DATA_BUFFER_SIZE)
                 {
-                    PrintError("ERROR: Data buffer overflow\n", 0, 0);
+                    PrintError("ERROR: Data buffer overflow\n");
                     hub_addr = hub_addr0;
                     cog_addr = cog_addr0;
                     return j;
@@ -669,7 +672,7 @@ int GetData(int i, char **tokens, int num, int datasize)
         {
             if (j + datasize > DATA_BUFFER_SIZE)
             {
-                PrintError("ERROR: Data buffer overflow\n", 0, 0);
+                PrintError("ERROR: Data buffer overflow\n");
                 hub_addr = hub_addr0;
                 cog_addr = cog_addr0;
                 return j;
@@ -749,7 +752,6 @@ int ProcessSrc(int *pi, char **tokens, int num, int *popcode)
     char *name;
     int extended = 0;
     int is_float = -1;
-    int immediate = 0;
 
     (*pi)++;
     CheckVref(*pi, tokens, num, 1);
@@ -759,13 +761,12 @@ int ProcessSrc(int *pi, char **tokens, int num, int *popcode)
         (*pi)++;
         *popcode |= I_BIT;
         extended = !strcmp(name, "##");
-        immediate = 1;
     }
     if (EvaluateExpression(12, pi, tokens, num, &value, &is_float)) return 1;
     if (extended)
         GenerateAugx(*popcode, value, 0);
     else if (value & (~511))
-        PrintError("ERROR: Immediate value must be between 0 and 511\n", 0, 0);
+        PrintError("ERROR: Immediate value must be between 0 and 511\n");
     *popcode |= (value & 511);
     return ProcessWx(pi, tokens, num, popcode);
 }
@@ -777,7 +778,6 @@ int ProcessSrcWlx(int *pi, char **tokens, int num, int *popcode)
     char *name;
     int extended = 0;
     int is_float = -1;
-    int immediate = 0;
 
     (*pi)++;
     CheckVref(*pi, tokens, num, 1);
@@ -787,13 +787,12 @@ int ProcessSrcWlx(int *pi, char **tokens, int num, int *popcode)
         (*pi)++;
         *popcode |= I_BIT;
         extended = !strcmp(name, "##");
-        immediate = 1;
     }
     if (EvaluateExpression(12, pi, tokens, num, &value, &is_float)) return 1;
     if (extended)
         GenerateAugx(*popcode, value, 0);
     else if (value & (~511))
-        PrintError("ERROR: Immediate value must be between 0 and 511\n", 0, 0);
+        PrintError("ERROR: Immediate value must be between 0 and 511\n");
     *popcode |= (value & 511);
     return ProcessWlx(pi, tokens, num, popcode, 22);
 }
@@ -805,7 +804,6 @@ int ProcessSrcWcz(int *pi, char **tokens, int num, int *popcode)
     char *name;
     int extended = 0;
     int is_float = -1;
-    int immediate = 0;
 
     (*pi)++;
     CheckVref(*pi, tokens, num, 1);
@@ -815,13 +813,12 @@ int ProcessSrcWcz(int *pi, char **tokens, int num, int *popcode)
         (*pi)++;
         *popcode |= I_BIT;
         extended = !strcmp(name, "##");
-        immediate = 1;
     }
     if (EvaluateExpression(12, pi, tokens, num, &value, &is_float)) return 1;
     if (extended)
         GenerateAugx(*popcode, value, 0);
     else if (value & (~511))
-        PrintError("ERROR: Immediate value must be between 0 and 511\n", 0, 0);
+        PrintError("ERROR: Immediate value must be between 0 and 511\n");
     *popcode |= (value & 511);
     return ProcessWcz(pi, tokens, num, popcode);
 }
@@ -847,7 +844,7 @@ int FindNeededSymbol(char *str, int pass)
     int index = FindSymbol(str);
     if (index < 0)
     {
-        PrintError("ERROR: %s is undefined\n", str, 0);
+        PrintError("ERROR: %s is undefined\n", str);
         if (pass == 2)
             PrintIt(PRINT_NOCODE, hub_addr, cog_addr, 0, buffer2, &opcode);
     }
@@ -1089,7 +1086,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
             if (value == 2 || value == 4 || value == 8 || value == 16)
                 hub_incr = (value - hub_addr) & (value - 1);
             else
-                PrintError("ERROR: .balign %d is not valid\n", value, 0);
+                PrintError("ERROR: .balign %d is not valid\n", value);
             printflag = PRINT_NOCODE;
             if (hub_incr && pass == 2) DumpIt(PRINT_CODE, &value, hub_incr);
             ExpectDone(&i, tokens, num);
@@ -1145,7 +1142,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
                 SymbolT *s1;
                 if (i != num - 3)
                 {
-                    PrintError("ERROR: Invalid number of parameters for .set directive\n", 0, 0);
+                    PrintError("ERROR: Invalid number of parameters for .set directive\n");
                     return;
                 }
                 if (CheckExpected(",", i+1, tokens, num)) break;
@@ -1155,7 +1152,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
                 if (pass == 1)
                 {
                     if (index1 >= 0)
-                        PrintError("ERROR: %s already exists\n", tokens[i], 0);
+                        PrintError("ERROR: %s already exists\n", tokens[i]);
                     if (index < 0)
                         AddSymbol2(tokens[i], 0x400, 0x400, TYPE_UNDEF, 0);
                     else
@@ -1165,11 +1162,11 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
                     }
                 }
                 else if (index1 < 0)
-                    PrintError("ERROR: %s doesn't exist\n", tokens[i], 0);
+                    PrintError("ERROR: %s doesn't exist\n", tokens[i]);
                 else if (SymbolTable[index1].type == TYPE_UNDEF)
                 {
                     if (index < 0)
-                        PrintError("ERROR: %s is not defined\n", tokens[i+2], 0);
+                        PrintError("ERROR: %s is not defined\n", tokens[i+2]);
                     else
                     {
                         s = &SymbolTable[index];
@@ -1289,7 +1286,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
             tempfile = fopen(filename, "rb");
             if (!tempfile)
             {
-                PrintError("ERROR: Couldn't open %s\n", filename, 0);
+                PrintError("ERROR: Couldn't open %s\n", filename);
             }
             else
             {
@@ -1599,7 +1596,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
             {
                 if (is_loc)
                 {
-                    PrintError("ERROR: Invalid LOC instruction\n", 0, 0);
+                    PrintError("ERROR: Invalid LOC instruction\n");
                     break;
                 }
                 s = &SymbolTable[opindex+1];

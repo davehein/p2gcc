@@ -49,7 +49,7 @@ static int numsym1 = 0;
 
 extern SymbolT SymbolTable[MAX_SYMBOLS];
 
-void PrintError(char *str, void *parm1, void *parm2);
+void PrintError(char *str, ...);
 int StrToDec1(char *str, int *is_float);
 int CheckExpected(char *str, int i, char **tokens, int num);
 int CheckForEOL(int i, int num);
@@ -221,7 +221,7 @@ SymbolT *GetSymbolPointer(char *str)
     int index = FindSymbol(str);
     if (index < 0)
     {
-	fprintf(lstfile, "ERROR: %s is undefined\n", str);
+	PrintError("ERROR: %s is undefined\n", str);
 	return 0;
     }
     return &SymbolTable[index];
@@ -236,7 +236,7 @@ int CheckFloat(int *is_float, int is_float1)
     }
     if (*is_float != is_float1)
     {
-        PrintError("ERROR: Cannot mix float and fix\n", 0, 0);
+        PrintError("ERROR: Cannot mix float and fix\n");
         return 1;
     }
     return 0;
@@ -365,7 +365,7 @@ int EvaluateExpression(int prevprec, int *pindex, char **tokens, int num, int *p
                     value = 0;
                 else
                 {
-                    printf("EvaluateExpression: Symbol %s is undefined\n", tokens[i]);
+                    PrintError("ERROR: Symbol %s is undefined when evaluating an expression\n", tokens[i]);
 #if 0
                     if (objflag)
                     {
@@ -419,7 +419,7 @@ int EvaluateExpression(int prevprec, int *pindex, char **tokens, int num, int *p
 	    else if (index == 3) fvalue /= fvalue2;
 	    else
             {
-                printf("ERROR: Operator '%s' is invalid for floating point\n", oplist[index]);
+                PrintError("ERROR: Operator '%s' is invalid for floating point\n", oplist[index]);
                 break;
             }
             memcpy(&value, &fvalue, 4);
