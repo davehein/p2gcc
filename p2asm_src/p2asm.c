@@ -1113,7 +1113,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
                 if (index >= 0)
                     SymbolTable[index].scope = SCOPE_GLOBAL;
                 else
-                    printf("ERROR GLOBAL %s not in symbol table\n", tokens[1]);
+                    PrintError("ERROR GLOBAL %s not in symbol table\n", tokens[1]);
             }
             return;
         }
@@ -1126,7 +1126,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
                 if (index >= 0)
                     SymbolTable[index].scope = SCOPE_WEAK;
                 else
-                    printf("ERROR WEAK %s not in symbol table\n", tokens[1]);
+                    PrintError("ERROR WEAK %s not in symbol table\n", tokens[1]);
             }
             return;
         }
@@ -1189,7 +1189,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
                 if (index >= 0)
                     SymbolTable[index].scope = SCOPE_LOCAL;
                 else
-                    printf("ERROR LOCAL %s not in symbol table\n", tokens[1]);
+                    PrintError("ERROR LOCAL %s not in symbol table\n", tokens[1]);
             }
             return;
         }
@@ -1705,7 +1705,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
         // Catch unsupported types
         default:
         {
-            printf("ERROR: Opcode type %d is not supported\n", optype);
+            PrintError("ERROR: Opcode type %d is not supported\n", optype);
             break;
         }
     }
@@ -1793,7 +1793,7 @@ void AddSymbolCon(char *symbol, int value, int type, int section)
     {
         if (index >= 0)
         {
-            printf("ERROR: Symbol %s is already defined\n", symbol);
+            PrintError("ERROR: Symbol %s is already defined\n", symbol);
             return;
         }
         AddSymbol(symbol, value, type, section);
@@ -1802,7 +1802,7 @@ void AddSymbolCon(char *symbol, int value, int type, int section)
     {
         if (index < 0)
         {
-            printf("ERROR: Symbol %s not previously defined\n", symbol);
+            PrintError("ERROR: Symbol %s not previously defined\n", symbol);
             return;
         }
         s = &SymbolTable[index];
@@ -1877,7 +1877,7 @@ void ProcessConstantLine(int *pcurrval, int *pcurrund, char **tokens, int num)
                 EvaluateExpression(12, &i, tokens, num, pcurrval, &is_float);
                 if (undefined > undefined1)
                 {
-                    if (!allow_undefined) printf("ERROR: %s is undefined\n", tokens[j]);
+                    if (!allow_undefined) PrintError("ERROR: %s is undefined\n", tokens[j]);
                     AddSymbolCon(tokens[j], (*pcurrval)++, TYPE_UCON, datamode);
                 }
                 else
