@@ -300,7 +300,7 @@ int CheckSourceDest(void)
     strcpy(buffer3, buffer1);
     temp_ptr = SkipWhiteSpace(buffer3);
     if (temp_ptr == buffer3) return 0;
-    if (!strncmp(temp_ptr, "IF_", 3))
+    if (!strncmp(temp_ptr, "IF_", 3) || !strncmp(temp_ptr, "if_", 3))
     {
         op_ptr = FindWhiteSpace(temp_ptr);
         op_ptr = SkipWhiteSpace(op_ptr);
@@ -316,7 +316,7 @@ int CheckSourceDest(void)
     com_ptr = FindChar(dst_ptr, ',');
     if (!*com_ptr) return 0;
     temp_ptr = FindWhiteSpace(dst_ptr);
-    if ((int)com_ptr < (int)temp_ptr) temp_ptr = com_ptr;
+    if (com_ptr - temp_ptr < 0) temp_ptr = com_ptr;
     src_ptr = SkipWhiteSpace(com_ptr+1);
     if (!*src_ptr) return 0;
     *temp_ptr = 0;
@@ -333,7 +333,7 @@ int CheckSourceDest(void)
     }
     else
         last[0] = 0;
-    len = (int)op_ptr - (int)buffer3;
+    len = op_ptr - buffer3;
     memcpy(first, buffer3, len);
     first[len] = 0;
 
