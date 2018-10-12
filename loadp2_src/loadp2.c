@@ -34,6 +34,7 @@
 static int clock_mode = 0xff;
 static int user_baud = 115200;
 static int clock_freq = 80000000;
+static int extra_cycles = 7;
 
 #if defined(__CYGWIN__) || defined(__MINGW32__) || defined(__MINGW64__)
   #define PORT_PREFIX "com"
@@ -95,8 +96,8 @@ int loadfile(char *fname, int address)
     tx((uint8_t *)"> Prop_Hex 0 0 0 0", 18);
     tx((uint8_t *)MainLoader, strlen(MainLoader));
     txval(clock_mode);
-    txval(3*clock_freq/LOADER_BAUD/2-6);
-    txval(clock_freq/LOADER_BAUD-6);
+    txval((3*clock_freq+LOADER_BAUD)/(LOADER_BAUD*2)-extra_cycles);
+    txval((clock_freq+LOADER_BAUD/2)/LOADER_BAUD-extra_cycles);
     txval(size);
     txval(address);
     tx((uint8_t *)"~", 1);
@@ -176,6 +177,15 @@ int main(int argc, char **argv)
                     user_baud = atoi(&argv[i][2]);
                 else if (++i < argc)
                     user_baud = atoi(argv[i]);
+                else
+                    Usage();
+            }
+            else if (argv[i][1] == 'X')
+            {
+                if(argv[i][2])
+                    extra_cycles = atoi(&argv[i][2]);
+                else if (++i < argc)
+                    extra_cycles = atoi(argv[i]);
                 else
                     Usage();
             }
