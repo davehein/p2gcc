@@ -89,7 +89,7 @@
 #define TYPE_UNDEF    66
 #define TYPE_BALIGN   67
 
-#define MAX_SYMBOLS    2000
+#define MAX_SYMBOLS    5000
 #define MAX_SYMBOL_LEN   39
 
 #define SCOPE_NULL        0
