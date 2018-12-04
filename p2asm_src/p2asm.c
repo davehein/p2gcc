@@ -1611,7 +1611,11 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
                 if (!strcmp(tokens[i+1], "\\"))
                     srcval = 1;
                 else
+                {
+                    if (is_loc)
+                        PrintError("WARNING: Relative mode used with LOC instruction\n");
                     GetImmSrcValue(i, tokens, num, &srcval);
+                }
                 if ((srcval&3) == 0 && srcval < (255 * 4) && srcval > (-256 * 4) && !is_loc)
                 {
                     i--;
