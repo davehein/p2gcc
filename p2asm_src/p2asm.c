@@ -77,6 +77,7 @@ int undefined = 0;
 int allow_undefined = 0;
 int addifmissing = 0;
 int line_number = 0;
+int object_section = 0;
 
 static int finalpass = 0;
 
@@ -431,10 +432,11 @@ int ProcessWcz(int *pi, char **tokens, int num, int *popcode)
     return 0;
 }
 
-void WriteObjectEntry(int type, int addr, char *str)
+void WriteObjectEntry(int type, int objsect, int addr, char *str)
 {
     int len = strlen(str) + 1;
     fwrite(&type, 1, 1, objfile);
+    fwrite(&objsect, 1, 1, objfile);
     fwrite(&addr, 1, 4, objfile);
     fwrite(&len, 1, 1, objfile);
     fwrite(str, 1, len, objfile);
@@ -465,7 +467,7 @@ int ProcessBigSrc(int *pi, char **tokens, int num, int *popcode)
         {
             value = hub_addr + 4;
             if (debugflag) printf("UNDEFI %8.8x %s\n", hub_addr, tokens[*pi]);
-            WriteObjectEntry(OTYPE_REF_FUNC_UND, hub_addr, tokens[*pi]);
+            WriteObjectEntry(OTYPE_REF_FUNC_UND, object_section, hub_addr, tokens[*pi]);
         }
         else if (SymbolTable[index].type == TYPE_HUB_ADDR)
             value = SymbolTable[index].value2;
@@ -632,7 +634,7 @@ int GetData(int i, char **tokens, int num, int datasize)
                     {
                         value = 0;
                         if (debugflag) printf("UNDEFI %8.8x %s\n", hub_addr, tokens[i]);
-                        WriteObjectEntry(OTYPE_REF_LONG_UND, hub_addr, tokens[i]);
+                        WriteObjectEntry(OTYPE_REF_LONG_UND, object_section, hub_addr, tokens[i]);
                     }
                 }
                 else if (SymbolTable[index].type == TYPE_HUB_ADDR)
@@ -641,7 +643,7 @@ int GetData(int i, char **tokens, int num, int datasize)
                     {
                         value = SymbolTable[index].value2;
                         if (debugflag) printf("VREF %8.8x %s\n", hub_addr, tokens[i]);
-                        WriteObjectEntry(OTYPE_REF_LONG_REL, hub_addr, tokens[i]);
+                        WriteObjectEntry(OTYPE_REF_LONG_REL, object_section, hub_addr, tokens[i]);
                     }
                 }
                 else
@@ -658,7 +660,7 @@ int GetData(int i, char **tokens, int num, int datasize)
                     (hub_addr >= 0x400 || !hubonly))
                 {
                     if (debugflag) printf("VREF %8.8x %s\n", hub_addr, tokens[i0]);
-                    WriteObjectEntry(OTYPE_REF_LONG_REL, hub_addr, tokens[i0]);
+                    WriteObjectEntry(OTYPE_REF_LONG_REL, object_section, hub_addr, tokens[i0]);
                     if (debugflag)
                     {
                         printf("Found Offset Reference -");
@@ -740,9 +742,9 @@ void CheckVref(int i, char **tokens, int num, int srcflag)
     if (s->type != TYPE_HUB_ADDR) return;
     if (debugflag) printf("VREF %8.8x %s\n", hub_addr, s->name);
     if (srcflag)
-        WriteObjectEntry(OTYPE_REF_AUGS, hub_addr, s->name);
+        WriteObjectEntry(OTYPE_REF_AUGS, object_section, hub_addr, s->name);
     else
-        WriteObjectEntry(OTYPE_REF_AUGD, hub_addr, s->name);
+        WriteObjectEntry(OTYPE_REF_AUGD, object_section, hub_addr, s->name);
 }
 
 // Handle source for OP1S or OP2 instruction, such as jmp s or add d,s/#n
@@ -905,7 +907,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
         // Check for an undefined symbol or local label if not object mode
         if (index < 0 || (!objflag && pass == 1 && tokens[i][0] == '.'))
         {
-            AddSymbol2(tokens[i], cog_addr >> 2, hub_addr, hubmode ? TYPE_HUB_ADDR : TYPE_COG_ADDR, datamode);
+            AddSymbol2(tokens[i], object_section, cog_addr >> 2, hub_addr, hubmode ? TYPE_HUB_ADDR : TYPE_COG_ADDR, datamode);
             if (num == 1) printflag = PRINT_NOCODE;
             i++;
         }
@@ -1095,13 +1097,27 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
 
         case TYPE_TEXT:
         {
+            object_section = SECTION_TEXT;
             datamode = 0;
             return;
         }
 
         case TYPE_DATA:
         {
+            object_section = SECTION_DATA;
             datamode = 1;
+            return;
+        }
+
+        case TYPE_SECTION:
+        {
+            if (!strcmp(".bss", tokens[i]))
+            {
+                object_section = SECTION_BSS;
+                datamode = 1;
+            }
+            else
+                PrintError("ERROR: Unknown section %s\n", tokens[i]);
             return;
         }
 
@@ -1154,11 +1170,11 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
                     if (index1 >= 0)
                         PrintError("ERROR: %s already exists\n", tokens[i]);
                     if (index < 0)
-                        AddSymbol2(tokens[i], 0x400, 0x400, TYPE_UNDEF, 0);
+                        AddSymbol2(tokens[i], object_section, 0x400, 0x400, TYPE_UNDEF, 0);
                     else
                     {
                         s = &SymbolTable[index];
-                        AddSymbol2(tokens[i], s->value, s->value2, s->type, s->section);
+                        AddSymbol2(tokens[i], s->objsect, s->value, s->value2, s->type, s->section);
                     }
                 }
                 else if (index1 < 0)
@@ -1174,6 +1190,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
                         s1->value = s->value;
                         s1->value2 = s->value2;
                         s1->type = s->type;
+                        s1->objsect = s->objsect;
                         s1->section = s->section;
                     }
                 }
@@ -1800,7 +1817,7 @@ void AddSymbolCon(char *symbol, int value, int type, int section)
             PrintError("ERROR: Symbol %s is already defined\n", symbol);
             return;
         }
-        AddSymbol(symbol, value, type, section);
+        AddSymbol(symbol, SECTION_NULL, value, type, section);
     }
     else
     {
@@ -1916,6 +1933,7 @@ void ParseCon(void)
     datamode = 0;
     cog_addr = 0;
     hub_addr = 0;
+    object_section = SECTION_NULL;
 
     while (ReadString(buffer2, 300, infile, unicode))
     {
@@ -1942,6 +1960,7 @@ void Parse(int pass)
     datamode = 0;
     cog_addr = 0;
     hub_addr = 0;
+    object_section = SECTION_NULL;
 
     while (ReadString(buffer2, 300, infile, unicode))
     {
@@ -2072,38 +2091,40 @@ int main(int argc, char **argv)
                     if (s->scope == SCOPE_GLOBAL_COMM)
                     {
                         if (debugflag) printf("GLOBAL COMM %8.8x %s\n", s->value2, s->name);
-                        WriteObjectEntry(OTYPE_UNINIT_DATA, s->value2, s->name);
+                        WriteObjectEntry(OTYPE_UNINIT_DATA, s->objsect, s->value2, s->name);
                     }
                     else if (s->scope == SCOPE_UNDECLARED)
                     {
                         if (debugflag) printf("GLOBAL UNDE %8.8x %s\n", s->value2, s->name);
-                        WriteObjectEntry(OTYPE_UNINIT_DATA, s->value2, s->name);
+                        WriteObjectEntry(OTYPE_UNINIT_DATA, s->objsect, s->value2, s->name);
                     }
                     else if (s->scope == SCOPE_WEAK)
                     {
                         if (debugflag) printf("WEAK LABEL %8.8x %s\n", s->value2, s->name);
-                        WriteObjectEntry(OTYPE_WEAK_LABEL, s->value2, s->name);
+                        WriteObjectEntry(OTYPE_WEAK_LABEL, s->objsect, s->value2, s->name);
                     }
                     else if (s->section == 0)
                     {
                         if (debugflag) printf("GLOBAL TEXT %8.8x %s\n", s->value2, s->name);
-                        WriteObjectEntry(OTYPE_GLOBAL_FUNC, s->value2, s->name);
+                        WriteObjectEntry(OTYPE_GLOBAL_FUNC, s->objsect, s->value2, s->name);
                     }
                     else
                     {
                         if (debugflag) printf("GLOBAL DATA %8.8x %s\n", s->value2, s->name);
-                        WriteObjectEntry(OTYPE_INIT_DATA, s->value2, s->name);
+                        WriteObjectEntry(OTYPE_INIT_DATA, s->objsect, s->value2, s->name);
                     }
                 }
                 else
                 {
                     if (debugflag) printf("LOCAL LABEL %8.8x %s\n", s->value2, s->name);
-                    WriteObjectEntry(OTYPE_LOCAL_LABEL, s->value2, s->name);
+                    WriteObjectEntry(OTYPE_LOCAL_LABEL, s->objsect, s->value2, s->name);
                 }
             }
         }
 
         i = OTYPE_END_OF_CODE;
+        fwrite(&i, 1, 1, objfile);
+        i = SECTION_NULL;
         fwrite(&i, 1, 1, objfile);
         fwrite(&hub_addr, 1, 4, objfile);
         binfile = FileOpen(binfname, "rb");

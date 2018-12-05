@@ -77,6 +77,7 @@
 #define TYPE_FLOAT    54
 #define TYPE_GLOBAL   55
 
+#define TYPE_SECTION  56
 #define TYPE_TEXT     57
 #define TYPE_DATA     58
 #define TYPE_MODCZP   59
@@ -104,6 +105,7 @@ typedef struct SymbolS {
     unsigned int value;
     unsigned int value2;
     int type;
+    int objsect;
     int section;
     int scope;
     char name[MAX_SYMBOL_LEN+1];
@@ -112,8 +114,8 @@ typedef struct SymbolS {
 int FindSymbol(char *symbol);
 void ReadSymbolTable(void);
 void PrintSymbolTable(int mode);
-void AddSymbol(char *symbol, int value, int type, int section);
-void AddSymbol2(char *symbol, int value, int value2, int type, int section);
+void AddSymbol(char *symbol, int objsect, int value, int type, int section);
+void AddSymbol2(char *symbol, int objsect, int value, int value2, int type, int section);
 void PurgeLocalLabels(int index);
 SymbolT *GetSymbolPointer(char *str);
 int EvaluateExpression(int precedence, int *pindex, char **tokens, int num, int *pval, int *is_float);

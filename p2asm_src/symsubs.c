@@ -142,7 +142,7 @@ int FindSymbol(char *symbol)
     if (objflag && addifmissing && strcmp(symbol, "_main"))
     {
         if (debugflag) printf("Need to add symbol %s\n", symbol);
-        AddSymbol2(symbol, 0, 0x400, TYPE_HUB_ADDR, datamode);
+        AddSymbol2(symbol, SECTION_NULL, 0, 0x400, TYPE_HUB_ADDR, datamode);
         SymbolTable[numsym-1].scope = SCOPE_UNDECLARED;
         return numsym - 1;
     } 
@@ -164,7 +164,7 @@ void PrintSymbolTable(int mode)
     }
 }
 
-void AddSymbol(char *symbol, int value, int type, int section)
+void AddSymbol(char *symbol, int objsect, int value, int type, int section)
 {
     if (numsym >= MAX_SYMBOLS)
     {
@@ -180,12 +180,13 @@ void AddSymbol(char *symbol, int value, int type, int section)
     SymbolTable[numsym].value = value;
     SymbolTable[numsym].value2 = 0;
     SymbolTable[numsym].type = type;
+    SymbolTable[numsym].objsect = objsect;
     SymbolTable[numsym].section = section;
     SymbolTable[numsym].scope = 0;
     numsym++;
 }
 
-void AddSymbol2(char *symbol, int value, int value2, int type, int section)
+void AddSymbol2(char *symbol, int objsect, int value, int value2, int type, int section)
 {
     if (numsym >= MAX_SYMBOLS)
     {
@@ -201,6 +202,7 @@ void AddSymbol2(char *symbol, int value, int value2, int type, int section)
     SymbolTable[numsym].value = value;
     SymbolTable[numsym].value2 = value2;
     SymbolTable[numsym].type = type;
+    SymbolTable[numsym].objsect = objsect;
     SymbolTable[numsym].section = section;
     SymbolTable[numsym].scope = 0;
     numsym++;
@@ -370,7 +372,7 @@ int EvaluateExpression(int prevprec, int *pindex, char **tokens, int num, int *p
                     if (objflag)
                     {
                         printf("Need to add symbol\n");
-                        AddSymbol2(tokens[i], 0, 0, TYPE_HUB_ADDR, 0);
+                        AddSymbol2(tokens[i], 0, 0, 0, TYPE_HUB_ADDR, 0);
                         WriteObjectEntry('d', 0, tokens[i]);
                         value = 0;
                     }

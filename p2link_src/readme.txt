@@ -1,5 +1,5 @@
                                     P2LINK
-                                 June 25, 2018
+                               December 4, 2018
                                    Dave Hein
 
 P2link is a linker that produces a P2 executable binary file.  It will link one
@@ -33,7 +33,7 @@ length of the object name, which includes the terminating NULL character.
 The symbol table contains one or more symbol entries with the following
 format:
 
-     <symbol type> <symbol value> <len> <symbol name>
+     <symbol type> <symbol section> <symbol value> <len> <symbol name>
 
 The symbol type is a single byte that is defined in p2link.h as follows:
 
@@ -47,6 +47,15 @@ The symbol type is a single byte that is defined in p2link.h as follows:
 #define OTYPE_INIT_DATA    0x13 // Initialized global data
 #define OTYPE_UNINIT_DATA  0x14 // Uninitialized global data
 #define OTYPE_END_OF_CODE  0x20 // End of code/data
+
+The symbol section defines the memory section where the symbol is declared
+or from where it is referenced.  The symbol section is define in p2link.h
+as follows:
+
+#define SECTION_NULL       0
+#define SECTION_TEXT       1
+#define SECTION_DATA       2
+#define SECTION_BSS        3
 
 The symbol value is a 32-bit number that normally specifies an address.  The
 len value is a single byte that specifies the length of the symbol name, which

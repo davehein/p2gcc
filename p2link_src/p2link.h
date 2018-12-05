@@ -15,3 +15,8 @@
 #define OTYPE_UNINIT_DATA    0x14 // Uninitialized global data
 #define OTYPE_WEAK_LABEL     0x55 // Weak Label
 #define OTYPE_END_OF_CODE    0x20 // End of code/data
+
+#define SECTION_NULL         0
+#define SECTION_TEXT         1
+#define SECTION_DATA         2
+#define SECTION_BSS          3

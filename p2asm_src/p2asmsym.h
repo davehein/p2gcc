@@ -508,6 +508,7 @@ char *p2asmsym[] = {
 "0 52 alignl",
 "0 53 alignw",
 "0 55 .global",
+"0 56 .section",
 "0 57 .text",
 "0 58 .data",
 "0 61 .set",

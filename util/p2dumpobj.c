@@ -24,6 +24,13 @@ ObjectTypeT objtypes[] = {
     {OTYPE_END_OF_CODE,  "End of code   "},
     {0,                  "Invalid type  "}};
 
+ObjectTypeT objsects[] = {
+    {SECTION_NULL,       "Null   "},
+    {SECTION_TEXT,       "Text   "},
+    {SECTION_DATA,       "Data   "},
+    {SECTION_BSS,        "BSS    "},
+    {-1,                 "Invalid"}};
+
 char *GetDescription(int type)
 {
     ObjectTypeT *ot = objtypes;
@@ -34,6 +41,18 @@ char *GetDescription(int type)
         ot++;
     }
     return ot->descript;
+}
+
+char *GetObjectSection(int objsect)
+{
+    ObjectTypeT *os = objsects;
+
+    while (os->type != -1)
+    {
+        if (os->type == objsect) break;
+        os++;
+    }
+    return os->descript;
 }
 
 void usage(void)
@@ -66,7 +85,7 @@ int read_header(FILE *infile, char *fname)
 int main(int argc, char **argv)
 {
     FILE *infile;
-    unsigned char type, len;
+    unsigned char type, objsect, len;
     char buffer[256];
     int num, value, addr0;
 
@@ -84,10 +103,11 @@ int main(int argc, char **argv)
     while (1)
     {
         if (fread(&type, 1, 1, infile) != 1) break;
+        fread(&objsect, 1, 1, infile);
         fread(&value, 1, 4, infile);
         if (type == OTYPE_END_OF_CODE)
         {
-            printf("End of code    %8.8x\n", value);
+            printf("%s %s %8.8x\n", GetDescription(type), GetObjectSection(objsect), value);
             value -= addr0;
             while (value > 0)
             {
@@ -101,7 +121,7 @@ int main(int argc, char **argv)
         }
         fread(&len, 1, 1, infile);
         fread(buffer, 1, len, infile);
-        printf("%s %8.8x %s\n", GetDescription(type), value, buffer);
+        printf("%s %s %8.8x %s\n", GetDescription(type), GetObjectSection(objsect), value, buffer);
     }
 
     return 0;

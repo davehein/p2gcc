@@ -14,6 +14,7 @@ int addr = 0;
 int debugflag = 0;
 int start_addr = 0;
 
+char symsect[MAX_SYMBOLS];
 char symtype[MAX_SYMBOLS];
 int symvalue[MAX_SYMBOLS];
 int symoffset[MAX_SYMBOLS];
@@ -143,9 +144,15 @@ int ReadObject(FILE *infile)
             exit(1);
         }
         if (fread(&symtype[numsym], 1, 1, infile) != 1) return 0;
+        fread(&symsect[numsym], 1, 1, infile);
         if (symtype[numsym] == OTYPE_END_OF_CODE)
         {
             fread(&size, 1, 4, infile);
+if (size < 0 || size > 512*1024)
+{
+printf("ERROR: size = %d\n", size);
+exit(1);
+}
             break;
         }
         fread(&symvalue[numsym], 1, 4, infile);
@@ -158,7 +165,7 @@ int ReadObject(FILE *infile)
         symname[numsym] = bufptr;
         bufptr += len;
         if (debugflag)
-            printf("%d: %2.2x %8.8x %s\n", numsym, symtype[numsym], symvalue[numsym], symname[numsym]);
+            printf("%d: %2.2x %2.2x %8.8x %s\n", numsym, symtype[numsym], symsect[numsym], symvalue[numsym], symname[numsym]);
         numsym++;
     }
     objstart[objnum+1] = numsym;

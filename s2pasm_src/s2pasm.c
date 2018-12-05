@@ -515,12 +515,6 @@ int main(int argc, char **argv)
     while (fgets(buffer1, 1000, infile))
     {
         RemoveCRLF(buffer1);
-        if (!strcmp(buffer1, "\t.section\t.bss"))
-        {
-            fprintf(outfile, "\t.data%s", NEW_LINE);
-            continue;
-        }
-        if (!strncmp(buffer1, "\t.section", 9)) continue;
         if (!strncmp(buffer1, "\t.ascii \"", 8))
         {
             ProcessAscii();
