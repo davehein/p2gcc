@@ -1,0 +1,286 @@
+DAT
+
+        ORG
+
+        nop
+
+label1  long label1
+
+        long @label1
+
+        jmp  #label1
+
+        jmp  #@label1
+
+        jmp  #\label1
+
+        jmp  #\@label1
+
+        loc  ptra, #label1
+
+        loc  ptra, #@label1
+
+        loc  ptra, #\label1
+
+        loc  ptra, #\@label1
+
+        jmp  #label2
+
+        jmp  #@label2
+
+        jmp  #\label2
+
+        jmp  #\@label2
+
+        loc  ptra, #label2
+
+        loc  ptra, #@label2
+
+        loc  ptra, #\label2
+
+        loc  ptra, #\@label2
+
+        jmp  #label3
+
+        jmp  #@label3
+
+        jmp  #\label3
+
+        jmp  #\@label3
+
+        loc  ptra, #label3
+
+        loc  ptra, #@label3
+
+        loc  ptra, #\label3
+
+        loc  ptra, #\@label3
+
+        jmp  #label4
+
+        jmp  #@label4
+
+        jmp  #\label4
+
+        jmp  #\@label4
+
+        loc  ptra, #label4
+
+        loc  ptra, #@label4
+
+        loc  ptra, #\label4
+
+        loc  ptra, #\@label4
+
+        ORGH
+
+label2  long label2
+
+        long @label2
+
+        jmp  #label1
+
+        jmp  #@label1
+
+        jmp  #\label1
+
+        jmp  #\@label1
+
+        loc  ptra, #label1
+
+        loc  ptra, #@label1
+
+        loc  ptra, #\label1
+
+        loc  ptra, #\@label1
+
+        jmp  #label2
+
+        jmp  #@label2
+
+        jmp  #\label2
+
+        jmp  #\@label2
+
+        loc  ptra, #label2
+
+        loc  ptra, #@label2
+
+        loc  ptra, #\label2
+
+        loc  ptra, #\@label2
+
+
+        jmp  #label3
+
+        jmp  #@label3
+
+        jmp  #\label3
+
+        jmp  #\@label3
+
+        loc  ptra, #label3
+
+        loc  ptra, #@label3
+
+        loc  ptra, #\label3
+
+        loc  ptra, #\@label3
+
+        jmp  #label4
+
+        jmp  #@label4
+
+        jmp  #\label4
+
+        jmp  #\@label4
+
+        loc  ptra, #label4
+
+        loc  ptra, #@label4
+
+        loc  ptra, #\label4
+
+        loc  ptra, #\@label4
+
+        ORGH $400
+
+label3  long label3
+
+        long @label3
+
+        jmp  #label1
+
+        jmp  #@label1
+
+        jmp  #\label1
+
+        jmp  #\@label1
+
+        loc  ptra, #label1
+
+        loc  ptra, #@label1
+
+        loc  ptra, #\label1
+
+        loc  ptra, #\@label1
+
+        jmp  #label2
+
+        jmp  #@label2
+
+        jmp  #\label2
+
+        jmp  #\@label2
+
+        loc  ptra, #label2
+
+        loc  ptra, #@label2
+
+        loc  ptra, #\label2
+
+        loc  ptra, #\@label2
+
+        jmp  #label3
+
+        jmp  #@label3
+
+        jmp  #\label3
+
+        jmp  #\@label3
+
+        loc  ptra, #label3
+
+        loc  ptra, #@label3
+
+        loc  ptra, #\label3
+
+        loc  ptra, #\@label3
+
+        jmp  #label4
+
+        jmp  #@label4
+
+        jmp  #\label4
+
+        jmp  #\@label4
+
+        loc  ptra, #label4
+
+        loc  ptra, #@label4
+
+        loc  ptra, #\label4
+
+        loc  ptra, #\@label4
+
+        ORG
+
+label4  long label4
+
+        long @label4
+
+        jmp  #label1
+
+        jmp  #@label1
+
+        jmp  #\label1
+
+        jmp  #\@label1
+
+        loc  ptra, #label1
+
+        loc  ptra, #@label1
+
+        loc  ptra, #\label1
+
+        loc  ptra, #\@label1
+
+        jmp  #label2
+
+        jmp  #@label2
+
+        jmp  #\label2
+
+        jmp  #\@label2
+
+        loc  ptra, #label2
+
+        loc  ptra, #@label2
+
+        loc  ptra, #\label2
+
+        loc  ptra, #\@label2
+
+        jmp  #label3
+
+        jmp  #@label3
+
+        jmp  #\label3
+
+        jmp  #\@label3
+
+        loc  ptra, #label3
+
+        loc  ptra, #@label3
+
+        loc  ptra, #\label3
+
+        loc  ptra, #\@label3
+
+        jmp  #label4
+
+        jmp  #@label4
+
+        jmp  #\label4
+
+        jmp  #\@label4
+
+        loc  ptra, #label4
+
+        loc  ptra, #@label4
+
+        loc  ptra, #\label4
+
+        loc  ptra, #\@label4
+
+

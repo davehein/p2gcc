@@ -35,3 +35,4 @@ call testit tt
 call testit xbyte
 call testit xoro32
 call testit xoroshiro128plus
+call testit testjmploc

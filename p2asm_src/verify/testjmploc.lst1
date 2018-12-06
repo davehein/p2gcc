@@ -1,0 +1,286 @@
+                   DAT
+                   
+00000 000                  ORG
+                   
+00000 000 00000000         nop
+                   
+00004 001 00000001 label1  long label1
+                   
+00008 002 00000004         long @label1
+                   
+0000c 003 fd9ffff4         jmp  #label1
+                   
+00010 004 fd9ffffc         jmp  #@label1
+                   
+00014 005 fd800001         jmp  #\label1
+                   
+00018 006 fd800004         jmp  #\@label1
+                   
+0001c 007 fedfffe4         loc  ptra, #label1
+                   
+00020 008 fedfffec         loc  ptra, #@label1
+                   
+00024 009 fec00001         loc  ptra, #\label1
+                   
+00028 00a fec00004         loc  ptra, #\@label1
+                   
+0002c 00b fd900200         jmp  #label2
+                   
+00030 00c fd9001fc         jmp  #@label2
+                   
+00034 00d fd80008c         jmp  #\label2
+                   
+00038 00e fd80008c         jmp  #\@label2
+                   
+0003c 00f fed001f0         loc  ptra, #label2
+                   
+00040 010 fed001ec         loc  ptra, #@label2
+                   
+00044 011 fec0008c         loc  ptra, #\label2
+                   
+00048 012 fec0008c         loc  ptra, #\@label2
+                   
+0004c 013 fd800400         jmp  #label3
+                   
+00050 014 fd800400         jmp  #@label3
+                   
+00054 015 fd800400         jmp  #\label3
+                   
+00058 016 fd800400         jmp  #\@label3
+                   
+0005c 017 fec00400         loc  ptra, #label3
+                   
+00060 018 fec00400         loc  ptra, #@label3
+                   
+00064 019 fec00400         loc  ptra, #\label3
+                   
+00068 01a fec00400         loc  ptra, #\@label3
+                   
+0006c 01b fd9fff90         jmp  #label4
+                   
+00070 01c fd800488         jmp  #@label4
+                   
+00074 01d fd800000         jmp  #\label4
+                   
+00078 01e fd800488         jmp  #\@label4
+                   
+0007c 01f fedfff80         loc  ptra, #label4
+                   
+00080 020 fec00488         loc  ptra, #@label4
+                   
+00084 021 fec00000         loc  ptra, #\label4
+                   
+00088 022 fec00488         loc  ptra, #\@label4
+                   
+0008c                      ORGH
+                   
+0008c     0000008c label2  long label2
+                   
+00090     0000008c         long @label2
+                   
+00094     fd800001         jmp  #label1
+                   
+00098     fd800004         jmp  #@label1
+                   
+0009c     fd800001         jmp  #\label1
+                   
+000a0     fd800004         jmp  #\@label1
+                   
+000a4     fec00001         loc  ptra, #label1
+                   
+000a8     fec00004         loc  ptra, #@label1
+                   
+000ac     fec00001         loc  ptra, #\label1
+                   
+000b0     fec00004         loc  ptra, #\@label1
+                   
+000b4     fd80008c         jmp  #label2
+                   
+000b8     fd80008c         jmp  #@label2
+                   
+000bc     fd80008c         jmp  #\label2
+                   
+000c0     fd80008c         jmp  #\@label2
+                   
+000c4     fec0008c         loc  ptra, #label2
+                   
+000c8     fec0008c         loc  ptra, #@label2
+                   
+000cc     fec0008c         loc  ptra, #\label2
+                   
+000d0     fec0008c         loc  ptra, #\@label2
+                   
+                   
+000d4     fd900328         jmp  #label3
+                   
+000d8     fd900324         jmp  #@label3
+                   
+000dc     fd800400         jmp  #\label3
+                   
+000e0     fd800400         jmp  #\@label3
+                   
+000e4     fed00318         loc  ptra, #label3
+                   
+000e8     fed00314         loc  ptra, #@label3
+                   
+000ec     fec00400         loc  ptra, #\label3
+                   
+000f0     fec00400         loc  ptra, #\@label3
+                   
+000f4     fd800000         jmp  #label4
+                   
+000f8     fd90038c         jmp  #@label4
+                   
+000fc     fd800000         jmp  #\label4
+                   
+00100     fd800488         jmp  #\@label4
+                   
+00104     fec00000         loc  ptra, #label4
+                   
+00108     fed0037c         loc  ptra, #@label4
+                   
+0010c     fec00000         loc  ptra, #\label4
+                   
+00110     fec00488         loc  ptra, #\@label4
+                   
+00400                      ORGH $400
+                   
+00400     00000400 label3  long label3
+                   
+00404     00000400         long @label3
+                   
+00408     fd800001         jmp  #label1
+                   
+0040c     fd800004         jmp  #@label1
+                   
+00410     fd800001         jmp  #\label1
+                   
+00414     fd800004         jmp  #\@label1
+                   
+00418     fec00001         loc  ptra, #label1
+                   
+0041c     fec00004         loc  ptra, #@label1
+                   
+00420     fec00001         loc  ptra, #\label1
+                   
+00424     fec00004         loc  ptra, #\@label1
+                   
+00428     fd80008c         jmp  #label2
+                   
+0042c     fd80008c         jmp  #@label2
+                   
+00430     fd80008c         jmp  #\label2
+                   
+00434     fd80008c         jmp  #\@label2
+                   
+00438     fec0008c         loc  ptra, #label2
+                   
+0043c     fec0008c         loc  ptra, #@label2
+                   
+00440     fec0008c         loc  ptra, #\label2
+                   
+00444     fec0008c         loc  ptra, #\@label2
+                   
+00448     fd9fffb4         jmp  #label3
+                   
+0044c     fd9fffb0         jmp  #@label3
+                   
+00450     fd800400         jmp  #\label3
+                   
+00454     fd800400         jmp  #\@label3
+                   
+00458     fedfffa4         loc  ptra, #label3
+                   
+0045c     fedfffa0         loc  ptra, #@label3
+                   
+00460     fec00400         loc  ptra, #\label3
+                   
+00464     fec00400         loc  ptra, #\@label3
+                   
+00468     fd800000         jmp  #label4
+                   
+0046c     fd900018         jmp  #@label4
+                   
+00470     fd800000         jmp  #\label4
+                   
+00474     fd800488         jmp  #\@label4
+                   
+00478     fec00000         loc  ptra, #label4
+                   
+0047c     fed00008         loc  ptra, #@label4
+                   
+00480     fec00000         loc  ptra, #\label4
+                   
+00484     fec00488         loc  ptra, #\@label4
+                   
+00488 000                  ORG
+                   
+00488 000 00000000 label4  long label4
+                   
+0048c 001 00000488         long @label4
+                   
+00490 002 fd9ffff8         jmp  #label1
+                   
+00494 003 fd900000         jmp  #@label1
+                   
+00498 004 fd800001         jmp  #\label1
+                   
+0049c 005 fd800004         jmp  #\@label1
+                   
+004a0 006 fedfffe8         loc  ptra, #label1
+                   
+004a4 007 fedffff0         loc  ptra, #@label1
+                   
+004a8 008 fec00001         loc  ptra, #\label1
+                   
+004ac 009 fec00004         loc  ptra, #\@label1
+                   
+004b0 00a fd900204         jmp  #label2
+                   
+004b4 00b fd900200         jmp  #@label2
+                   
+004b8 00c fd80008c         jmp  #\label2
+                   
+004bc 00d fd80008c         jmp  #\@label2
+                   
+004c0 00e fed001f4         loc  ptra, #label2
+                   
+004c4 00f fed001f0         loc  ptra, #@label2
+                   
+004c8 010 fec0008c         loc  ptra, #\label2
+                   
+004cc 011 fec0008c         loc  ptra, #\@label2
+                   
+004d0 012 fd800400         jmp  #label3
+                   
+004d4 013 fd800400         jmp  #@label3
+                   
+004d8 014 fd800400         jmp  #\label3
+                   
+004dc 015 fd800400         jmp  #\@label3
+                   
+004e0 016 fec00400         loc  ptra, #label3
+                   
+004e4 017 fec00400         loc  ptra, #@label3
+                   
+004e8 018 fec00400         loc  ptra, #\label3
+                   
+004ec 019 fec00400         loc  ptra, #\@label3
+                   
+004f0 01a fd9fff94         jmp  #label4
+                   
+004f4 01b fd800488         jmp  #@label4
+                   
+004f8 01c fd800000         jmp  #\label4
+                   
+004fc 01d fd800488         jmp  #\@label4
+                   
+00500 01e fedfff84         loc  ptra, #label4
+                   
+00504 01f fec00488         loc  ptra, #@label4
+                   
+00508 020 fec00000         loc  ptra, #\label4
+                   
+0050c 021 fec00488         loc  ptra, #\@label4
+                   
+                   
