@@ -50,7 +50,8 @@ void Run(int argc, char **argv)
     DIRB = 0;
     while (*ptr) ;
     DIRB = 0x40000000;
-    sd_mount(59, 60, 58, 61);
+    //sd_mount(59, 60, 58, 61);
+    sd_mount(58, 61, 59, 60);
 }
 
 void Cd(int argc, char **argv)
@@ -418,7 +419,8 @@ int main(int argc, char **argv)
     char buffer[80];
 
     waitcnt(CNT+12000000);
-    sd_mount(59, 60, 58, 61);
+    //sd_mount(59, 60, 58, 61);
+    sd_mount(58, 61, 59, 60);
 
     stdinfile = stdin;
     stdoutfile = stdout;
