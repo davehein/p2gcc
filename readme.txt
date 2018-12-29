@@ -1,5 +1,5 @@
                                      P2GCC
-                                 May 29, 2018
+                               December 29, 2018
                                    Dave Hein
 
 p2gcc will compile, link and load a C file onto a P2 FPGA board.  If the -s
