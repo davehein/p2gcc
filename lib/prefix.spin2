@@ -82,7 +82,7 @@ __MEMCPY
 prefix_setup
 	mov	sp, ##init_stack_ptr
 	drvh    #tx_pin
-        hubset  #$ff
+        nop                           'hubset  #$ff
 	mov	r0, #1
         qmul    r0, r0
         getqx   __has_cordic
