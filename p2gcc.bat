@@ -161,8 +161,8 @@ if %ERRORLEVEL% neq 0 goto :eof
 exit /b
 
 :runs2pasm
-if %verbose% equ 1 echo %s2pasmstr% -g -t -p%P2GCC_LIBDIR%\prefix.spin2 %name%
-%s2pasmstr% -g -t -p%P2GCC_LIBDIR%\prefix.spin2 %name%
+if %verbose% equ 1 echo %s2pasmstr% -p%P2GCC_LIBDIR%\prefix.spin2 %name%
+%s2pasmstr% -p%P2GCC_LIBDIR%\prefix.spin2 %name%
 if %ERRORLEVEL% neq 0 goto :eof
 exit /b
 
