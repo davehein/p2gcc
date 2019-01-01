@@ -33,13 +33,16 @@
 #define LOAD_FPGA   1
 #define LOAD_SINGLE 2
 
-#define LOADER_BAUD 2000000
+#define LOADER_BAUD loader_baud
 
+static int loader_baud = 2000000;
 static int clock_mode = -1;
 static int user_baud = -1;
 static int clock_freq = 80000000;
 static int extra_cycles = 7;
 static int load_mode = -1;
+
+int get_loader_baud(int ubaud, int lbaud);
 
 #if defined(__CYGWIN__) || defined(__MINGW32__) || defined(__MINGW64__)
   #define PORT_PREFIX "com"
@@ -313,6 +316,19 @@ int main(int argc, char **argv)
     }
 
     if (!fname) Usage();
+
+    // Determine the user baud rate
+    if (user_baud == -1)
+    {
+        user_baud = clock_freq / 10 * 9 / 625;
+        if (verbose) printf("Setting user_baud to %d\n", user_baud);
+    }
+
+    // Determine the loader baud rate
+    loader_baud = get_loader_baud(user_baud, loader_baud);
+    if (verbose) printf("Set loader_baud to %d\n", loader_baud);
+
+    // Determine the P2 serial port
     if (!port)
     {
         if (!findp2(PORT_PREFIX, LOADER_BAUD))
@@ -336,11 +352,6 @@ int main(int argc, char **argv)
             clock_mode = temp1;
             if (verbose) printf("Setting clock_mode to %x\n", temp1);
         }
-        if (user_baud == -1)
-        {
-            user_baud = clock_freq / 10 * 9 / 625;
-            if (verbose) printf("Setting user_baud to %d\n", user_baud);
-        }
     }
     else if (load_mode == LOAD_FPGA)
     {
@@ -350,11 +361,6 @@ int main(int argc, char **argv)
         {
             clock_mode = temp1;
             if (verbose) printf("Setting clock_mode to %x\n", temp1);
-        }
-        if (user_baud == -1)
-        {
-            user_baud = clock_freq / 10 * 9 / 625;
-            if (verbose) printf("Setting user_baud to %d\n", user_baud);
         }
     }
 

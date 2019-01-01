@@ -63,6 +63,11 @@ static void chk(char *fun, int sts)
         printf("%s failed\n", fun);
 }
 
+int get_loader_baud(int baud)
+{
+    return baud;
+}
+
 int serial_find(const char* prefix, int (*check)(const char* port, void* data), void* data)
 {
     char path[PATH_MAX];
@@ -167,6 +172,9 @@ int serial_baud(unsigned long baud)
 {
     struct termios sparm;
     int tbaud = 0;
+static unsigned long last_baud = -1;
+if (baud == last_baud) return 1;
+last_baud = baud;
 
     switch(baud) {
         case 0: // default
