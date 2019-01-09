@@ -222,6 +222,33 @@ int atox(char *ptr)
     return value;
 }
 
+int get_clock_mode(int sysfreq)
+{
+    int xtalfreq = 20000000;
+    int xdiv = 4;
+    int xdivp = 2;
+    int xosc = 2;
+    int xmul, xpppp, setfreq;
+    //int xsel = 3;
+    //int enafreq;
+
+    if (sysfreq > 180)
+    {
+        xdiv = 10;
+        xdivp = 1;
+    }
+
+    xmul = sysfreq/100*xdiv*xdivp/(xtalfreq/100);
+
+    xpppp = ((xdivp >> 1) + 15) & 0xf;
+    setfreq = (1 << 24) + ((xdiv-1) << 18) + ((xmul - 1) << 8) + (xpppp << 4) + (xosc << 2);
+    //enafreq = setfreq + xsel;
+
+    //printf("SYSFREQ = %d, XMUL = %d, SETFREQ = %8.8x, ENAFREQ = %8.8x\n", sysfreq, xmul, setfreq, enafreq);
+    //printf("VCOFREQ = %d\n", xtalfreq/xdiv*xmul);
+
+    return setfreq;
+}
 int main(int argc, char **argv)
 {
     int i;
@@ -345,12 +372,10 @@ int main(int argc, char **argv)
 
     if (load_mode == LOAD_CHIP)
     {
-        int temp = clock_freq / 2500000; // * 72 / 180000000
-        int temp1 = 0x010c0008 | ((temp - 1) << 8);
         if (clock_mode == -1)
         {
-            clock_mode = temp1;
-            if (verbose) printf("Setting clock_mode to %x\n", temp1);
+            clock_mode = get_clock_mode(clock_freq);
+            if (verbose) printf("Setting clock_mode to %x\n", clock_mode);
         }
     }
     else if (load_mode == LOAD_FPGA)
