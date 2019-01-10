@@ -63,9 +63,9 @@ static void chk(char *fun, int sts)
         printf("%s failed\n", fun);
 }
 
-int get_loader_baud(int baud)
+int get_loader_baud(int ubaud, int lbaud)
 {
-    return baud;
+    return lbaud;
 }
 
 int serial_find(const char* prefix, int (*check)(const char* port, void* data), void* data)
@@ -353,6 +353,7 @@ int rx_timeout(uint8_t* buff, int n, int timeout)
  * @param sparm - pointer to DCB serial control struct
  * @returns void
  */
+#if 0
 void hwreset(void)
 {
     int cmd = use_rts_for_reset ? TIOCM_RTS : TIOCM_DTR;
@@ -362,6 +363,19 @@ void hwreset(void)
     msleep(90);
     tcflush(hSerial, TCIFLUSH);
 }
+#else
+void hwreset(void)
+{
+    int cmd = use_rts_for_reset ? TIOCM_RTS : TIOCM_DTR;
+    ioctl(hSerial, TIOCMBIS, &cmd); /* assert bit */
+    msleep(10);
+    ioctl(hSerial, TIOCMBIC, &cmd); /* clear bit */
+    msleep(10);
+    ioctl(hSerial, TIOCMBIS, &cmd); /* assert bit */
+    msleep(90);
+    tcflush(hSerial, TCIFLUSH);
+}
+#endif
 
 /**
  * sleep for ms milliseconds
