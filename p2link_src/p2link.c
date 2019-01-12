@@ -1,3 +1,28 @@
+/*
+ *
+ * Copyright (c) 2018 - 2019 by Dave Hein
+ *
+ * MIT License
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -5,7 +30,7 @@
 
 #define MAX_NAME_LEN 30
 #define MAX_OBJECTS 1000
-#define MAX_SYMBOLS 4000
+#define MAX_SYMBOLS 10000
 
 int FindSymbolLimits(char *str, int type, int first, int last);
 int FindSymbolLimitsMask(char *str, int mask, int first, int last);
@@ -31,6 +56,7 @@ int mem[100000];
 
 void usage(void)
 {
+    printf("p2link - a linker for the propeller 2 - version 0.003, 2019-1-11\n");
     printf("usage: p2link\n");
     printf("         [ -v ]       enable verbose mode\n");
     printf("         [ -d ]       enable debug mode\n");
