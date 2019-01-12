@@ -274,7 +274,7 @@ void serial_done(void)
 {
     if (hSerial != -1) {
         tcflush(hSerial, TCIOFLUSH);
-        tcsetattr(hSerial, TCSANOW, &old_sparm);
+        //tcsetattr(hSerial, TCSANOW, &old_sparm);
         ioctl(hSerial, TIOCNXCL);
         close(hSerial);
         hSerial = -1;
