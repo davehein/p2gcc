@@ -167,16 +167,24 @@ int loadfile(char *fname, int address)
     return 0;
 }
 
-int findp2(char *portprefix, int baudrate)
+int findp2(char *portprefix, int baudrate, char *portname)
 {
     int i, num;
-    char Port[20];
+    char Port[100];
     char buffer[101];
 
     if (verbose) printf("Searching serial ports for a P2\n");
-    for (i = 0; i < 20; i++)
+    if (portname)
     {
-        sprintf(Port, "%s%d", portprefix, i);
+        i = 19;
+        strcpy(Port, portname);
+    }
+    else
+        i = 0;
+    for (; i < 20; i++)
+    {
+        if (!portname)
+            sprintf(Port, "%s%d", portprefix, i);
         if (serial_init(Port, baudrate))
         {
             hwreset();
@@ -355,18 +363,10 @@ int main(int argc, char **argv)
     loader_baud = get_loader_baud(user_baud, loader_baud);
     if (verbose) printf("Set loader_baud to %d\n", loader_baud);
 
-    // Determine the P2 serial port
-    if (!port)
+    // Find a P2 on one of the serial ports, or on the specified port
+    if (!findp2(PORT_PREFIX, LOADER_BAUD, port))
     {
-        if (!findp2(PORT_PREFIX, LOADER_BAUD))
-        {
-            printf("Could not find a P2\n");
-            exit(1);
-        }
-    }
-    else if (1 != serial_init(port, LOADER_BAUD))
-    {
-        printf("Could not open port %s\n", argv[1]);
+        printf("Could not find a P2\n");
         exit(1);
     }
 
