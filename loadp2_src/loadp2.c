@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (c) 2017-2018 by Dave Hein
+ * Copyright (c) 2017-2019 by Dave Hein
  * Based on p2load written by David Betz
  *
  * MIT License
@@ -66,7 +66,7 @@ static int verbose = 0;
 static void Usage(void)
 {
 printf("\
-loadp2 - a loader for the propeller 2 - version 0.007, 2018-12-29\n\
+loadp2 - a loader for the propeller 2 - version 0.008, 2019-1-11\n\
 usage: loadp2\n\
          [ -p port ]               serial port\n\
          [ -b baud ]               baud rate (default is %d)\n\
