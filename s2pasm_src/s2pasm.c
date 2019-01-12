@@ -300,7 +300,8 @@ int IsHubVariable(char *ptr)
         "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11",
         "r12", "r13", "r14", "sp", "lr", "temp", "temp1", "temp2", "__has_cordic",
         "CNT", "INA", "INB", "OUTA", "OUTB", "DIRA", "DIRB",
-        "cnt", "ina", "inb", "outa", "outb", "dira", "dirb", 0};
+        "cnt", "ina", "inb", "outa", "outb", "dira", "dirb",
+        "ijmp1", "ijmp2", "ijmp3", "iret1", "iret2", "iret3",  0};
 
     if (*ptr == '#') return 0;
 
@@ -478,7 +479,7 @@ void CheckLocalName(void)
 
 void usage(void)
 {
-    printf("s2pasm - a utility to convert from P1 to P2 assembly - version 0.004, 2019-1-11\n");
+    printf("s2pasm - a utility to convert from P1 to P2 assembly - version 0.005, 2019-1-12\n");
     printf("usage: s2pasm [options] filename\n");
     printf("  options are\n");
     printf("  -d      - Debug mode\n");
