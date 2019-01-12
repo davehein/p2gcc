@@ -1,7 +1,7 @@
 /*******************************************************************************
 ' Author: Dave Hein
 ' Version 0.002
-' Copyright (c) 2017
+' Copyright (c) 2017 - 2019
 ' See end of file for terms of use.
 '******************************************************************************/
 #include <stdio.h>
@@ -637,6 +637,7 @@ void Disassemble2(int32_t instruct, int32_t pc, char *outstr, int *perrflag)
 
 void usage(void)
 {
+    printf("p2dump - a utility to dump propeller 2 binary files - version 0.003, 2019-1-11\n");
     printf("usage: p2dump [options] file\n");
     printf("  options are:\n");
     printf("  -hub addr - Set hub exec address\n");
