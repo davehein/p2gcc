@@ -69,6 +69,7 @@ int bincount = 0;
 int objflag = 0;
 int hasmain = 0;
 char buffer2[300];
+char buffer3[300];
 int debugflag = 0;
 int case_sensative = 0;
 int datamode = 0;
@@ -94,7 +95,7 @@ void PrintError(char *str, ...)
     vprintf(str, ap);
     vfprintf(lstfile, str, ap);
     va_end(ap);
-    printf("%s\n", buffer2);
+    printf("%s\n", buffer3);
 }
 
 void PrintUnexpected(int num, char *str)
@@ -1929,10 +1930,13 @@ void ParseCon(void)
     datamode = 0;
     cog_addr = 0;
     hub_addr = 0;
+    line_number = 0;
     object_section = SECTION_NULL;
 
     while (ReadString(buffer2, 300, infile, unicode))
     {
+        line_number++;
+        strcpy(buffer3, buffer2);
         if (CheckComment(buffer2, &commentflag)) continue;
 	num = Tokenize(buffer2, tokens, 100, buffer);
         if (num == 0) continue;
@@ -1956,10 +1960,13 @@ void Parse(int pass)
     datamode = 0;
     cog_addr = 0;
     hub_addr = 0;
+    line_number = 0;
     object_section = SECTION_NULL;
 
     while (ReadString(buffer2, 300, infile, unicode))
     {
+        line_number++;
+        strcpy(buffer3, buffer2);
         if (CheckComment(buffer2, &commentflag))
         {
 	    if (pass == 2) fprintf(lstfile, "                   %s\n", buffer2);
