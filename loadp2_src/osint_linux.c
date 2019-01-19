@@ -396,8 +396,6 @@ void msleep(int ms)
 #endif
 }
 
-#define ESC     0x1b    /* escape from terminal mode */
-
 /**
  * simple terminal emulator
  */
@@ -473,7 +471,7 @@ void terminal_mode(int check_for_exit, int pst_mode)
                     int i;
                     for (i = 0; i < cnt; ++i) {
                         //printf("%02x\n", buf[i]);
-                        if (buf[i] == ESC)
+                        if (buf[i] == EXIT_CHAR0)
                             goto done;
                     }
                     write(hSerial, buf, cnt);

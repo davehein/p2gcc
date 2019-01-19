@@ -363,10 +363,18 @@ int main(int argc, char **argv)
     loader_baud = get_loader_baud(user_baud, loader_baud);
     if (verbose) printf("Set loader_baud to %d\n", loader_baud);
 
-    // Find a P2 on one of the serial ports, or on the specified port
-    if (!findp2(PORT_PREFIX, LOADER_BAUD, port))
+    // Determine the P2 serial port
+    if (!port)
     {
-        printf("Could not find a P2\n");
+        if (!findp2(PORT_PREFIX, LOADER_BAUD, port))
+        {
+            printf("Could not find a P2\n");
+            exit(1);
+        }
+    }
+    else if (1 != serial_init(port, LOADER_BAUD))
+    {
+        printf("Could not open port %s\n", port);
         exit(1);
     }
 
@@ -398,7 +406,7 @@ int main(int argc, char **argv)
     if (runterm)
     {
         serial_baud(user_baud);
-        printf("[ Entering terminal mode.  Press ESC to exit. ]\n");
+        printf("( Entering terminal mode.  Press Ctrl-] to exit. )\n");
         terminal_mode(1,pstmode);
     }
 
