@@ -301,7 +301,8 @@ int IsHubVariable(char *ptr)
         "r12", "r13", "r14", "sp", "lr", "temp", "temp1", "temp2", "__has_cordic",
         "CNT", "INA", "INB", "OUTA", "OUTB", "DIRA", "DIRB",
         "cnt", "ina", "inb", "outa", "outb", "dira", "dirb",
-        "ijmp1", "ijmp2", "ijmp3", "iret1", "iret2", "iret3",  0};
+        "ijmp1", "ijmp2", "ijmp3", "iret1", "iret2", "iret3",
+        "ptra", "ptrb",  "pa", "pb", 0};
 
     if (*ptr == '#') return 0;
 
