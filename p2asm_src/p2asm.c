@@ -1480,12 +1480,13 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
             if (rflag)
             {
                 if (hubmode)
-                    value = ((value - hub_addr) >> 2) - 2;
+                    value = ((value - hub_addr) >> 2) - 1;
                 else
                     value -= (cog_addr >> 2) + 1;
             }
 	    opcode |= (value & 511) << 9;
             if (CheckExpected(",", ++i, tokens, num)) break;
+            if (rflag && !strcmp(tokens[i+1], "##")) opcode -= 1 << 9;
             ProcessSrc(&i, tokens, num, &opcode);
             break;
         }
@@ -1502,13 +1503,16 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
         // Handle OP1DOPT instruction, such as getrnd [d]
         case TYPE_OP1DOPT:
         {
-            if (strcmp(tokens[i], "wz") && strcmp(tokens[i], "wc"))
+            if (strcmp(tokens[i], "wz") && strcmp(tokens[i], "wc") && strcmp(tokens[i], "wcz"))
             {
                 if (EvaluateExpression(12, &i, tokens, num, &value, &is_float)) break;
 	        opcode |= (value & 511) << 9;
             }
             else
+            {
                 i--;
+                opcode |= 0x00040000;
+            }
             ProcessWx(&i, tokens, num, &opcode);
             break;
         }
@@ -1990,7 +1994,7 @@ void Parse(int pass)
 
 void usage(void)
 {
-    printf("p2asm - an assembler for the propeller 2 - version 0.006, 2019-1-11\n");
+    printf("p2asm - an assembler for the propeller 2 - version 0.007, 2019-1-20\n");
     printf("usage: p2asm\n");
     printf("  [ -o ]     generate an object file\n");
     printf("  [ -d ]     enable debug prints\n");

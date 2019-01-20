@@ -71,6 +71,14 @@ void ReadSymbolTable(void)
     {
         if (!objflag && p2asmsym[i][5] == '.') break;
         sscanf(p2asmsym[i], "%x %d %s", &s->value, &s->type, s->name);
+        // Prefix MODCZP symbols with "modczp" if generating an object file
+        if (objflag && s->type == TYPE_MODCZP)
+        {
+            char temp_name[MAX_SYMBOL_LEN+1];
+            strcpy(temp_name, "modczp");
+            strcat(temp_name, s->name);
+            strcpy(s->name, temp_name);
+        }
 	s = &SymbolTable[++numsym];
     }
     numsym1 = numsym;
@@ -351,7 +359,7 @@ int EvaluateExpression(int prevprec, int *pindex, char **tokens, int num, int *p
         {
             int is_float1 = 0;
             i++;
-            if ((errnum = EvaluateExpression(12, &i, tokens, num, &value, &is_float1))) return errnum;
+            if ((errnum = EvaluateExpression(1, &i, tokens, num, &value, &is_float1))) return errnum;
             value = 1 << value;
             getvalue = 0;
             *is_float = 0;
