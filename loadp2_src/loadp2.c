@@ -37,7 +37,7 @@
 
 static int loader_baud = 2000000;
 static int clock_mode = -1;
-static int user_baud = -1;
+static int user_baud = 115200;
 static int clock_freq = 80000000;
 static int extra_cycles = 7;
 static int load_mode = -1;
@@ -66,10 +66,11 @@ static int verbose = 0;
 static void Usage(void)
 {
 printf("\
-loadp2 - a loader for the propeller 2 - version 0.008, 2019-1-11\n\
+loadp2 - a loader for the propeller 2 - version 0.009, 2019-1-19\n\
 usage: loadp2\n\
          [ -p port ]               serial port\n\
-         [ -b baud ]               baud rate (default is %d)\n\
+         [ -b baud ]               user baud rate (default is %d)\n\
+         [ -l baud ]               loader baud rate (default is %d)\n\
          [ -f clkfreq ]            clock frequency (default is %d)\n\
          [ -m clkmode ]            clock mode in hex (default is %02x)\n\
          [ -s address ]            starting address in hex (default is 0)\n\
@@ -80,7 +81,7 @@ usage: loadp2\n\
          [ -CHIP ]                 set load mode for CHIP\n\
          [ -FPGA ]                 set load mode for FPGA\n\
          [ -SINGLE ]               set load mode for single stage\n\
-         file                      file to load\n", user_baud, clock_freq, clock_mode);
+         file                      file to load\n", user_baud, loader_baud, clock_freq, clock_mode);
     exit(1);
 }
 
@@ -167,24 +168,16 @@ int loadfile(char *fname, int address)
     return 0;
 }
 
-int findp2(char *portprefix, int baudrate, char *portname)
+int findp2(char *portprefix, int baudrate)
 {
     int i, num;
     char Port[100];
     char buffer[101];
 
     if (verbose) printf("Searching serial ports for a P2\n");
-    if (portname)
+    for (i = 0; i < 20; i++)
     {
-        i = 19;
-        strcpy(Port, portname);
-    }
-    else
-        i = 0;
-    for (; i < 20; i++)
-    {
-        if (!portname)
-            sprintf(Port, "%s%d", portprefix, i);
+        sprintf(Port, "%s%d", portprefix, i);
         if (serial_init(Port, baudrate))
         {
             hwreset();
@@ -289,6 +282,15 @@ int main(int argc, char **argv)
                 else
                     Usage();
             }
+            else if (argv[i][1] == 'l')
+            {
+                if(argv[i][2])
+                    loader_baud = atoi(&argv[i][2]);
+                else if (++i < argc)
+                    loader_baud = atoi(argv[i]);
+                else
+                    Usage();
+            }
             else if (argv[i][1] == 'X')
             {
                 if(argv[i][2])
@@ -359,14 +361,16 @@ int main(int argc, char **argv)
         if (verbose) printf("Setting user_baud to %d\n", user_baud);
     }
 
+#if 0
     // Determine the loader baud rate
     loader_baud = get_loader_baud(user_baud, loader_baud);
     if (verbose) printf("Set loader_baud to %d\n", loader_baud);
+#endif
 
     // Determine the P2 serial port
     if (!port)
     {
-        if (!findp2(PORT_PREFIX, LOADER_BAUD, port))
+        if (!findp2(PORT_PREFIX, LOADER_BAUD))
         {
             printf("Could not find a P2\n");
             exit(1);
