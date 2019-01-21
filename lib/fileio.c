@@ -6,6 +6,8 @@
 #include <sys/stat.h>
 #include "fsrw.h"
 
+char *getsn(char *, int num);
+
 #define EOK         0
 #define ENOENT      1
 #define EEXIST      2
@@ -159,6 +161,11 @@ int fgetc(FILE *fd)
     return val;
 }
 
+int getc(FILE *fd)
+{
+    return fgetc(fd);
+}
+
 int fputc(int val, FILE *fd)
 {
     if (fd->_flag & 0xfff00000)
@@ -169,6 +176,11 @@ int fputc(int val, FILE *fd)
         pputc(val);
     }
     return val;
+}
+
+int putc(int val, FILE *fd)
+{
+    return fputc(val, fd);
 }
 
 int chdir(const char *path)
@@ -268,6 +280,15 @@ int fputs(const char *str, FILE *fd)
         pputs((char *)str);
     }
     return 0;
+}
+
+char *fgets(char *str, int num, FILE *fd)
+{
+    if (fd->_flag & 0xfff00000)
+        getsn(str, num);
+    else
+        hgets((int *)fd->_flag, str, num);
+    return str;
 }
 
 int fflush(FILE *fd)

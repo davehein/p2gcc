@@ -18,3 +18,4 @@ void loadhandle0(void);
 int  nextfile(char *fbuf);
 int  tell(void);
 int  get_filesize(void);
+char *hgets(int *handle, char *ubuf, int count);
