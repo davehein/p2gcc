@@ -1,0 +1,18 @@
+con
+        lr = $1f6
+dat
+        org     7
+r0      long    0
+r1      long    0
+r2      long    0
+
+        orgh    $400
+        .text
+        .global _cognew2
+_cognew2
+       mov     r2, #$10
+       setq    r1
+       coginit r2, r0 wc
+ if_nc mov     r0, r2
+ if_c  neg     r0, #1
+       jmp     lr

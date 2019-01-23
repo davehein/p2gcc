@@ -4,7 +4,7 @@ con
 	clock_freq = 80_000_000
 	baud_rate = 115_200
 	lr = $1f6
-	init_stack_ptr = 32*1024 - 32*4
+	init_stack_ptr = 64*1024 - 32*4
 
 dat
 	orgh	0
@@ -79,15 +79,6 @@ __MEMCPY
         djnz    r2, #__MEMCPY
         ret
 
-prefix_setup
-	mov	sp, ##init_stack_ptr
-	drvh    #tx_pin
-        nop                           'hubset  #$ff
-	mov	r0, #1
-        qmul    r0, r0
-        getqx   __has_cordic
-	ret
-
 __has_cordic
 	long	0
 
@@ -140,6 +131,31 @@ __UDIVSI2
 	mov	r1, r0
 	mov	r0, temp1
         ret
+
+__CMPSWAPSI
+	mov	temp1,r0	'' save value to set
+	rdlong	r0,r2		'' fetch original value
+	cmp	r0,r1 wz	'' compare with desired original value
+ if_z   wrlong  temp1,r2	'' if match, save new value
+	ret
+
+prefix_setup
+        cmp     ptra, #0 wz     ' Check if ptra is zero
+ if_z   jmp     #prefix_setup1  ' If zero set sp to init_stack_ptr
+        mov     sp, ptra
+        rdlong  main_address, sp
+        add     sp, #4
+        rdlong  r0, sp
+        add     sp, #4
+        jmp     #prefix_setup2
+prefix_setup1
+	mov	sp, ##init_stack_ptr
+	drvh    #tx_pin
+prefix_setup2
+	mov	r1, #1
+        qmul    r1, r1
+        getqx   __has_cordic
+	ret
 
 '*******************************************************************************
 '  Program HUB Code
