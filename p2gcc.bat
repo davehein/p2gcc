@@ -1,6 +1,7 @@
 @echo off
 
 if not -%1-==-- goto :nohelp
+echo p2gcc - a C compiler for the propeller 2 - version 0.002, 2019-1-21
 echo usage: p2gcc [options] file [file...]
 echo   options are
 echo   -c      - Do not run the linker
@@ -25,7 +26,7 @@ set linkflag=0
 set ccstr=propeller-elf-gcc -mcog -Os -S
 set s2pasmstr=s2pasm
 set asmstr=p2asm
-set linkstr=p2link %P2GCC_LIBDIR%\prefix.o
+set linkstr=p2link -L %P2GCC_LIBDIR% prefix.o
 set loadstr=loadp2
 set simstr=spinsim
 
@@ -138,8 +139,8 @@ goto argactionstart
 :argactionend
 
 if %linkflag% neq 1 goto :checksim
-if %verbose% equ 1 echo %linkstr% %P2GCC_LIBDIR%\stdio.a %P2GCC_LIBDIR%\stdlib.a %P2GCC_LIBDIR%\string.a
-%linkstr% %P2GCC_LIBDIR%\stdio.a %P2GCC_LIBDIR%\stdlib.a %P2GCC_LIBDIR%\string.a
+if %verbose% equ 1 echo %linkstr% libc.a
+%linkstr% libc.a
 if %ERRORLEVEL% neq 0 goto :eof
 
 :checksim
@@ -161,8 +162,8 @@ if %ERRORLEVEL% neq 0 goto :eof
 exit /b
 
 :runs2pasm
-if %verbose% equ 1 echo %s2pasmstr% -p%P2GCC_LIBDIR%\prefix.spin2 %name%
-%s2pasmstr% -p%P2GCC_LIBDIR%\prefix.spin2 %name%
+if %verbose% equ 1 echo %s2pasmstr% -g -t -p%P2GCC_LIBDIR%\prefix.spin2 %name%
+%s2pasmstr% -g -t -p%P2GCC_LIBDIR%\prefix.spin2 %name%
 if %ERRORLEVEL% neq 0 goto :eof
 exit /b
 
