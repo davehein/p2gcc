@@ -31,6 +31,8 @@
 #define MAX_NAME_LEN 30
 #define MAX_OBJECTS 1000
 #define MAX_SYMBOLS 10000
+#define MAX_LIB_DIRS 10
+#define MAX_LIB_DIR_LEN 100
 
 int FindSymbolLimits(char *str, int type, int first, int last);
 int FindSymbolLimitsMask(char *str, int mask, int first, int last);
@@ -51,17 +53,20 @@ int objnum = 0;
 int verbose = 0;
 int objstart[MAX_OBJECTS+1];
 char objname[MAX_OBJECTS][MAX_NAME_LEN];
+char liblist[MAX_LIB_DIRS][MAX_LIB_DIR_LEN+1];
+int numlibs = 0;
 
 int mem[100000];
 
 void usage(void)
 {
-    printf("p2link - a linker for the propeller 2 - version 0.003, 2019-1-11\n");
+    printf("p2link - a linker for the propeller 2 - version 0.004, 2019-1-21\n");
     printf("usage: p2link\n");
     printf("         [ -v ]       enable verbose mode\n");
     printf("         [ -d ]       enable debug mode\n");
     printf("         [ -o file ]  output file name (default a.out)\n");
     printf("         [ -s addr ]  set starting address (default 0)\n");
+    printf("         [ -L dir ]   specify library directory\n");
     printf("         files        one or more object and library files\n");
     exit(1);
 }
@@ -69,6 +74,43 @@ void usage(void)
 FILE *OpenFile(char *fname, char *mode)
 {
     FILE *iofile = fopen(fname, mode);
+
+    if (!iofile)
+    {
+        printf("Couldn't open %s\n", fname);
+        exit(1);
+    }
+
+    return iofile;
+}
+
+FILE *OpenInputFile(char *fname)
+{
+    int i;
+    char *ptr;
+    FILE *iofile = 0;
+    char fname1[MAX_LIB_DIR_LEN + 50];
+
+    for (ptr = fname; *ptr; ptr++)
+    {
+        if (*ptr == '/' || *ptr == '\\') break;
+    }
+
+    if (*ptr)
+        iofile = fopen(fname, "rb");
+    else
+    {
+        for (i = 0; i < numlibs; i++)
+        {
+            strcpy(fname1, liblist[i]);
+            ptr = fname1 + strlen(fname1) - 1;
+            if (*ptr != '/' && *ptr != '\\')
+                strcat(fname1, "/");
+            strcat(fname1, fname);
+            iofile = fopen(fname1, "rb");
+            if (iofile) break;
+        }
+    }
 
     if (!iofile)
     {
@@ -520,6 +562,7 @@ int main(int argc, char **argv)
 
     memset(symoffset, 0, MAX_SYMBOLS*4);
     strcpy(outfname, "a.out");
+    strcpy(liblist[numlibs++], "./");
     for (i = 1; i < argc; i++)
     {
         if (argv[i][0] == '-')
@@ -535,6 +578,20 @@ int main(int argc, char **argv)
                 else
                     strcpy(outfname, argv[i]);
             }
+            else if (argv[i][1] == 'L')
+            {
+                if (numlibs >= MAX_LIB_DIRS)
+                {
+                    printf("Too many library directories\n");
+                    exit(1);
+                }
+                if (argv[i][2])
+                    strcpy(liblist[numlibs++], &argv[i][2]);
+                else if (++i >= argc)
+                    usage();
+                else
+                    strcpy(liblist[numlibs++], argv[i]);
+            }
             else if (argv[i][1] == 's')
             {
                 if (argv[i][2])
@@ -549,7 +606,7 @@ int main(int argc, char **argv)
         }
         else
         {
-            infile = OpenFile(argv[i], "rb");
+            infile = OpenInputFile(argv[i]);
             ReadFile(infile, is_lib(argv[i]));
             fclose(infile);
         }

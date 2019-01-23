@@ -1,5 +1,5 @@
                                     P2LINK
-                               December 4, 2018
+                               January 22, 2019
                                    Dave Hein
 
 P2link is a linker that produces a P2 executable binary file.  It will link one
@@ -10,11 +10,13 @@ location zero or $400, but anthing below $400 will be ignored.
 If p2link is run without parameters, or a bad parameter is encountered the
 following usage message will be printed:
 
+p2link - a linker for the propeller 2 - version 0.004, 2019-1-21
 usage: p2link
          [ -v ]       enable verbose mode
          [ -d ]       enable debug mode
          [ -o file ]  output file name (default a.out)
          [ -s addr ]  set starting address (default 0)
+         [ -L dir ]   specify library directory
          files        one or more object and library files
 
 Object files use the following format:
