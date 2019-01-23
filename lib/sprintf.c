@@ -2,6 +2,7 @@
 #include <stdio.h>
 //#include <ctype.h>
 #include <compiler.h>
+#include <stdint.h>
 
 /*
  * very simple printf -- just understands a few format features
@@ -62,7 +63,7 @@ static int ISDIGIT(int val)
 }
 
 static int
-putlw(char **ptr, ULONG u, int base, int width, int fill_char)
+putlw(char **ptr, uint64_t u, int base, int width, int fill_char, int digits)
 {
 	int put = 0;
 	char obuf[24]; /* 64 bits -> 22 digits maximum in octal */ 
@@ -71,7 +72,7 @@ putlw(char **ptr, ULONG u, int base, int width, int fill_char)
 	t = obuf;
 
 	do {
-		*t++ = d2a(u % base);
+		*t++ = d2a((int)(u % base));
 		u /= base;
 		width--;
 	} while (u > 0);
@@ -91,10 +92,11 @@ _doprnt(char *ptr, const char *fmt, va_list args )
    char c, fill_char;
    char *s_arg;
    unsigned int i_arg;
-   ULONG l_arg;
+   uint64_t l_arg;
    int width, long_flag;
    int outbytes = 0;
    int base;
+   int digits;
 
    while( (c = *fmt++) != 0 ) {
      if (c != '%') {
@@ -103,6 +105,7 @@ _doprnt(char *ptr, const char *fmt, va_list args )
      }
      c = *fmt++;
      width = 0;
+     digits = 0;
      long_flag = 0;
      fill_char = ' ';
      if (c == '0') fill_char = '0';
@@ -110,6 +113,16 @@ _doprnt(char *ptr, const char *fmt, va_list args )
        width = 10*width + (c-'0');
        c = *fmt++;
      }
+     if (c == '.')
+     {
+       c = *fmt++;
+       while (c && ISDIGIT(c)) {
+         digits = 10*digits + (c-'0');
+         c = *fmt++;
+       }
+     }
+     else
+       digits = width;
      /* for us "long int" and "int" are the same size, so
 	we can ignore one 'l' flag; use long long if two
     'l flags are seen */
@@ -135,15 +148,17 @@ _doprnt(char *ptr, const char *fmt, va_list args )
      case 'x':
      case 'u':
        base = (c == 'x') ? 16 : 10;
-       l_arg = va_arg(args, ULONG);
+       l_arg = (uint64_t)va_arg(args, ULONG);
+       if (long_flag >= 2)
+         l_arg |= ((uint64_t)va_arg(args, ULONG)) << 32;
        if (c == 'd') {
-	 if (((LONG)l_arg) < 0) {
+	 if (((int64_t)l_arg) < 0) {
            outbytes += putcw(&ptr, '-', 1);
            width--;
-           l_arg = (ULONG)(-((LONG)l_arg));
+           l_arg = (uint64_t)(-((int64_t)l_arg));
          }
        }
-       outbytes += putlw(&ptr, l_arg, base, width, fill_char);
+       outbytes += putlw(&ptr, l_arg, base, width, fill_char, digits);
        break;
      }
    }
