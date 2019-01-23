@@ -22,7 +22,7 @@ char *getsn(char *, int num);
 #define ENOMEM     11
 
 int errno;
-FILE __files[10] = {0};
+FILE __files[10] = {{0}};
 static char dirbuf[16];
 static char currentwd[100];
 
