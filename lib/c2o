@@ -1,4 +1,4 @@
 echo $1
-propeller-elf-gcc -Wall -mcog -O2 -S $1.c
+propeller-elf-gcc -Wall -mcog -O2 -m32bit-doubles -S $1.c
 ../bin/s2pasm -p prefix.spin2 $1
-../bin/p2asm -o -hub $1.spin2
+../bin/p2asm -c -o -hub $1.spin2

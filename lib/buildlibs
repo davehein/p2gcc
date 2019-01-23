@@ -7,5 +7,13 @@ chmod +x c2o
 ./buildstdiolib
 ./buildstdlib
 ./buildstrlib
+./c2o cogstart
+./c2o cogthread
+../bin/p2asm -o cognew2.spin2
+./c2o float
+./c2o longlong
+./c2o libm
+cat stdio.a stdlib.a string.a cogstart.o cogthread.o cognew2.o float.o longlong.o >libc.a
+cp libm.o libm.a
 ../bin/p2asm -o prefix.spin2
 ./cleanup
