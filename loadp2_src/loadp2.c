@@ -41,6 +41,7 @@ static int user_baud = 115200;
 static int clock_freq = 80000000;
 static int extra_cycles = 7;
 static int load_mode = -1;
+static int patch_mode = 0;
 
 int get_loader_baud(int ubaud, int lbaud);
 
@@ -66,7 +67,7 @@ static int verbose = 0;
 static void Usage(void)
 {
 printf("\
-loadp2 - a loader for the propeller 2 - version 0.009, 2019-1-19\n\
+loadp2 - a loader for the propeller 2 - version 0.010, 2019-1-23\n\
 usage: loadp2\n\
          [ -p port ]               serial port\n\
          [ -b baud ]               user baud rate (default is %d)\n\
@@ -96,6 +97,9 @@ int loadfilesingle(char *fname)
 {
     FILE *infile;
     int num, size, i;
+    int patch = patch_mode;
+    int address = 0;
+    int bitcycles = clock_freq/user_baud;
 
     infile = fopen(fname, "rb");
     if (!infile)
@@ -113,6 +117,14 @@ int loadfilesingle(char *fname)
 
     while ((num=fread(binbuffer, 1, 101, infile)))
     {
+        if (patch)
+        {
+            patch = 0;
+            memcpy(&binbuffer[4], &clock_freq, 4);
+            memcpy(&binbuffer[8], &user_baud, 4);
+            memcpy(&binbuffer[12], &address, 4);
+            memcpy(&binbuffer[16], &bitcycles, 4);
+        }
         for( i = 0; i < num; i++ )
             sprintf( &buffer[i*3], " %2.2x", binbuffer[i] & 255 );
         tx( (uint8_t *)buffer, strlen(buffer) );
@@ -128,12 +140,11 @@ int loadfile(char *fname, int address)
 {
     FILE *infile;
     int num, size;
+    int patch = patch_mode;
+    int bitcycles = clock_freq/user_baud;
 
     if (load_mode == LOAD_SINGLE)
-    {
-        loadfilesingle(fname);
-        return 0;
-    }
+        return loadfilesingle(fname);
 
     infile = fopen(fname, "rb");
     if (!infile)
@@ -161,6 +172,14 @@ int loadfile(char *fname, int address)
     msleep(100);
     while ((num=fread(buffer, 1, 1024, infile)))
     {
+        if (patch)
+        {
+            patch = 0;
+            memcpy(&buffer[4], &clock_freq, 4);
+            memcpy(&buffer[8], &user_baud, 4);
+            memcpy(&buffer[12], &address, 4);
+            memcpy(&buffer[16], &bitcycles, 4);
+        }
         tx((uint8_t *)buffer, num);
     }
     msleep(50);
@@ -195,12 +214,12 @@ int findp2(char *portprefix, int baudrate)
                     if (buffer[11] == 'A')
                     {
                         load_mode = LOAD_CHIP;
-                        if (verbose) printf("Setting load_mode to LOAD_CHIP\n");
+                        if (verbose) printf("Setting load mode to CHIP\n");
                     }
                     else if (buffer[11] == 'B')
                     {
                         load_mode = LOAD_FPGA;
-                        if (verbose) printf("Setting load_mode to LOAD_FPGA\n");
+                        if (verbose) printf("Setting load mode to FPGA\n");
                     }
                     else
                     {
@@ -333,6 +352,8 @@ int main(int argc, char **argv)
                 runterm = pstmode = 1;
             else if (argv[i][1] == 'v')
                 verbose = 1;
+            else if (!strcmp(argv[i], "-PATCH"))
+                patch_mode = 1;
             else if (!strcmp(argv[i], "-CHIP"))
                 load_mode = LOAD_CHIP;
             else if (!strcmp(argv[i], "-FPGA"))
@@ -352,7 +373,7 @@ int main(int argc, char **argv)
         }
     }
 
-    if (!fname) Usage();
+    if (!fname && (!port || !runterm)) Usage();
 
     // Determine the user baud rate
     if (user_baud == -1)
@@ -382,29 +403,37 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    if (load_mode == LOAD_CHIP)
+    if (fname)
     {
-        if (clock_mode == -1)
+        if (load_mode == LOAD_CHIP)
         {
-            clock_mode = get_clock_mode(clock_freq);
-            if (verbose) printf("Setting clock_mode to %x\n", clock_mode);
+            if (clock_mode == -1)
+            {
+                clock_mode = get_clock_mode(clock_freq);
+                if (verbose) printf("Setting clock_mode to %x\n", clock_mode);
+            }
         }
-    }
-    else if (load_mode == LOAD_FPGA)
-    {
-        int temp = clock_freq / 312500; // * 256 / 80000000
-        int temp1 = temp - 1;
-        if (clock_mode == -1)
+        else if (load_mode == LOAD_FPGA)
         {
-            clock_mode = temp1;
-            if (verbose) printf("Setting clock_mode to %x\n", temp1);
+            int temp = clock_freq / 312500; // * 256 / 80000000
+            int temp1 = temp - 1;
+            if (clock_mode == -1)
+            {
+                clock_mode = temp1;
+                if (verbose) printf("Setting clock_mode to %x\n", temp1);
+            }
         }
-    }
+        else if (load_mode == -1)
+        {
+            load_mode = LOAD_SINGLE;
+            if (verbose) printf("Setting load mode to SINGLE\n");
+        }
 
-    if (loadfile(fname, address))
-    {
-        serial_done();
-        exit(1);
+        if (loadfile(fname, address))
+        {
+            serial_done();
+            exit(1);
+        }
     }
 
     if (runterm)
