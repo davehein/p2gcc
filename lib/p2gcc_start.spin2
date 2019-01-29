@@ -1,0 +1,19 @@
+dat
+	orgh	$400
+
+	.data
+
+	.global	_p2clkfreq
+	.balign	4
+_p2clkfreq
+	long	80000000
+
+	.global	_p2baudrate
+	.balign	4
+_p2baudrate
+	long	115200
+
+	.global	_p2bitcycles
+	.balign	4
+_p2bitcycles
+	long	694

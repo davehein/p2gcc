@@ -16,4 +16,5 @@ chmod +x c2o
 cat stdio.a stdlib.a string.a cogstart.o cogthread.o cognew2.o float.o longlong.o >libc.a
 cp libm.o libm.a
 ../bin/p2asm -o prefix.spin2
+../bin/p2asm -o p2gcc_start.spin2
 ./cleanup
