@@ -65,7 +65,11 @@ static void chk(char *fun, int sts)
 
 int get_loader_baud(int ubaud, int lbaud)
 {
+#ifdef MACOSX
+    return 921600;
+#else
     return lbaud;
+#endif
 }
 
 int serial_find(const char* prefix, int (*check)(const char* port, void* data), void* data)
@@ -226,8 +230,8 @@ last_baud = baud;
             tbaud = B9600;
             break;
         default:
-            printf("Unsupported baudrate. Use ");
-            tbaud = baud; break;
+            printf("Unsupported baudrate %lu. Use ", baud);
+            tbaud = baud;
 #ifdef B921600
             printf("921600, ");
 #endif
