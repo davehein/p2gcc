@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include "propeller.h"
 
-unsigned int _clkfreq = 80000000;
+unsigned int p2clkfreq;
 
 unsigned int clock(void)
 {
@@ -31,7 +31,7 @@ void main (int argc,  char* argv[])
     unsigned int executionTime;
     unsigned int rawTime;
 
-    waitcnt(CNT+12000000);
+    sleep(1);
     printf("hello, world!\r\n");
     for (n = 0; n <= 26; n++)
     {
@@ -40,7 +40,7 @@ void main (int argc,  char* argv[])
         result = fibo(n);
         endTime = clock();
         rawTime = endTime - startTime;
-        executionTime = rawTime / (CLKFREQ / 1000);
+        executionTime = rawTime / (p2clkfreq / 1000);
         printf ("%06d (%05ums) (%u ticks)\n", result, executionTime, rawTime);
     }
 }

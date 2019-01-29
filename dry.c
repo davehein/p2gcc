@@ -2,8 +2,6 @@
 #include <stdlib.h>
 #include <propeller.h>
 
-unsigned int _clkfreq = 80000000;
-
 #define INTEGER_ONLY
 #define MSC_CLOCK
 #define CLOCKS_PER_SEC 80000000
@@ -387,6 +385,18 @@ unsigned int _clkfreq = 80000000;
 
 /* variables for time measurement: */
 
+#define USE_P2CLKFREQ
+
+#ifdef USE_P2CLKFREQ
+
+#define CLOCK_TYPE "P2 Cycles"
+#define Start_Timer() Begin_Time = CNT
+#define Stop_Timer()  End_Time   = CNT
+unsigned int p2clkfreq;
+#define HZ p2clkfreq
+unsigned int Too_Small_Time;
+
+#else // USE_P2CLKFREQ
 #ifdef TIME
 
 #define CLOCK_TYPE "time()"
@@ -440,12 +450,12 @@ struct tms      time_info;
 
 #endif /* MSC_CLOCK */
 #endif /* TIME */
-
+#endif
 
 //#define Mic_secs_Per_Second     1000000.0
 #define Mic_secs_Per_Second     1000000
 
-#define FIXED_NUMBER_OF_PASSES 5000
+#define FIXED_NUMBER_OF_PASSES 10000
 
 #ifdef FIXED_NUMBER_OF_PASSES
 #define NUMBER_OF_RUNS          FIXED_NUMBER_OF_PASSES
@@ -574,7 +584,10 @@ int main (argc, argv) int argc; char *argv[];
   REG   int             Run_Index;
   REG   int             Number_Of_Runs;
 
-  waitcnt(CNT+12000000);
+#ifdef USE_P2CLKFREQ
+  Too_Small_Time = 2 * p2clkfreq;
+  waitcnt(p2clkfreq + CNT);
+#endif
 
 #if !defined(FIXED_NUMBER_OF_PASSES)
   /* Arguments */
