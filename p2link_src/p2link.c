@@ -60,7 +60,7 @@ int mem[100000];
 
 void usage(void)
 {
-    printf("p2link - a linker for the propeller 2 - version 0.004, 2019-1-21\n");
+    printf("p2link - a linker for the propeller 2 - version 0.005, 2019-1-28\n");
     printf("usage: p2link\n");
     printf("         [ -v ]       enable verbose mode\n");
     printf("         [ -d ]       enable debug mode\n");
@@ -232,6 +232,7 @@ exit(1);
         fread(bufptr, 1, len, infile);
         symname[numsym] = bufptr;
         bufptr += len;
+        symoffset[numsym] = 0;
         if (debugflag)
             printf("%d: %2.2x %2.2x %8.8x %s\n", numsym, symtype[numsym], symsect[numsym], symvalue[numsym], symname[numsym]);
         numsym++;
