@@ -1,18 +1,19 @@
 #include <stdarg.h>
 #include <stdio.h>
-//#include <ctype.h>
 #include <compiler.h>
 #include <stdint.h>
+#include <string.h>
 
 /*
- * very simple printf -- just understands a few format features
- * does c,s,u,d,x
+ * printf
+ * does c,s,u,d,x,f,e
  */
 
 #define ULONG unsigned long
 #define LONG long
 
-//unsigned char __ctype[];
+char *putfloatf(char *str, int x, int width, int digits);
+char *putfloate(char *str, int x, int width, int digits);
 
 static int
 putcw(int c, int width) {
@@ -78,6 +79,28 @@ putlw(uint64_t u, int base, int width, int fill_char, int digits)
 }
 
 static int
+putf(int val, int width, int digits)
+{
+    char obuf[100];
+    char *ptr = obuf;
+
+    putfloatf(obuf, val, width, digits);
+    while (*ptr) putchar(*ptr++);
+    return strlen(obuf);
+}
+
+static int
+pute(int val, int width, int digits)
+{
+    char obuf[100];
+    char *ptr = obuf;
+
+    putfloate(obuf, val, width, digits);
+    while (*ptr) putchar(*ptr++);
+    return strlen(obuf);
+}
+
+static int
 _doprnt( const char *fmt, va_list args )
 {
    char c, fill_char;
@@ -96,7 +119,7 @@ _doprnt( const char *fmt, va_list args )
      }
      c = *fmt++;
      width = 0;
-     digits = 0;
+     digits = -1;
      long_flag = 0;
      fill_char = ' ';
      if (c == '0') fill_char = '0';
@@ -107,13 +130,12 @@ _doprnt( const char *fmt, va_list args )
      if (c == '.')
      {
        c = *fmt++;
+       digits = 0;
        while (c && ISDIGIT(c)) {
          digits = 10*digits + (c-'0');
          c = *fmt++;
        }
      }
-     else
-       digits = width;
      /* for us "long int" and "int" are the same size, so
 	we can ignore one 'l' flag; use long long if two
     'l flags are seen */
@@ -141,7 +163,9 @@ _doprnt( const char *fmt, va_list args )
        base = (c == 'x') ? 16 : 10;
        l_arg = (uint64_t)va_arg(args, ULONG);
        if (long_flag >= 2)
-           l_arg |= ((uint64_t)va_arg(args, ULONG)) << 32;
+         l_arg |= ((uint64_t)va_arg(args, ULONG)) << 32;
+       else
+         l_arg = (((int64_t)l_arg) << 32) >> 32;
        if (c == 'd') {
          if ((int64_t)l_arg < 0) {
            outbytes += putcw('-', 1);
@@ -150,6 +174,14 @@ _doprnt( const char *fmt, va_list args )
          }
        }
        outbytes += putlw(l_arg, base, width, fill_char, digits);
+       break;
+     case 'f':
+       i_arg = va_arg(args, unsigned int);
+       outbytes += putf(i_arg, width, digits);
+       break;
+     case 'e':
+       i_arg = va_arg(args, unsigned int);
+       outbytes += pute(i_arg, width, digits);
        break;
      }
    }
