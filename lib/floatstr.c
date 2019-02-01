@@ -55,14 +55,21 @@ static char ndecs[]  = {  1, 2,  3,  6, 12, 24, 0, 0 };
 */ 
 char *putfloate(char *str, float x, int width, int digits)
 {
-  int man, exp10, signbit;
+  int man, exp10, signbit, temp;
 
   if (digits < 0)
     digits = 6;
   signbit = tofloat10(x, &man, &exp10);
   if (man)
+  {
     exp10 += round10(digits + 1, &man) + digits;
-  width -= 5 + signbit + (digits != 0);
+    if (numdigits(man, &temp) > digits + 1)
+    {
+      exp10++;
+      man /= 10;
+    }
+  }
+  width -= 5 - signbit + (digits != 0);
   while (width-- > digits)
     *str++ = ' ';
   if (signbit)
@@ -95,32 +102,44 @@ char *putfloate(char *str, float x, int width, int digits)
 char *putfloatf(char *str, float x, int width, int digits)
 {
   int lead0, trail0, man, exp10, signbit, digits0;
+  int leftdigits, temp;
 
   if (digits < 0)
     digits = 6;
   signbit = tofloat10(x, &man, &exp10);
   if (man == 0)
   {
-    width -= digits + (digits > 0);
+    width -= digits + (digits > 0) + 1;
     while (width-- > 0)
       *str++ = ' ';
     str = dochar(str, '0', 1, digits + 1);
     return str;
   }
   digits0 = numdigits(man, &lead0) + exp10;
+  leftdigits = digits0;
   if (digits0 > 0)
     width -= digits0;
   digits0 += digits;
   if (digits0 > 8)
     digits0 = 8;
-  exp10 += round10(digits0, &man) + digits0 - 1;
+  temp = round10(digits0, &man);
+  if (numdigits(man, &lead0) > digits0)
+  {
+    if (++leftdigits > 0)
+      width--;
+    if (digits0 == 8)
+      man /= 10;
+    else if (++digits0 > 8)
+      digits0 = 8;
+  }
+  exp10 += temp + digits0 - 1;
   if (digits0 < 0)
     digits0 = 0;
   else if (digits0 == 0 && man == 1 && digits > 0)
     digits0 = 1;
   lead0 = digits - digits0;
   trail0 = digits - digits0 + exp10 + 1;
-  width -= signbit + digits + (lead0 >= 0) + 1;
+  width -= -signbit + digits + (lead0 >= 0) + 1;
   while (width-- > 0)
     *str++ = ' ';
   if (signbit)
@@ -175,6 +194,11 @@ float strtofloat(char **pstr)
         value = strchar - '0';
       else if (strchar == '-')
         signbit = 1;
+      else if (strchar == '.')
+      {
+        mode = 2;
+        continue;
+      }
       else if (strchar != '+')
         loop = 0;
       mode = 1;
@@ -380,10 +404,9 @@ static int round10(int digits, int *pman)
   else if (digits == 0)
   {
     if (man / divisor >= 5)
-    {
       man = 1;
-      exp10++;
-    }
+    else
+      man = 0;
   }
   else if (exp10 > 0)
   {
@@ -392,11 +415,6 @@ static int round10(int digits, int *pman)
       rounder *= 10;
     man = (man + (rounder >> 1)) / rounder;
     divisor /= rounder;
-    if (man / divisor > 9)
-    {
-      man /= 10;
-      exp10++;
-    }
   }
   else if (exp10 < 0)
   {
