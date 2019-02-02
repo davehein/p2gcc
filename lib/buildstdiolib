@@ -1,7 +1,9 @@
+./c2o simple_printf
 ./c2o printf
 ./c2o sprintf
 ./c2o scanf
 ./c2o sscanf
+./c2o fscanf
 ./c2o fprintf
 ./c2o fileio
 ./c2o fsrw
@@ -12,4 +14,5 @@
 ./s2o getch
 ./c2o putchar
 ./c2o putch
-cat printf.o sprintf.o scanf.o sscanf.o fprintf.o fileio.o fsrw.o sdspi.o puts.o gets.o getchar.o getch.o putchar.o putch.o >stdio.a
+./c2o floatstr
+cat simple_printf.o printf.o sprintf.o scanf.o sscanf.o fscanf.o fprintf.o fileio.o fsrw.o sdspi.o puts.o gets.o getchar.o getch.o putchar.o putch.o floatstr.o >stdio.a
