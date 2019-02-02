@@ -20,11 +20,13 @@ char *getsn(char *, int num);
 #define ENOTEMPTY   9
 #define ENOSPC     10
 #define ENOMEM     11
+#define ENXIO      12
 
 int errno;
 FILE __files[10] = {{0}};
 static char dirbuf[16];
 static char currentwd[100];
+static int mounted = 0;
 
 void sd_mount(int DO, int CLK, int DI, int CS)
 {
@@ -34,12 +36,14 @@ void sd_mount(int DO, int CLK, int DI, int CS)
     __files[2]._flag = 0x100000;
     for (i = 3; i < 10; i++) __files[i]._flag = 0;
     strcpy(currentwd, "/");
-    mount_explicit(DO, CLK, DI, CS);
+    if (!mount_explicit(DO, CLK, DI, CS))
+      mounted = 1;
 }
 
 void sd_unmount(void)
 {
     unmount();
+    mounted = 0;
 }
 
 FILE *allocfile(int size)
@@ -69,6 +73,11 @@ FILE *fopen(const char *fname, const char *mode)
 {
     FILE *fd;
     int *handle;
+    if (!mounted)
+    {
+        errno = ENXIO;
+        return 0;
+    }
     if (*mode != 'r' && *mode != 'w' && *mode != 'a')
     {
         errno = EINVAL;
@@ -147,6 +156,11 @@ size_t fwrite(const void *ptr0, size_t size, size_t num, FILE *fd)
 
 int remove(const char *fname)
 {
+    if (!mounted)
+    {
+        errno = ENXIO;
+        return 1;
+    }
     loadhandle0();
     errno = popen((char *)fname, 'd');
     return 0;
@@ -186,6 +200,11 @@ int putc(int val, FILE *fd)
 int chdir(const char *path)
 {
     int err;
+    if (!mounted)
+    {
+        errno = ENXIO;
+        return -1;
+    }
     if (!(err = pchdir((char *)path)))
     {
         if (*path == '/')
@@ -250,6 +269,9 @@ static char *get_errstr(void)
         case ENOMEM:
             ptr = "Not enough memory";
             break;
+        case ENXIO:
+            ptr = "No such devide or address";
+            break;
         default:
             ptr = "Unknown error";
             break;
@@ -304,6 +326,11 @@ DIR *opendir(const char *path)
 {
     FILE *fd;
     int *handle;
+    if (!mounted)
+    {
+        errno = ENXIO;
+        return 0;
+    }
     if (path[0] && strcmp(path, ".") && strcmp(path, "/") && strcmp(path,"./"))
         return 0;
     fd = allocfile(44 + 512);
@@ -358,6 +385,11 @@ int stat(const char *fname, struct stat *buf)
 {
     int retval;
     int filestat[2];
+    if (!mounted)
+    {
+        errno = ENXIO;
+        return -1;
+    }
     loadhandle0();
     retval = popen((char *)fname, 'r');
     if (retval) return -1;
@@ -373,7 +405,13 @@ int stat(const char *fname, struct stat *buf)
 
 int mkdir(const char *path, int mode)
 {
-    int err = pmkdir((char *)path);
+    int err;
+    if (!mounted)
+    {
+        errno = ENXIO;
+        return -1;
+    }
+    err = pmkdir((char *)path);
     if (err)
         errno = EEXIST;
     return err;
@@ -381,4 +419,6 @@ int mkdir(const char *path, int mode)
 
 void rmdir(void)
 {
+    if (!mounted)
+        errno = ENXIO;
 }
