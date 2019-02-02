@@ -30,6 +30,12 @@ int sscanf(const char *str, const char *fmt, ...)
                 count++;
                 *iptr = strtol(ptr, &ptr, 16);
             }
+            else if (*fmt == 'f' || *fmt == 'g')
+            {
+                float *fptr = (float *)va_arg(va, int);
+                count++;
+                *fptr = strtof(ptr, &ptr);
+            }
             else if (*fmt == 's')
             {
                 ptr1 = (char *)va_arg(va, int);

@@ -1,14 +1,19 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdarg.h>
 
 int scanf(const char *fmt, ...)
 {
+    char *ptr;
+    int *iptr;
+    char *ptr1;
     va_list va;
     int count = 0;
-    int negate, value, inval;
-    char *cptr;
-    int *iptr;
+    char inbuf[200];
+
+    gets(inbuf);
     va_start(va, fmt);
+    ptr = inbuf;
     while (*fmt)
     {
         if (*fmt == '%')
@@ -17,82 +22,29 @@ int scanf(const char *fmt, ...)
             if (*fmt == 0) break;
             if (*fmt == 'd')
             {
-                negate = 0;
-                value = 0;
                 iptr = (int *)va_arg(va, int);
                 count++;
-                while (1)
-                {
-                    inval = getchar();
-                    if (inval > ' ') break;
-                }
-                if (inval == '+')
-                    inval = getchar();
-                else if (inval == '-')
-                {
-                    negate = 1;
-                    inval = getchar();
-                }
-                while (inval >= '0' && inval <= '9')
-                {
-                    value = value * 10 + inval - '0';
-                    inval = getchar();
-                }
-                if (negate)
-                    *iptr = -value;
-                else
-                    *iptr = value;
+                *iptr = strtol(ptr, &ptr, 10);
             }
             else if (*fmt == 'x')
             {
-                negate = 0;
-                value = 0;
                 iptr = (int *)va_arg(va, int);
                 count++;
-                while (1)
-                {
-                    inval = getchar();
-                    if (inval > ' ') break;
-                }
-                if (inval == '+')
-                    inval = getchar();
-                else if (inval == '-')
-                {
-                    negate = 1;
-                    inval = getchar();
-                }
-                while (1)
-                {
-                    if (inval >= '0' && inval <= '9')
-                        value = (value << 4) + inval - '0';
-                    else if (inval >= 'A' && inval <= 'F')
-                        value = (value << 4) + inval - 'A' + 10;
-                    else if (inval >= 'a' && inval <= 'f')
-                        value = (value << 4) + inval - 'a' + 10;
-                    else
-                        break;
-                    inval = getchar();
-                }
-                if (negate)
-                    *iptr = -value;
-                else
-                    *iptr = value;
+                *iptr = strtol(ptr, &ptr, 16);
+            }
+            else if (*fmt == 'f' || *fmt == 'g')
+            {
+                float *fptr = (float *)va_arg(va, int);
+                count++;
+                *fptr = strtof(ptr, &ptr);
             }
             else if (*fmt == 's')
             {
-                cptr = (char *)va_arg(va, int);
+                ptr1 = (char *)va_arg(va, int);
                 count++;
-                while (1)
-                {
-                    inval = getchar();
-                    if (inval > ' ') break;
-                }
-                while (inval > ' ')
-                {
-                    *cptr++ = inval;
-                    inval = getchar();
-                }
-                *cptr = 0;
+                while (*ptr && *ptr == ' ') ptr++;
+                while (*ptr && *ptr != ' ') *ptr1++ = *ptr++;
+                *ptr1 = 0;
             }
         }
         fmt++;
