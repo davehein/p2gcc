@@ -22,6 +22,7 @@
 #include <stdint.h>
 #include <string.h>
 
+float strtofloat(char **pstr);
 static int numdigits(int man, int *pdiv);
 static int round10(int digits, int *pman);
 static char *utoa10(int number, char *str, int point);
@@ -43,6 +44,19 @@ static int scale2[] = {
 static char nbits1[] = {  4, 7, 10, 20, 40, 80, 0, 0 };
 static char nbits2[] = {  3, 6,  9, 19, 39, 79, 0, 0 };
 static char ndecs[]  = {  1, 2,  3,  6, 12, 24, 0, 0 };
+
+double atof(const char *str)
+{
+  return (double)strtofloat((char **)&str);
+}
+
+float strtof(const char *str, char **endptr)
+{
+  float x = strtofloat((char **)&str);
+  if (endptr)
+    *endptr = (char *)str;
+  return x;
+}
 
 //******************************************************************************  
 // Floating Point Routines
