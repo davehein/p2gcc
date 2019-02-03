@@ -27,10 +27,12 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include "lmmsubs.h"
 
-static char buffer1[1000];
+char buffer1[1000];
 static char buffer2[1000];
 
+static int lmmflag = 0;
 static int debugflag = 0;
 
 FILE *infile;
@@ -480,10 +482,11 @@ void CheckLocalName(void)
 
 void usage(void)
 {
-    printf("s2pasm - a utility to convert from P1 to P2 assembly - version 0.005, 2019-1-12\n");
+    printf("s2pasm - a utility to convert from P1 to P2 assembly - version 0.006, 2019-2-2\n");
     printf("usage: s2pasm [options] filename\n");
     printf("  options are\n");
     printf("  -d      - Debug mode\n");
+    printf("  -lmm    - lmm mode\n");
     printf("  -p file - Specify prefix file name\n");
     exit(1);
 }
@@ -503,6 +506,8 @@ int main(int argc, char **argv)
         {
             if (!strcmp(argv[argi], "-d"))
                 debugflag = 1;
+            else if (!strcmp(argv[argi], "-lmm"))
+                lmmflag = 1;
             else if (argv[argi][1] == 'p')
             {
                 if (argv[argi][2])
@@ -569,12 +574,20 @@ int main(int argc, char **argv)
         ReplaceString(" maxs\t", " fles\t");
         ReplaceString(" min\t", " fge\t");
         ReplaceString(" mins\t", " fges\t");
-        //ReplaceString(".L", "_L");
-        //ReplaceString(".balign\t4", "alignl");
-        //ReplaceString(".balign\t2", "alignw");
         ReplaceString("0x", "$");
         ReplaceString("jmpret", "calld");
         ReplaceString("__MASK_", "##$");
+        if (lmmflag)
+        {
+            if (CheckPushPop()) continue;
+            if (Modify("mvi", "mov", "##")) continue;
+            if (Modify("lcall", "calld", "lr,#")) continue;
+            if (Modify("brs", "jmp", "#")) continue;
+            if (CheckLmmJmp()) continue;
+            if (CheckLmmCallIndirect()) continue;
+            if (CheckMovPcLr()) continue;
+            if (CheckMorePc()) continue;
+        }
         if (CheckMova()) continue;
         if (CheckWaitcnt()) continue;
         if (CheckCoginit()) continue;
@@ -588,7 +601,7 @@ int main(int argc, char **argv)
             fprintf(outfile, "\tlong\t%s%s", &buffer1[6], NEW_LINE);
             continue;
         }
-        if (CheckSourceDest()) continue;
+        if (!lmmflag && CheckSourceDest()) continue;
         if (CheckNR()) continue;
 	if (CheckCNTSource()) continue;
 	if (CheckCNTDest()) continue;

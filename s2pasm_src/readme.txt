@@ -1,11 +1,12 @@
                                     S2PASM
-                                 July 20, 2017
+                               February 2, 2019
                                    Dave Hein
 
-S2pasm converts a P1 GCC assembly file to P2 assembly.  It assumes that the C
-code was compiled using the COG memory model, and that the -S option was
-specified to generate an assemby code file.  The output from s2pasm will have a
-.spin2 extension.
+S2pasm converts a P1 GCC assembly file to P2 assembly.  By default it assumes
+that the C code was compiled using the COG memory model, and that the -S option
+was specified to generate an assemby code file.  s2pasm can also convert
+assembly that was produce for the LMM model by specifying the -lmm option.  The
+output from s2pasm will have a .spin2 extension.
 
 As an example, the C file blink.c is converted to a pasm2 file as follows:
 
@@ -18,5 +19,5 @@ the definitions of the registers along with the startup and stopping code.
 
 S2pasm is built as follows:
 
-gcc -Wall s2pasm.c -o s2pasm
+gcc -Wall s2pasm.c lmmsubs.c -o s2pasm
 

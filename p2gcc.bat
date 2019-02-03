@@ -1,7 +1,7 @@
 @echo off
 
 if not -%1-==-- goto :nohelp
-echo p2gcc - a C compiler for the propeller 2 - version 0.003, 2019-1-29
+echo p2gcc - a C compiler for the propeller 2 - version 0.004, 2019-02-02
 echo usage: p2gcc [options] file [file...]
 echo   options are
 echo   -c      - Do not run the linker
@@ -12,6 +12,7 @@ echo   -t      - Run terminal emulator
 echo   -T      - Run terminal emulator in PST mode
 echo   -k      - Keep intermediate files
 echo   -s      - Run simulator
+echo   -LMM    - Generate LMM assembly
 echo   -o file - Set output file name
 echo   -p port - Port used for loading
 goto :eof
@@ -23,12 +24,14 @@ set runflag=0
 set simflag=0
 set keepflag=0
 set linkflag=0
-set ccstr=propeller-elf-gcc -mcog -Os -S
+set ccstr=propeller-elf-gcc -Os -S
 set s2pasmstr=s2pasm
 set asmstr=p2asm
 set linkstr=p2link -L %P2GCC_LIBDIR% prefix.o p2gcc_start.o
 set loadstr=loadp2
 set simstr=spinsim
+set modelstr=-mcog
+set s2pmodstr=
 
 :argactionstart
 if -%1-==-- goto argactionend
@@ -86,6 +89,11 @@ if not %1==-s goto :label30
   set simflag=1
   goto :nextparm
 :label30
+if not %1==-LMM goto :label33
+  set modelstr=-mlmm
+  set s2pmodstr=-lmm
+  goto :nextparm
+:label33
 
 REM Get the file name root and extension
 set myvar=%1
@@ -156,14 +164,14 @@ if %verbose% equ 1 echo %loadstr% %binfile%
 exit /b
 
 :runpropgcc
-if %verbose% equ 1 echo %ccstr% %name%.c
-%ccstr% %NAME%.c
+if %verbose% equ 1 echo %ccstr% %modelstr% %name%.c
+%ccstr% %modelstr% %NAME%.c
 if %ERRORLEVEL% neq 0 goto :eof
 exit /b
 
 :runs2pasm
-if %verbose% equ 1 echo %s2pasmstr% -g -t -p%P2GCC_LIBDIR%\prefix.spin2 %name%
-%s2pasmstr% -g -t -p%P2GCC_LIBDIR%\prefix.spin2 %name%
+if %verbose% equ 1 echo %s2pasmstr% -g -t -p%P2GCC_LIBDIR%\prefix.spin2 %s2pmodstr% %name%
+%s2pasmstr% -g -t -p%P2GCC_LIBDIR%\prefix.spin2 %s2pmodstr% %name%
 if %ERRORLEVEL% neq 0 goto :eof
 exit /b
 

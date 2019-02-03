@@ -19,7 +19,7 @@ chmod +x build_mingw
 cp loadp2.exe ../bin
 cd ..
 cd s2pasm_src
-gcc s2pasm.c -o s2pasm
+gcc s2pasm.c lmmsubs.c -o s2pasm
 cp s2pasm.exe ../bin
 cd ..
 cd util

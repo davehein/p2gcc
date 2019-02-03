@@ -20,7 +20,7 @@ chmod +x build_linux
 cp loadp2 ../bin
 cd ..
 cd s2pasm_src
-gcc s2pasm.c -o s2pasm
+gcc s2pasm.c lmmsubs.c -o s2pasm
 cp s2pasm ../bin
 cd ..
 cd util
