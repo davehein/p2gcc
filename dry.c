@@ -392,7 +392,7 @@
 #define CLOCK_TYPE "P2 Cycles"
 #define Start_Timer() Begin_Time = CNT
 #define Stop_Timer()  End_Time   = CNT
-unsigned int p2clkfreq;
+#define p2clkfreq (*(int *)0x14)
 #define HZ p2clkfreq
 unsigned int Too_Small_Time;
 

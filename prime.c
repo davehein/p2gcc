@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <propeller.h>
 
+#define p2clkfreq (*(int *)0x14)
+
 int prime(int maxnum)
 {
     int i, j, numprimes, maxprimes;
@@ -43,6 +45,7 @@ int prime(int maxnum)
     }
     if (count)
         printf("\n");
+    printf("%d prime numbers\n", numprimes);
     return 0;
 }
 
@@ -51,7 +54,7 @@ void main(void)
     int max_number;
     char inbuf[80];
 
-    waitcnt(CNT+12000000);
+    waitcnt(CNT+p2clkfreq/2);
     while (1)
     {
         printf("Enter the max number: ");

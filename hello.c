@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <propeller.h>
 
-int p2clkfreq;
+#define p2clkfreq (*(int *)0x14)
 
 void main(void)
 {
