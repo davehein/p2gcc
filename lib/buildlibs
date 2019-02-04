@@ -10,11 +10,12 @@ chmod +x c2o
 ./c2o cogstart
 ./c2o cogthread
 ../bin/p2asm -o cognew2.spin2
+./c2o freqset
 ./c2o float
 ./c2o longlong
 ./c2o libm
-cat stdio.a stdlib.a string.a cogstart.o cogthread.o cognew2.o float.o longlong.o >libc.a
+cat stdio.a stdlib.a string.a cogstart.o cogthread.o cognew2.o freqset.o float.o longlong.o >libc.a
 cp libm.o libm.a
 ../bin/p2asm -o prefix.spin2
-../bin/p2asm -o p2gcc_start.spin2
+./c2o p2start
 ./cleanup
