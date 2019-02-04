@@ -82,7 +82,7 @@ promptexit(int r)
 static void Usage(void)
 {
 printf("\
-loadp2 - a loader for the propeller 2 - version 0.011, 2019-01-29\n\
+loadp2 - a loader for the propeller 2 - version 0.012, 2019-02-03\n\
 usage: loadp2\n\
          [ -p port ]               serial port\n\
          [ -b baud ]               user baud rate (default is %d)\n\
@@ -116,7 +116,6 @@ int loadfilesingle(char *fname)
     int num, size, i;
     int patch = patch_mode;
     int totnum = 0;
-    int bitcycles = clock_freq/user_baud;
     
     infile = fopen(fname, "rb");
     if (!infile)
@@ -134,12 +133,12 @@ int loadfilesingle(char *fname)
 
     while ((num=fread(binbuffer, 1, 128, infile)))
     {
-        if (patch && totnum == 1024)
+        if (patch)
         {
             patch = 0;
-            memcpy(&binbuffer[0], &clock_freq, 4);
-            memcpy(&binbuffer[4], &user_baud, 4);
-            memcpy(&binbuffer[8], &bitcycles, 4);
+            memcpy(&binbuffer[0x14], &clock_freq, 4);
+            memcpy(&binbuffer[0x18], &clock_mode, 4);
+            memcpy(&binbuffer[0x1c], &user_baud, 4);
         }
         for( i = 0; i < num; i++ )
             sprintf( &buffer[i*3], " %2.2x", binbuffer[i] & 255 );
@@ -159,7 +158,6 @@ int loadfile(char *fname, int address)
     int num, size;
     int totnum = 0;
     int patch = patch_mode;
-    int bitcycles = clock_freq/user_baud;
     
     if (load_mode == LOAD_SINGLE)
         return loadfilesingle(fname);
@@ -190,12 +188,12 @@ int loadfile(char *fname, int address)
     msleep(100);
     while ((num=fread(buffer, 1, 1024, infile)))
     {
-        if (patch && totnum == 1024)
+        if (patch)
         {
             patch = 0;
-            memcpy(&buffer[0], &clock_freq, 4);
-            memcpy(&buffer[4], &user_baud, 4);
-            memcpy(&buffer[8], &bitcycles, 4);
+            memcpy(&buffer[0x14], &clock_freq, 4);
+            memcpy(&buffer[0x18], &clock_mode, 4);
+            memcpy(&buffer[0x1c], &user_baud, 4);
         }
         tx((uint8_t *)buffer, num);
         totnum += num;
