@@ -147,7 +147,7 @@ int FindSymbol(char *symbol)
         }
     }
 
-    if (objflag && addifmissing && strcmp(symbol, "_main"))
+    if (objflag && addifmissing && strcmp(symbol, "_p2start"))
     {
         if (debugflag) printf("Need to add symbol %s\n", symbol);
         AddSymbol2(symbol, SECTION_NULL, 0, 0x400, TYPE_HUB_ADDR, datamode);
