@@ -14,16 +14,15 @@ dat
 '*******************************************************************************
 	org
 
-start	call	#prefix_setup
-	calld	lr, main_address
-	cogid	r1
-        mov     r2, #0
-        wrlong  r2, r2
-	cogstop	r1
-main_address
-	long	_main
-
-r0	long	0
+start	jmp 	#prefix_setup
+p2start_address
+	long	_p2start
+	long	0
+	long	0
+	long	0
+        long    80000000 ' p2clkfreq
+        long    19146744 ' p2clkconfig
+r0	long	115200   ' baudrate
 r1	long	0
 r2	long	0
 r3	long	0
@@ -143,7 +142,7 @@ prefix_setup
         cmp     ptra, #0 wz     ' Check if ptra is zero
  if_z   jmp     #prefix_setup1  ' If zero set sp to init_stack_ptr
         mov     sp, ptra
-        rdlong  main_address, sp
+        rdlong  p2start_address, sp
         add     sp, #4
         rdlong  r0, sp
         add     sp, #4
@@ -155,7 +154,11 @@ prefix_setup2
 	mov	r1, #1
         qmul    r1, r1
         getqx   __has_cordic
-	ret
+	calld	lr, p2start_address
+	cogid	r1
+        mov     r2, #0
+        wrlong  r2, r2
+	cogstop	r1
 
 '*******************************************************************************
 '  Program HUB Code
