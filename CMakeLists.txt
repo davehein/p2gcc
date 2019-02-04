@@ -15,7 +15,7 @@ install(TARGETS p2asm DESTINATION bin)
 add_executable(p2link p2link_src/p2link.c)
 install(TARGETS p2link DESTINATION bin)
 
-add_executable(s2pasm s2pasm_src/s2pasm.c)
+add_executable(s2pasm s2pasm_src/s2pasm.c s2pasm_src/lmmsubs.c)
 install(TARGETS s2pasm DESTINATION bin)
 
 add_executable(p2dump util/p2dump.c)
