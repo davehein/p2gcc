@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include "propeller.h"
 
-unsigned int p2clkfreq;
+#define p2clkfreq (*(int *)0x14)
 
 unsigned int clock(void)
 {
