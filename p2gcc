@@ -39,7 +39,7 @@ function runp2asm {
 
 if [ $# -lt 1 ]
 then
-echo "p2gcc - a C compiler for the propeller 2 - version 0.004, 2019-02-02"
+echo "p2gcc - a C compiler for the propeller 2 - version 0.005, 2019-02-03"
 echo "usage: p2gcc [options] file [file...]"
 echo "  options are"
 echo "  -c      - Do not run the linker"
@@ -65,7 +65,7 @@ linkflag=0
 ccstr="propeller-elf-gcc -Os -m32bit-doubles -S "
 s2pasmstr="s2pasm "
 asmstr="p2asm "
-linkstr="p2link -L $P2GCC_LIBDIR prefix.o p2gcc_start.o "
+linkstr="p2link -L $P2GCC_LIBDIR prefix.o p2start.o "
 loadstr="loadp2 "
 simstr="spinsim -b -t "
 modelstr="-mcog"
@@ -105,7 +105,7 @@ do
   else if [ $1 = "-c" ]; then
     linkflag=2
   else if [ $1 = "-LMM" ]; then
-    modelstr="-mlmm"
+    modelstr="-mlmm -mno-fcache"
     s2pmodstr="-lmm"
   else if [ $1 = "-o" ]; then
     shift

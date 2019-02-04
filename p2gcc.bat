@@ -1,7 +1,7 @@
 @echo off
 
 if not -%1-==-- goto :nohelp
-echo p2gcc - a C compiler for the propeller 2 - version 0.004, 2019-02-02
+echo p2gcc - a C compiler for the propeller 2 - version 0.005, 2019-02-03
 echo usage: p2gcc [options] file [file...]
 echo   options are
 echo   -c      - Do not run the linker
@@ -27,7 +27,7 @@ set linkflag=0
 set ccstr=propeller-elf-gcc -Os -S
 set s2pasmstr=s2pasm
 set asmstr=p2asm
-set linkstr=p2link -L %P2GCC_LIBDIR% prefix.o p2gcc_start.o
+set linkstr=p2link -L %P2GCC_LIBDIR% prefix.o p2start.o
 set loadstr=loadp2
 set simstr=spinsim
 set modelstr=-mcog
@@ -90,7 +90,7 @@ if not %1==-s goto :label30
   goto :nextparm
 :label30
 if not %1==-LMM goto :label33
-  set modelstr=-mlmm
+  set modelstr=-mlmm -mno-fcache
   set s2pmodstr=-lmm
   goto :nextparm
 :label33
