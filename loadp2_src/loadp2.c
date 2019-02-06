@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include "osint.h"
 
 #define LOAD_CHIP   0
@@ -40,6 +41,7 @@ static int clock_freq = 80000000;
 static int extra_cycles = 7;
 static int load_mode = -1;
 static int patch_mode = 0;
+static int use_checksum = 1;
 
 int get_loader_baud(int ubaud, int lbaud);
 
@@ -57,8 +59,10 @@ char *MainLoader =
 char *MainLoader1 =
 " 00 26 60 fd 86 01 80 ff 1f 80 66 fd 03 26 44 f5 00 26 60 fd 17 00 88 fc 20 7e 65 fd 24 08 60 fd 24 28 60 fd 1f 28 60 fd 08 06 dc fc 40 7e 74 fd 01 30 84 f0 1f 2a 60 fd 18 30 44 f0 15 30 60 fd f6 2d 6c fb 00 00 7c fc 17 00 e8 fc";
 
-static char buffer[1024];
-static char binbuffer[128];   // Added for Prop2-v28
+static int32_t ibuf[256];
+static int32_t ibin[32];
+static char *buffer = (char *)ibuf;
+static char *binbuffer = (char *)ibin;
 static int verbose = 0;
 static int waitAtExit = 0;
 
@@ -110,12 +114,23 @@ void txval(int val)
     tx((uint8_t *)buffer, strlen(buffer));
 }
 
+int compute_checksum(int *ptr, int num)
+{
+    int checksum = 0;
+
+    while (num-- > 0)
+        checksum += *ptr++;
+
+    return checksum;
+}
+
 int loadfilesingle(char *fname)
 {
     FILE *infile;
     int num, size, i;
     int patch = patch_mode;
     int totnum = 0;
+    int checksum = 0;
     
     infile = fopen(fname, "rb");
     if (!infile)
@@ -140,12 +155,40 @@ int loadfilesingle(char *fname)
             memcpy(&binbuffer[0x18], &clock_mode, 4);
             memcpy(&binbuffer[0x1c], &user_baud, 4);
         }
+        if (use_checksum)
+        {
+            num = (num + 3) & ~3;
+            checksum += compute_checksum(ibin, num/4);
+        }
         for( i = 0; i < num; i++ )
             sprintf( &buffer[i*3], " %2.2x", binbuffer[i] & 255 );
+        strcat(buffer, " > ");
         tx( (uint8_t *)buffer, strlen(buffer) );
         totnum += num;
     }
-    tx((uint8_t *)"~", 1);   // Added for Prop2-v28
+    if (use_checksum)
+    {
+        char *ptr = (char *)&checksum;
+        checksum = 0x706f7250 - checksum;
+        for( i = 0; i < 4; i++ )
+            sprintf( &buffer[i*3], " %2.2x", ptr[i] & 255 );
+        tx( (uint8_t *)buffer, strlen(buffer) );
+        tx((uint8_t *)"?", 1);
+        msleep(50);
+        num = rx_timeout((uint8_t *)buffer, 100, 10);
+        if (num >= 0) buffer[num] = 0;
+        else buffer[0] = 0;
+        if (strcmp(buffer, "."))
+        {
+            printf("%s failed to load\n", fname);
+            printf("Error response was \"%s\"\n", buffer);
+            promptexit(1);
+        }
+        if (verbose)
+            printf("Checksum validated\n");
+    }
+    else
+        tx((uint8_t *)"~", 1);   // Added for Prop2-v28
 
     msleep(50);
     if (verbose) printf("%s loaded\n", fname);
