@@ -86,7 +86,7 @@ promptexit(int r)
 static void Usage(void)
 {
 printf("\
-loadp2 - a loader for the propeller 2 - version 0.012, 2019-02-03\n\
+loadp2 - a loader for the propeller 2 - version 0.013, 2019-02-06\n\
 usage: loadp2\n\
          [ -p port ]               serial port\n\
          [ -b baud ]               user baud rate (default is %d)\n\
@@ -174,8 +174,8 @@ int loadfilesingle(char *fname)
             sprintf( &buffer[i*3], " %2.2x", ptr[i] & 255 );
         tx( (uint8_t *)buffer, strlen(buffer) );
         tx((uint8_t *)"?", 1);
-        msleep(50);
-        num = rx_timeout((uint8_t *)buffer, 100, 10);
+        wait_drain();
+        num = rx_timeout((uint8_t *)buffer, 1, 100);
         if (num >= 0) buffer[num] = 0;
         else buffer[0] = 0;
         if (strcmp(buffer, "."))
@@ -188,7 +188,10 @@ int loadfilesingle(char *fname)
             printf("Checksum validated\n");
     }
     else
+    {
         tx((uint8_t *)"~", 1);   // Added for Prop2-v28
+        wait_drain();
+    }
 
     msleep(50);
     if (verbose) printf("%s loaded\n", fname);
@@ -241,6 +244,7 @@ int loadfile(char *fname, int address)
         tx((uint8_t *)buffer, num);
         totnum += num;
     }
+    wait_drain();
     msleep(50);
     if (verbose) printf("%s loaded\n", fname);
     return 0;
