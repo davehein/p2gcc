@@ -59,7 +59,7 @@ static int d2a(int val)
 
 static int ISDIGIT(int val)
 {
-    if (val >= 0 && val <= 9) return 1;
+    if (val >= '0' && val <= '9') return 1;
     return 0;
 }
 
@@ -149,7 +149,6 @@ _doprnt(char *ptr, const char *fmt, va_list args )
        c = *fmt++;
      }
      if (!c) break;
-
      switch (c) {
      case '%':
        outbytes += putcw(&ptr, c, width);
