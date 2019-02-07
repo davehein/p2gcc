@@ -24,7 +24,7 @@ int main()
         if (freq < 10000000 || freq > 320000000)
         {
             printf("freq %d is out of range\n", freq);
-            continue;
+            break;
         }
         freqset(freq);
     }
