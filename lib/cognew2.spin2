@@ -1,7 +1,7 @@
 con
         lr = $1f6
 dat
-        org     7
+        org     8
 r0      long    0
 r1      long    0
 r2      long    0
@@ -16,3 +16,9 @@ _cognew2
  if_nc mov     r0, r2
  if_c  neg     r0, #1
        jmp     lr
+
+        .global _coginit2
+_coginit2
+        setq    r2
+        coginit r0, r1
+        jmp     lr
