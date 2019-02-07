@@ -23,18 +23,20 @@ char *getsn(char *, int num);
 #define ENXIO      12
 
 int errno;
-FILE __files[10] = {{0}};
+//FILE __files[10] = {{0}};
 static char dirbuf[16];
 static char currentwd[100];
 static int mounted = 0;
 
 void sd_mount(int DO, int CLK, int DI, int CS)
 {
+#if 0
     int i;
     __files[0]._flag = 0x100000;
     __files[1]._flag = 0x100000;
     __files[2]._flag = 0x100000;
     for (i = 3; i < 10; i++) __files[i]._flag = 0;
+#endif
     strcpy(currentwd, "/");
     if (!mount_explicit(DO, CLK, DI, CS))
       mounted = 1;
@@ -309,7 +311,7 @@ char *fgets(char *str, int num, FILE *fd)
     if (fd->_flag & 0xfff00000)
         getsn(str, num);
     else
-        hgets((int *)fd->_flag, str, num);
+        str = hgets((int *)fd->_flag, str, num);
     return str;
 }
 
