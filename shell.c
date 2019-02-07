@@ -30,9 +30,9 @@ void Run(int argc, char **argv)
     FILE *infile;
     volatile int *ptr = 0;
 
-    if (argc != 2)
+    if (argc < 2)
     {
-        fprintf(stdoutfile, "usage: run file\n");
+        fprintf(stdoutfile, "usage: run file [parms ...]\n");
         return;
     }
 
@@ -42,9 +42,12 @@ void Run(int argc, char **argv)
         return;
     }
 
-    fread((void *)ptr, 1, 32768, infile);
+    fread((void *)ptr, 1, 128 * 1024, infile);
     fclose(infile);
     sd_unmount();
+    patch_sys_config();
+    *(int *)(8 * 4) = argc - 1;
+    *(int *)(9 * 4) = (int)&argv[1];
     coginit(1, 0, 0);
     DIRA = 0;
     DIRB = 0;
