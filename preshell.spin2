@@ -4,7 +4,8 @@ con
 	clock_freq = 80_000_000
 	baud_rate = 115_200
 	lr = $1f6
-	init_stack_ptr = 128*1024 - 32*4
+	'init_stack_ptr = 64*1024 - 32*4
+	init_stack_ptr = 256*1024 - 32*4
 
 dat
 	orgh	0
@@ -14,15 +15,15 @@ dat
 '*******************************************************************************
 	org
 
-start	call	#prefix_setup
-	calld	lr, main_address
-	cogid	r1
-        mov     r2, #0
-        wrlong  r2, r2
-	cogstop	r1
-main_address
-	long	_main
-
+start	jmp 	#prefix_setup
+p2start_address
+	long	_p2start
+	long	0
+	long	0
+	long	0
+        long    80000000 ' p2clkfreq
+        long    19146744 ' p2clkconfig
+  	long	115200   ' baudrate
 r0	long	0
 r1	long	0
 r2	long	0
@@ -140,10 +141,12 @@ __CMPSWAPSI
 	ret
 
 prefix_setup
+        mov     save_r0, r0
+        mov     save_r1, r1
         cmp     ptra, #0 wz     ' Check if ptra is zero
  if_z   jmp     #prefix_setup1  ' If zero set sp to init_stack_ptr
         mov     sp, ptra
-        rdlong  main_address, sp
+        rdlong  p2start_address, sp
         add     sp, #4
         rdlong  r0, sp
         add     sp, #4
@@ -155,7 +158,15 @@ prefix_setup2
 	mov	r1, #1
         qmul    r1, r1
         getqx   __has_cordic
-	ret
+        mov     r0, save_r0
+        mov     r1, save_r1
+	calld	lr, p2start_address
+	cogid	r1
+        mov     r2, #0
+        wrlong  r2, r2
+	cogstop	r1
+save_r0 long    0
+save_r1 long    0
 
 '*******************************************************************************
 '  Program HUB Code
