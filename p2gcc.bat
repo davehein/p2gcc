@@ -1,7 +1,7 @@
 @echo off
 
 if not -%1-==-- goto :nohelp
-echo p2gcc - a C compiler for the propeller 2 - version 0.005, 2019-02-03
+echo p2gcc - a C compiler for the propeller 2 - version 0.005, 2019-02-08
 echo usage: p2gcc [options] file [file...]
 echo   options are
 echo   -c      - Do not run the linker
@@ -135,6 +135,11 @@ if not %EXTENSION%==o goto :label13
   set linkflag=1
   goto :nextparm
 :label13
+if not %EXTENSION%==a goto :label34
+  set linkstr=%linkstr% %NAME%.a
+  set linkflag=1
+  goto :nextparm
+:label34
   echo invalid extension in %1
   goto :eof
 :label31
