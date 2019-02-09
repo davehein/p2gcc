@@ -1,7 +1,7 @@
 @echo off
 
 if not -%1-==-- goto :nohelp
-echo p2gcc - a C compiler for the propeller 2 - version 0.005, 2019-02-08
+echo p2gcc - a C compiler for the propeller 2 - version 0.006, 2019-02-08
 echo usage: p2gcc [options] file [file...]
 echo   options are
 echo   -c      - Do not run the linker
@@ -15,6 +15,11 @@ echo   -s      - Run simulator
 echo   -LMM    - Generate LMM assembly
 echo   -o file - Set output file name
 echo   -p port - Port used for loading
+echo   -D name - Pass a name to the compiler
+echo   -L dir  - Specify a library directory
+echo   -I dir  - Specify an include directory
+echo   -b baud - Specify a user baud rate
+echo   -f freq - Specify a clock frequency
 goto :eof
 :nohelp
 
@@ -28,7 +33,7 @@ set ccstr=propeller-elf-gcc -Os -S
 set s2pasmstr=s2pasm
 set asmstr=p2asm
 set linkstr=p2link -L %P2GCC_LIBDIR% prefix.o p2start.o
-set loadstr=loadp2
+set loadstr=loadp2 -PATCH
 set simstr=spinsim
 set modelstr=-mcog
 set s2pmodstr=
@@ -94,6 +99,31 @@ if not %1==-LMM goto :label33
   set s2pmodstr=-lmm
   goto :nextparm
 :label33
+if not %1==-D goto :label35
+  shift
+  set ccstr=%ccstr% -D %1
+  goto :nextparm
+:label35
+if not %1==-L goto :label36
+  shift
+  set linkstr=%linkstr% -L %1
+  goto :nextparm
+:label36
+if not %1==-I goto :label37
+  shift
+  set ccstr=%ccstr% -I %1
+  goto :nextparm
+:label37
+if not %1==-b goto :label38
+  shift
+  set loadstr=%loadstr% -b %1
+  goto :nextparm
+:label38
+if not %1==-f goto :label39
+  shift
+  set loadstr=%loadstr% -f %1
+  goto :nextparm
+:label39
 
 REM Get the file name root and extension
 set myvar=%1

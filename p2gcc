@@ -39,7 +39,7 @@ function runp2asm {
 
 if [ $# -lt 1 ]
 then
-echo "p2gcc - a C compiler for the propeller 2 - version 0.005, 2019-02-03"
+echo "p2gcc - a C compiler for the propeller 2 - version 0.006, 2019-02-08"
 echo "usage: p2gcc [options] file [file...]"
 echo "  options are"
 echo "  -c      - Do not run the linker"
@@ -53,6 +53,11 @@ echo "  -s      - Run simulutor"
 echo "  -LMM    - Generate LMM assembly"
 echo "  -o file - Set output file name"
 echo "  -p port - Port used for loading"
+echo "  -D name - Define a name for the compiler"
+echo "  -L dir  - Specify a library directory"
+echo "  -I dir  - Specify an include directory"
+echo "  -b baud - Specify a user baud rate"
+echo "  -f freq - Specify a clock frequency"
 exit
 fi
 
@@ -66,7 +71,7 @@ ccstr="propeller-elf-gcc -Os -m32bit-doubles -S "
 s2pasmstr="s2pasm "
 asmstr="p2asm "
 linkstr="p2link -L $P2GCC_LIBDIR prefix.o p2start.o "
-loadstr="loadp2 "
+loadstr="loadp2 -PATCH"
 simstr="spinsim -b -t "
 modelstr="-mcog"
 s2pmodstr=""
@@ -114,6 +119,21 @@ do
   else if [ $1 = "-p" ]; then
     shift
     loadstr="$loadstr -p $1 "
+  else if [ $1 = "-D" ]; then
+    shift
+    ccstr="$ccstr -D $1 "
+  else if [ $1 = "-L" ]; then
+    shift
+    linkstr="$linkstr -L $1 "
+  else if [ $1 = "-I" ]; then
+    shift
+    ccstr="$ccstr -I $1 "
+  else if [ $1 = "-b" ]; then
+    shift
+    loadstr="$loadstr -b $1 "
+  else if [ $1 = "-f" ]; then
+    shift
+    loadstr="$loadstr -f $1 "
   else
     getroot $1
     getext $1
@@ -175,6 +195,11 @@ do
     fi
     fi
     fi
+  fi
+  fi
+  fi
+  fi
+  fi
   fi
   fi
   fi
