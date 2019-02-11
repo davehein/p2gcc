@@ -148,6 +148,8 @@ void List(int argc, char **argv)
     //int filestat[2];
     int attribute;
     struct stat statbuf;
+    char longpath[100];
+    int len;
 
     count = 0;
     longflag = 0;
@@ -202,7 +204,12 @@ void List(int argc, char **argv)
             }
             if (longflag)
             {
-                stat(fname, &statbuf);
+                strcpy(longpath, path);
+                len = strlen(longpath);
+                if (len && longpath[len-1] != '/')
+                    strcat(longpath, "/");
+                strcat(longpath, fname);
+                stat(longpath, &statbuf);
                 filesize = statbuf.st_size;
                 attribute = statbuf.st_mode;
                 strcpy(drwx, "-rw-");
