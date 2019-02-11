@@ -1,0 +1,36 @@
+con
+        lr = $1f6
+dat
+        org     8
+r0      long    0
+r1      long    0
+r2      long    0
+
+	orgh	$400
+
+	.text
+	.balign	4
+	.global	_spi_read
+_spi_read
+        mov     r2, #0
+        rep	@_spi_read1,#8		' 8 bits
+	outnot 	r0			' clock (low high)
+	outnot	r0
+        waitx   #4
+	testp	r1 wc			' read data from card
+	rcl	r2,#1			' shift in msb first
+_spi_read1
+        mov     r0, r2
+        jmp     lr
+
+	.global	_spi_send
+_spi_send
+	shl	r0, #24			' left justify 8-bit data
+	rep	@_spi_send1, #8
+	rol	r0,#1 wc		' output next msb
+	outc	r2
+	outnot	r1			' clock
+	outnot	r1			' clock
+_spi_send1
+        drvh    r2
+        jmp     lr
