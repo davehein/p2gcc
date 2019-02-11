@@ -9,7 +9,7 @@ chmod +x c2o
 ./buildstrlib
 ./c2o cogstart
 ./c2o cogthread
-../bin/p2asm -o cognew2.spin2
+../bin/p2asm -o -hub cognew2.spin2
 ./c2o freqset
 ./c2o float
 ./c2o longlong
