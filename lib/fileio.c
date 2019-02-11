@@ -22,6 +22,10 @@ char *getsn(char *, int num);
 #define ENOMEM     11
 #define ENXIO      12
 
+void resolve_path(const char *fname, char *path);
+static char *SplitPathFile(char *pathstr);
+static char *SplitPathFileCd(char *fname, char *pathstr);
+
 int errno;
 //FILE __files[10] = {{0}};
 static char dirbuf[16];
@@ -75,6 +79,10 @@ FILE *fopen(const char *fname, const char *mode)
 {
     FILE *fd;
     int *handle;
+    char path[100];
+    char *fname1;
+    char dirpath[100];
+
     if (!mounted)
     {
         errno = ENXIO;
@@ -85,6 +93,8 @@ FILE *fopen(const char *fname, const char *mode)
         errno = EINVAL;
         return 0;
     }
+    resolve_path(fname, path);
+    fname1 = SplitPathFileCd(path, dirpath);
     fd = allocfile(44 + 512);
     if (!fd)
     {
@@ -95,7 +105,7 @@ FILE *fopen(const char *fname, const char *mode)
     memset(handle, 0, 40);
     handle[10] = (int)&handle[11];
     loadhandle(handle);
-    errno = popen((char *)fname, *mode);
+    errno = popen(fname1, *mode);
     if (errno)
     {
         errno = ENOENT;
@@ -158,13 +168,19 @@ size_t fwrite(const void *ptr0, size_t size, size_t num, FILE *fd)
 
 int remove(const char *fname)
 {
+    char path[100];
+    char dirpath[100];
+    char *fname1;
+
     if (!mounted)
     {
         errno = ENXIO;
         return 1;
     }
+    resolve_path(fname, path);
+    fname1 = SplitPathFileCd(path, dirpath);
     loadhandle0();
-    errno = popen((char *)fname, 'd');
+    errno = popen((char *)fname1, 'd');
     return 0;
 }
 
@@ -202,20 +218,23 @@ int putc(int val, FILE *fd)
 int chdir(const char *path)
 {
     int err;
+    char dirpath[100];
+
     if (!mounted)
     {
         errno = ENXIO;
         return -1;
     }
-    if (!(err = pchdir((char *)path)))
+    resolve_path(path, dirpath);
+    if (!(err = pchdir(dirpath)))
     {
-        if (*path == '/')
-            strcpy(currentwd, path);
+        if (*dirpath == '/')
+            strcpy(currentwd, dirpath);
         else
         {
             if (strcmp(currentwd, "/"))
                 strcat(currentwd, "/");
-            strcat(currentwd, path);
+            strcat(currentwd, dirpath);
         }
         return 0;
     }
@@ -328,13 +347,20 @@ DIR *opendir(const char *path)
 {
     FILE *fd;
     int *handle;
+    char path1[100];
+
     if (!mounted)
     {
         errno = ENXIO;
         return 0;
     }
+    resolve_path(path, path1);
+    if (pchdir(path1))
+        return 0;
+#if 0
     if (path[0] && strcmp(path, ".") && strcmp(path, "/") && strcmp(path,"./"))
         return 0;
+#endif
     fd = allocfile(44 + 512);
     if (!fd) return 0;
     handle = (int *)fd->_flag;
@@ -387,20 +413,29 @@ int stat(const char *fname, struct stat *buf)
 {
     int retval;
     int filestat[2];
+    char path[100];
+    char dirpath[100];
+    char *fname1;
+
     if (!mounted)
     {
         errno = ENXIO;
         return -1;
     }
+    resolve_path(fname, path);
+    fname1 = SplitPathFileCd(path, dirpath);
     loadhandle0();
-    retval = popen((char *)fname, 'r');
+    retval = popen(fname1, 'r');
     if (retval) return -1;
     pstat(filestat);
     buf->st_size = filestat[1];
+    buf->st_mode = S_IWRITE;
     if (filestat[0] & 0x10)
-        buf->st_mode = S_IFDIR;
-    else
-        buf->st_mode = 0;
+        buf->st_mode |= S_IFDIR | S_IEXEC;
+    if (filestat[0] & 0x20)
+        buf->st_mode |= S_IEXEC;
+    if (!(filestat[0] & 0x01))
+        buf->st_mode |= S_IREAD;
     pclose();
     return 0;
 }
@@ -408,12 +443,18 @@ int stat(const char *fname, struct stat *buf)
 int mkdir(const char *path, int mode)
 {
     int err;
+    char path1[100];
+    char dirpath[100];
+    char *dirname;
+
     if (!mounted)
     {
         errno = ENXIO;
         return -1;
     }
-    err = pmkdir((char *)path);
+    resolve_path(path, path1);
+    dirname = SplitPathFileCd(path1, dirpath);
+    err = pmkdir(dirname);
     if (err)
         errno = EEXIST;
     return err;
@@ -423,4 +464,55 @@ void rmdir(void)
 {
     if (!mounted)
         errno = ENXIO;
+}
+
+static void memcpyr(char *dst, char *src, int num)
+{
+    dst += num - 1;
+    src += num - 1;
+    while (num-- > 0)
+        *dst-- = *src--;
+}
+
+static char *SplitPathFileCd(char *fname, char *pathstr)
+{
+    char *fname1;
+
+    strncpy(pathstr, fname, 80);
+    fname1 = SplitPathFile(pathstr);
+    if (pchdir(pathstr))
+        return 0;
+    return fname1;
+}
+
+static char *SplitPathFile(char *pathstr)
+{
+    int len, len1;
+
+    // Search backwards for a "/"
+    len1 = len = strlen(pathstr);
+    if (!len)
+        return pathstr;
+    if (len == 1 && *pathstr == '/')
+        return pathstr + 1;
+    while (--len > 0)
+    {
+        if (pathstr[len] == '/')
+        {
+            pathstr[len] = 0;
+            return pathstr + len + 1;
+        }
+    }
+    if (*pathstr == '/')
+    {
+        memcpyr(pathstr+2, pathstr+1, len1);
+        pathstr[1] = 0;
+        return pathstr + 2;
+    }
+    else
+    {
+        memcpyr(pathstr+1, pathstr, len1+1);
+        pathstr[0] = 0;
+        return pathstr + 1;
+    }
 }
