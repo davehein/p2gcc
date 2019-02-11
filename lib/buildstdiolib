@@ -1,13 +1,15 @@
+./c2o fscanf
+./c2o fprintf
+./c2o fileio
+./c2o resolve
+./c2o fsrw
+./c2o sdspi
+../bin/p2asm -o -hub spi.spin2
 ./c2o simple_printf
 ./c2o printf
 ./c2o sprintf
 ./c2o scanf
 ./c2o sscanf
-./c2o fscanf
-./c2o fprintf
-./c2o fileio
-./c2o fsrw
-./c2o sdspi
 ./c2o puts
 ./c2o gets
 ./c2o getchar
@@ -15,4 +17,4 @@
 ./c2o putchar
 ./c2o putch
 ./c2o floatstr
-cat simple_printf.o printf.o sprintf.o scanf.o sscanf.o fscanf.o fprintf.o fileio.o fsrw.o sdspi.o puts.o gets.o getchar.o getch.o putchar.o putch.o floatstr.o >stdio.a
+cat fscanf.o fprintf.o fileio.o resolve.o fsrw.o sdspi.o spi.o simple_printf.o printf.o sprintf.o scanf.o sscanf.o puts.o gets.o getchar.o getch.o putchar.o putch.o floatstr.o >stdio.a
