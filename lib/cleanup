@@ -4,6 +4,7 @@ cp exit.s savesrc
 cp abort.s savesrc
 cp prefix.spin2 savesrc
 cp cognew2.spin2 savesrc
+cp spi.spin2 savesrc
 rm *.lst *.s *.spin2 *.bin
 cp savesrc/* .
 rm -rf savesrc
