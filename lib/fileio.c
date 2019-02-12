@@ -31,6 +31,7 @@ int errno;
 static char dirbuf[16];
 static char currentwd[100];
 static int mounted = 0;
+static struct dirent direntbuf;
 
 void sd_mount(int DO, int CLK, int DI, int CS)
 {
@@ -316,7 +317,10 @@ char *getcwd(char *ptr, int size)
 int fputs(const char *str, FILE *fd)
 {
     if (fd->_flag & 0xfff00000)
-        puts(str);
+    {
+        while (*str)
+            putchar(*str++);
+    }
     else
     {
         loadhandle((int *)fd->_flag);
@@ -382,7 +386,10 @@ struct dirent *readdir(DIR *dirt)
     FILE *fd = (FILE *)dirt;
     loadhandle((int *)fd->_flag);
     if (!nextfile(dirbuf))
-        return (struct dirent *)dirbuf;
+    {
+        strcpy(direntbuf.d_name, dirbuf);
+        return &direntbuf;
+    }
     return 0;
 }
 
@@ -429,13 +436,41 @@ int stat(const char *fname, struct stat *buf)
     if (retval) return -1;
     pstat(filestat);
     buf->st_size = filestat[1];
-    buf->st_mode = S_IWRITE;
+    buf->st_mode = S_IREAD;
     if (filestat[0] & 0x10)
         buf->st_mode |= S_IFDIR | S_IEXEC;
     if (filestat[0] & 0x20)
         buf->st_mode |= S_IEXEC;
     if (!(filestat[0] & 0x01))
-        buf->st_mode |= S_IREAD;
+        buf->st_mode |= S_IWRITE;
+    pclose();
+    return 0;
+}
+
+int chmod(const char *fname, mode_t mode)
+{
+    char path[100];
+    char dirpath[100];
+    char *fname1;
+    int filestat[2];
+
+    if (!mounted)
+    {
+        errno = ENXIO;
+        return -1;
+    }
+    resolve_path(fname, path);
+    fname1 = SplitPathFileCd(path, dirpath);
+    loadhandle0();
+    if (popen(fname1, 'r'))
+        return -1;
+    pstat(filestat);
+    filestat[0] &= ~0x21;
+    if (mode & S_IEXEC)
+        filestat[0] |= 0x20;
+    if (!(mode & S_IWRITE))
+        filestat[0] |= 0x01;
+    pchmod(filestat[0]);
     pclose();
     return 0;
 }
