@@ -1143,23 +1143,13 @@ void pstat(int *filestat)
     filestat[1] = filesize;
 }
 
-int chmod(char *fname, int modebits)
+void pchmod(int modebits)
 {
     char *ptr;
-    int retval;
-
-    loadhandle(handle0);
-    retval = popen(fname, 'r');
-    if (!retval)
-    {
-        pclose();
-        ptr = readbytec(direntry0) + 11;
-        *ptr = modebits;
-        dirty = 1;
-        flushifdirty();
-    }
-
-    return retval;
+    ptr = readbytec(direntry0) + 11;
+    *ptr = modebits;
+    dirty = 1;
+    flushifdirty();
 }
 
 int rename(const char *fname1, const char *fname2)
