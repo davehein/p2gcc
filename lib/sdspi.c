@@ -36,6 +36,12 @@
 #include <stdlib.h>
 #include <propeller.h>
 
+#define send(x) spi_send(x, clk_pin, di_pin)
+#define read() spi_read(clk_pin, do_pin)
+
+int spi_read(int cpin, int dpin);
+void spi_send(int val, int cpin, int dpin);
+
 int di_pin, do_pin, clk_pin, cs_pin, starttime;
 int di_mask, do_mask, clk_mask, cs_mask;
 int aflag;
@@ -66,6 +72,7 @@ void release(void)
     }
 }
 
+#if 0
 //
 //  Send eight bits, then raise di.
 //
@@ -112,6 +119,7 @@ void send(int outv)
     else
         sendb(outv);
 }
+#endif
 
 //
 //  Did we go over our time limit yet?
@@ -122,6 +130,7 @@ void checktime(void)
         errorexit(-41); // Timeout during read
 }
 
+#if 0
 static void __attribute__ ((noinline)) sdspi_delay(int cycles)
 {
     __asm__("waitx r0");
@@ -175,6 +184,7 @@ int read(void)
 
     return retval;
 }
+#endif
 
 //
 //  Read eight bits, and loop until we
