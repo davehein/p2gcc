@@ -32,6 +32,12 @@ int scanf(const char *fmt, ...)
                 count++;
                 *iptr = strtol(ptr, &ptr, 16);
             }
+            else if (*fmt == 'o')
+            {
+                iptr = (int *)va_arg(va, int);
+                count++;
+                *iptr = strtol(ptr, &ptr, 8);
+            }
             else if (*fmt == 'f' || *fmt == 'g')
             {
                 float *fptr = (float *)va_arg(va, int);

@@ -160,7 +160,13 @@ _doprnt( const char *fmt, va_list args )
      case 'd':
      case 'x':
      case 'u':
-       base = (c == 'x') ? 16 : 10;
+     case 'o':
+       if (c == 'x')
+           base = 16;
+       else if (c == 'o')
+           base = 8;
+       else
+           base = 10;
        l_arg = (uint64_t)va_arg(args, ULONG);
        if (long_flag >= 2)
          l_arg |= ((uint64_t)va_arg(args, ULONG)) << 32;
