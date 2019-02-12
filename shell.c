@@ -30,6 +30,8 @@ void Run(int argc, char **argv)
     FILE *infile;
     volatile int *ptr = 0;
     int buffer[25];
+    char path[100];
+    char *ptr1;
 
 #if 0
     if (argc < 2)
@@ -38,8 +40,18 @@ void Run(int argc, char **argv)
         return;
     }
 #endif
+    // Check if directory path specified
+    ptr1 = argv[0];
+    while (*ptr1 && *ptr1 != '/') ptr1++;
+    if (*ptr1)
+        strcpy(path, argv[0]);
+    else
+    {
+        strcpy(path, "/bin/");
+        strcat(path, argv[0]);
+    }
 
-    if (!(infile = fopen(argv[0], "r")))
+    if (!(infile = fopen(path, "r")))
     {
         printf("Invalid command\n");
         Help();
@@ -59,6 +71,7 @@ void Run(int argc, char **argv)
     fread((void *)ptr+32, 1, 128 * 1024 - 32, infile);
     fclose(infile);
     getcwd(buffer, 100);
+    argv[argc] = (char *)buffer;
     sd_unmount();
     *(int *)(8 * 4) = argc;
     *(int *)(9 * 4) = (int)argv;
@@ -195,6 +208,8 @@ void List(int argc, char **argv)
     //int filestat[2];
     int attribute;
     struct stat statbuf;
+    int len;
+    char path1[100];
 
     count = 0;
     longflag = 0;
@@ -241,7 +256,7 @@ void List(int argc, char **argv)
         prevlen = 14;
         while (entry = readdir(dirp))
         {
-            ptr = entry->name;
+            ptr = entry->d_name;
             for (i = 0; i < 13; i++)
             {
                 fname[i] = tolower(*ptr);
@@ -249,7 +264,12 @@ void List(int argc, char **argv)
             }
             if (longflag)
             {
-                stat(fname, &statbuf);
+                strcpy(path1, path);
+                len = strlen(path1);
+                if (len && path1[len-1] != '/')
+                    strcat(path1, "/");
+                strcat(path1, fname);
+                stat(path1, &statbuf);
                 filesize = statbuf.st_size;
                 attribute = statbuf.st_mode;
                 strcpy(drwx, "-rw-");
