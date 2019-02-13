@@ -1,0 +1,2 @@
+cat simple_printf.o printf.o sprintf.o scanf.o sscanf.o puts.o gets.o getchar.o getch.o putchar.o putch.o floatstr.o >smallio.a
+cat smallio.a stdlib.a string.a cogstart.o cogthread.o cognew2.o freqset.o float.o longlong.o >libsmall.a
