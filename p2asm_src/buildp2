@@ -1,0 +1,1 @@
+p2gcc -o p2asm p2asm.c symsubs.c strsubs.c 
