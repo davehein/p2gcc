@@ -28,11 +28,19 @@
 #include <string.h>
 #include "p2link.h"
 
+#ifdef __P2GCC__
+#define MAX_NAME_LEN 28
+#define MAX_OBJECTS 50
+#define MAX_SYMBOLS 500
+#define MAX_LIB_DIRS 4
+#define MAX_LIB_DIR_LEN 99
+#else
 #define MAX_NAME_LEN 30
 #define MAX_OBJECTS 1000
 #define MAX_SYMBOLS 10000
 #define MAX_LIB_DIRS 10
 #define MAX_LIB_DIR_LEN 100
+#endif
 
 int FindSymbolLimits(char *str, int type, int first, int last);
 int FindSymbolLimitsMask(char *str, int mask, int first, int last);
@@ -56,7 +64,11 @@ char objname[MAX_OBJECTS][MAX_NAME_LEN];
 char liblist[MAX_LIB_DIRS][MAX_LIB_DIR_LEN+1];
 int numlibs = 0;
 
-int mem[100000];
+#ifdef __P2GCC__
+int mem[64*1024];
+#else
+int mem[512*1024];
+#endif
 
 void usage(void)
 {
@@ -561,6 +573,11 @@ int main(int argc, char **argv)
     int unresolved = 0;
     FILE *infile, *outfile;
 
+#ifdef __P2GCC__
+    sd_mount(58, 61, 59, 60);
+    chdir(argv[argc]);
+#endif
+
     memset(symoffset, 0, MAX_SYMBOLS*4);
     strcpy(outfname, "a.out");
     strcpy(liblist[numlibs++], "./");
@@ -636,6 +653,7 @@ int main(int argc, char **argv)
 
     outfile = OpenFile(outfname, "wb");
     fwrite(&mem[start_addr>>2], 1, addr - start_addr, outfile);
+    fclose(outfile);
 
     if (debugflag)
     {
