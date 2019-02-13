@@ -658,6 +658,11 @@ int main(int argc, char **argv)
     int errthresh = 1;
     char debugstr[100];
 
+#if __P2GCC__
+    sd_mount(58, 61, 59, 60);
+    chdir(argv[argc]);
+#endif
+
     for (i = 1; i < argc; i++)
     {
         if (argv[i][0] == '-')
