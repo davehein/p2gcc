@@ -1,5 +1,5 @@
 p2gcc -c shell.c
 p2asm -o preshell.spin2
 rm preshell.bin preshell.lst
-p2link -s 20000 -o shell.bin -L $P2GCC_LIBDIR preshell.o p2start.o shell.o libc.a
-loadp2 -t -s 20000 shell.bin
+p2link -s 60000 -o shell.bin -L $P2GCC_LIBDIR preshell.o p2start.o shell.o libc.a
+loadp2 -t -s 60000 shell.bin

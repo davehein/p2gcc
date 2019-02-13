@@ -5,7 +5,7 @@ con
 	baud_rate = 115_200
 	lr = $1f6
 	'init_stack_ptr = 64*1024 - 32*4
-	init_stack_ptr = 256*1024 - 32*4
+	init_stack_ptr = 512*1024 - 16*1024
 
 dat
 	orgh	0

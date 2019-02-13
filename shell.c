@@ -68,7 +68,7 @@ void Run(int argc, char **argv)
     }
     memcpy((void *)ptr, buffer, 32);
     patch_sys_config();
-    fread((void *)ptr+32, 1, 128 * 1024 - 32, infile);
+    fread((void *)ptr+32, 1, 384 * 1024 - 32, infile);
     fclose(infile);
     getcwd(buffer, 100);
     argv[argc] = (char *)buffer;
