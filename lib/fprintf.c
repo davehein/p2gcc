@@ -69,10 +69,17 @@ fputlw(FILE *fd, uint64_t u, int base, int width, int fill_char, int digits)
 		*t++ = d2a((int)(u % base));
 		u /= base;
 		width--;
+                digits--;
 	} while (u > 0);
+
+        if (digits > 0)
+            width -= digits;
 
 	while (width-- > 0) {
 	  fputc(fill_char, fd); put++;
+	}
+	while (digits-- > 0) {
+	  fputc('0', fd); put++;
 	}
 	while (t != obuf) {
 	  fputc(*--t, fd); put++;
@@ -102,8 +109,8 @@ pute(FILE *fd, int val, int width, int digits)
     return strlen(obuf);
 }
 
-static int
-_dofprnt(FILE *fd, const char *fmt, va_list args )
+int
+vfprintf(FILE *fd, const char *fmt, va_list args )
 {
    char c, fill_char;
    char *s_arg;
@@ -201,7 +208,7 @@ int fprintf(FILE *fd, const char *fmt, ...)
     va_list args;
     int r;
     va_start(args, fmt);
-    r = _dofprnt(fd, fmt, args);
+    r = vfprintf(fd, fmt, args);
     va_end(args);
     return r;
 }

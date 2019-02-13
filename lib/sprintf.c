@@ -76,10 +76,17 @@ putlw(char **ptr, uint64_t u, int base, int width, int fill_char, int digits)
 		*t++ = d2a((int)(u % base));
 		u /= base;
 		width--;
+                digits--;
 	} while (u > 0);
+
+        if (digits > 0)
+            width -= digits;
 
 	while (width-- > 0) {
 	  putcharstr(ptr, fill_char); put++;
+	}
+	while (digits-- > 0) {
+	  putcharstr(ptr, '0'); put++;
 	}
 	while (t != obuf) {
 	  putcharstr(ptr, *--t); put++;
@@ -105,8 +112,8 @@ pute(char **ptr, int val, int width, int digits)
     return strlen(ptr1);
 }
 
-static int
-_doprnt(char *ptr, const char *fmt, va_list args )
+int
+vsprintf(char *ptr, const char *fmt, va_list args )
 {
    char c, fill_char;
    char *s_arg;
@@ -204,7 +211,7 @@ int sprintf(char *ptr, const char *fmt, ...)
     va_list args;
     int r;
     va_start(args, fmt);
-    r = _doprnt(ptr, fmt, args);
+    r = vsprintf(ptr, fmt, args);
     va_end(args);
     return r;
 }
