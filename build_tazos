@@ -1,0 +1,23 @@
+rm -rf bin
+mkdir bin
+cd p2asm_src
+chmod +x buildit
+./buildit
+cp p2asm ../bin
+cd ..
+cd p2link_src
+p2gcc p2link.c -o p2link
+cp p2link ../bin
+cd ..
+cd util
+p2gcc p2dump.c -o p2dump
+cp p2dump ../bin
+p2gcc p2dumpobj.c -o p2dumpobj
+cp p2dumpobj ../bin
+cd ..
+cd taz_src
+./buildp2
+cp taz ../bin
+cp prep ../bin
+cd ..
+
