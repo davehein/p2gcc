@@ -4,7 +4,8 @@ con
 	clock_freq = 80_000_000
 	baud_rate = 115_200
 	lr = $1f6
-	init_stack_ptr = 32*1024 - 32*4
+	'init_stack_ptr = 64*1024 - 32*4
+	init_stack_ptr = 384*1024
 
 dat
 	orgh	0
@@ -14,15 +15,15 @@ dat
 '*******************************************************************************
 	org
 
-start	call	#prefix_setup
-	calld	lr, main_address
-	cogid	r1
-        mov     r2, #0
-        wrlong  r2, r2
-	cogstop	r1
-main_address
-	long	_main
-
+start	jmp 	#prefix_setup
+p2start_address
+	long	_p2start
+	long	0
+	long	0
+	long	0
+        long    80000000 ' p2clkfreq
+        long    19146744 ' p2clkconfig
+  	long	115200   ' baudrate
 r0	long	0
 r1	long	0
 r2	long	0
@@ -79,15 +80,6 @@ __MEMCPY
         djnz    r2, #__MEMCPY
         ret
 
-prefix_setup
-	mov	sp, ##init_stack_ptr
-	drvh    #tx_pin
-        hubset  #$ff
-	mov	r0, #1
-        qmul    r0, r0
-        getqx   __has_cordic
-	ret
-
 __has_cordic
 	long	0
 
@@ -140,6 +132,41 @@ __UDIVSI2
 	mov	r1, r0
 	mov	r0, temp1
         ret
+
+__CMPSWAPSI
+	mov	temp1,r0	'' save value to set
+	rdlong	r0,r2		'' fetch original value
+	cmp	r0,r1 wz	'' compare with desired original value
+ if_z   wrlong  temp1,r2	'' if match, save new value
+	ret
+
+prefix_setup
+        mov     save_r0, r0
+        mov     save_r1, r1
+        cmp     ptra, #0 wz     ' Check if ptra is zero
+ if_z   jmp     #prefix_setup1  ' If zero set sp to init_stack_ptr
+        mov     sp, ptra
+        rdlong  p2start_address, sp
+        add     sp, #4
+        rdlong  r0, sp
+        add     sp, #4
+        jmp     #prefix_setup2
+prefix_setup1
+	mov	sp, ##init_stack_ptr
+	drvh    #tx_pin
+prefix_setup2
+	mov	r1, #1
+        qmul    r1, r1
+        getqx   __has_cordic
+        mov     r0, save_r0
+        mov     r1, save_r1
+	calld	lr, p2start_address
+	cogid	r1
+        mov     r2, #0
+        wrlong  r2, r2
+	cogstop	r1
+save_r0 long    0
+save_r1 long    0
 
 '*******************************************************************************
 '  Program HUB Code

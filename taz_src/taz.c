@@ -16,8 +16,8 @@
 static char *types[] = {"void", "char", "short", "int", "signed", "unsigned",
     0};
 static char *typename[] = {"void", "byte", "word", "xxxx", "long"};
-static char typesize[] = {1, 1, 2, 4, 4, 4};
-static char typesign[] = {0, 0, 1, 1, 1, 0};
+static char typesize[] = {1, 1, 2, 4, 4, 4, 0, 0};
+static char typesign[] = {0, 0, 1, 1, 1, 0, 0, 0};
 //static char size2char[] = {'v', 'b', 'w', 'x', 'l'};
 
 // List of C assignment operators
@@ -30,7 +30,7 @@ static char *aopcode[] = {"null", "add", "sub", "mul", "div", "mod", "shl", "shr
 static char *oplist[] = {"*", "/", "%", "+", "-", "<<", ">>", "<", "<=", ">",
     ">=", "==", "!=", "&", "^", "|", "&&", "||", 0};
 static char  opprec[] = {13, 13, 13, 12, 12, 11, 11, 10, 10, 10, 10, 9, 9, 8,
-    7, 6, 5, 4};
+    7, 6, 5, 4, 0, 0};
 
 // C keywords
 static char *keywords[] = {"return", "if", "while", "do", "for", "break",
@@ -62,6 +62,11 @@ int main(int argc, char **argv)
 {
     int i;
     char *fname = 0;
+
+#if __P2GCC__
+    sd_mount(58, 61, 59, 60);
+    chdir(argv[argc]);
+#endif
 
     for (i = 1; i < argc; i++)
     {
@@ -112,7 +117,7 @@ int main(int argc, char **argv)
 
 void usage(void)
 {
-    printf("usage: taz [-d] infile\n");
+    printf("usage: taz [-d -g] infile\n");
     exit(0);
 }
 

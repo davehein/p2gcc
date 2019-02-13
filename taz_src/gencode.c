@@ -17,7 +17,7 @@ int cs_index = 0;
 int nopflag;
 int globalflag;
 
-static char size2char[] = {'v', 'b', 'w', 'x', 'l'};
+static char size2char[] = {'v', 'b', 'w', 'x', 'l', 0, 0, 0};
 
 #define USE_CALLD
 
@@ -25,7 +25,11 @@ static char size2char[] = {'v', 'b', 'w', 'x', 'l'};
 void EmitHeader(void)
 {
     char buffer[200];
+#ifdef __P2GCC__
+    FILE *prefile = fopen("/lib/prefix.spin2", "r");
+#else
     FILE *prefile = fopen("prefix.spin2", "r");
+#endif
     while (fgets(buffer, 200, prefile))
         Emit(buffer);
     fclose(prefile);
@@ -871,10 +875,16 @@ void EmitAlignment(int size)
 
 void EmitFunctionStart(char *funcname)
 {
+#if 0
     if (globalflag)
         Emit1a("_%-7s global\n", funcname);
     else
         Emit1a("_%-7s\n", funcname);
+#else
+    if (globalflag)
+        Emit1a("        .global _%s\n", funcname);
+    Emit1a("_%-7s\n", funcname);
+#endif
     //EmitLabelString(funcname);
 #ifdef USE_CALLD
     Emit("        sub     sp, #4\n");

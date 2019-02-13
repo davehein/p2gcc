@@ -140,6 +140,11 @@ int main(int argc, char **argv)
 {
     FILE *infile;
 
+#ifdef __P2GCC__
+    sd_mount(58, 61, 59, 60);
+    chdir(argv[argc]);
+#endif
+
     if (argc != 2) usage();
     infile = fopen(argv[1], "r");
     if (!infile)
