@@ -19,7 +19,7 @@ static void init_files(void)
     for (i = 3; i < 10; i++) __files[i]._flag = 0;
 }
 
-static int __attribute__((noinline)) _get_ptrb(void)
+int __attribute__((noinline)) _get_ptrb(void)
 {
     __asm__("mov r0, ptrb");
 }
