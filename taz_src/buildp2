@@ -1,0 +1,2 @@
+p2gcc taz.c cstrsubs.c csymbols.c ctokens.c gencode.c -o taz
+p2gcc prep.c cstrsubs.c -o prep
