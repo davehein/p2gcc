@@ -46,7 +46,11 @@
 #define Z_BIT (1 << 19)
 #define I_BIT (1 << 18)
 
+#ifdef __P2GCC__
+#define DATA_BUFFER_SIZE 100000
+#else
 #define DATA_BUFFER_SIZE 1000000
+#endif
 
 // Keywords and delimiters
 char *SectionKeywords[] = {"dat", "con", "pub", "pri", "var", 0};
@@ -1920,10 +1924,24 @@ void ProcessConstantLine(int *pcurrval, int *pcurrund, char **tokens, int num)
     return;
 }
 
+int GetLineMode(int *pcommentflag, int *pnum, char **tokens, char *buffer, int *pmode)
+{
+    int i;
+
+    line_number++;
+    strcpy(buffer3, buffer2);
+    if (CheckComment(buffer2, pcommentflag)) return 1;
+    *pnum = Tokenize(buffer2, tokens, 100, buffer);
+    if (*pnum == 0) return 1;
+    i = SearchList(SectionKeywords, tokens[0]);
+    if (i >= 0) *pmode = i;
+    return 0;
+}
+
 // Parse the con section of a Spin file
 void ParseCon(void)
 {
-    int i, num;
+    int num;
     char *tokens[200];
     char buffer[600];
     int mode = MODE_CON;
@@ -1939,13 +1957,7 @@ void ParseCon(void)
 
     while (ReadString(buffer2, 300, infile, unicode))
     {
-        line_number++;
-        strcpy(buffer3, buffer2);
-        if (CheckComment(buffer2, &commentflag)) continue;
-	num = Tokenize(buffer2, tokens, 100, buffer);
-        if (num == 0) continue;
-	i = SearchList(SectionKeywords, tokens[0]);
-        if (i >= 0) mode = i;
+        if (GetLineMode(&commentflag, &num, tokens, buffer, &mode))continue;
         if (mode == MODE_CON)
             ProcessConstantLine(&currval, &currund, tokens, num);
     }
@@ -2011,6 +2023,11 @@ int main(int argc, char **argv)
     char *infname = 0;
     char rootname[80], lstfname[80], binfname[80];
 
+#ifdef __P2GCC__
+    sd_mount(58, 61, 59, 60);
+    chdir(argv[argc]);
+#endif
+
     for (i = 1; i < argc; i++)
     {
 	if (argv[i][0] == '-')
@@ -2043,9 +2060,9 @@ int main(int argc, char **argv)
     strcat(lstfname, "lst");
     strcat(binfname, "bin");
 
-    infile = FileOpen(infname, "r");
+    infile = FileOpen(infname, "rb");
     unicode = CheckForUnicode(infile);
-    lstfile = FileOpen(lstfname, "w");
+    lstfile = FileOpen(lstfname, "wb");
     binfile = FileOpen(binfname, "wb");
     if (objflag)
     {

@@ -90,7 +90,11 @@
 #define TYPE_UNDEF    66
 #define TYPE_BALIGN   67
 
+#ifdef __P2GCC__
+#define MAX_SYMBOLS    1000
+#else
 #define MAX_SYMBOLS    5000
+#endif
 #define MAX_SYMBOL_LEN   39
 
 #define SCOPE_NULL        0
