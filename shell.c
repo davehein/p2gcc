@@ -18,6 +18,9 @@
 FILE __files[]; // Needed for stdin and stdout to link properly
 FILE *stdinfile;
 FILE *stdoutfile;
+FILE *scriptfile = 0;
+int scriptline = 0;
+char scriptarg[4][80];
 
 // Print help information
 void Help()
@@ -32,6 +35,7 @@ void Run(int argc, char **argv)
     int buffer[25];
     char path[100];
     char *ptr1;
+    int i;
 
 #if 0
     if (argc < 2)
@@ -60,7 +64,25 @@ void Run(int argc, char **argv)
     }
 
     fread(buffer, 1, 32, infile);
-    if (buffer[5] != 80000000 || buffer[6] != 19146744 || buffer[7] != 115200)
+    if (!strncmp((char *)buffer, "#shell", 6))
+    {
+        if (scriptfile)
+            fclose(scriptfile);
+        fseek(infile, 0, SEEK_SET);
+        fgets((char *)buffer, 80, infile);
+        scriptfile = infile;
+        scriptline = 1;
+        strcpy(scriptarg[0], path);
+        for (i = 1; i < 4; i++)
+        {
+            if (i < argc)
+                strcpy(scriptarg[i], argv[i]);
+            else
+                scriptarg[i][0] = 0;
+        }
+        return;
+    }
+    else if (buffer[5] != 80000000 || buffer[6] != 19146744 || buffer[7] != 115200)
     {
         printf("%s is not an executable file\n", argv[1]);
         fclose(infile);
@@ -70,6 +92,8 @@ void Run(int argc, char **argv)
     patch_sys_config();
     fread((void *)ptr+32, 1, 384 * 1024 - 32, infile);
     fclose(infile);
+    if (scriptfile)
+        fclose(scriptfile);
     getcwd(buffer, 100);
     argv[argc] = (char *)buffer;
     sd_unmount();
@@ -83,6 +107,13 @@ void Run(int argc, char **argv)
     //sd_mount(59, 60, 58, 61);
     sd_mount(58, 61, 59, 60);
     chdir(buffer);
+    if (scriptfile)
+    {
+        scriptfile = fopen(scriptarg[0], "r");
+        if (!scriptfile) return;
+        for (i = 0; i < scriptline; i++)
+            fgets((char *)buffer, 80, scriptfile);
+    }
 }
 
 void Cd(int argc, char **argv)
@@ -447,6 +478,71 @@ int getdec(char *ptr)
     return val;
 }
 
+void RemoveCRLF(char *str)
+{
+    int len = strlen(str);
+    if (len <= 0) return;
+    str += len - 1;
+    if (*str == 10)
+    {
+        *str-- = 0;
+        if (--len <= 0) return;
+    }
+    if (*str == 13)
+        *str = 0;
+}
+
+void GetCommandLine(char *buf)
+{
+    if (scriptfile)
+    {
+        if (fgets(buf, 80, scriptfile))
+        {
+            scriptline++;
+            RemoveCRLF(buf);
+            return;
+        }
+        fclose(scriptfile);
+        scriptfile = 0;
+    }
+    gets(buf);
+}
+
+void CheckScriptParms(int argc, char **argv)
+{
+    int i;
+    static char workbuf[200];
+    char *ptr;
+    char *ptr1 = workbuf;
+    char *ptr2;
+    int change = 0;
+
+    for (i = 0; i < argc; i++)
+    {
+        ptr = argv[i];
+        ptr2 = ptr1;
+        while (*ptr)
+        {
+            if (ptr[0] == '$' && ptr[1] >= '0' && ptr[1] <= '3')
+            {
+                strcpy(ptr2, scriptarg[ptr[1] - '0']);
+                ptr2 += strlen(ptr2);
+                ptr += 2;
+                change = 1;
+            }
+            else
+               *ptr2++ = *ptr++;
+        }
+        *ptr2++ = 0;
+        if (change)
+        {
+            argv[i] = ptr1;
+            ptr1 = ptr2;
+            change = 0;
+        }
+    }
+}
+
 // The program starts the file system.  It then loops reading commands
 // and calling the appropriate routine to process it.
 int main(int argc, char **argv)
@@ -470,9 +566,10 @@ int main(int argc, char **argv)
     {
         printf("\n> ");
         fflush(stdout);
-        gets(buffer);
+        GetCommandLine(buffer);
         num = tokenize(buffer, tokens);
         num = CheckRedirection(tokens, num);
+        if (scriptfile) CheckScriptParms(num, tokens);
         if (num == 0) continue;
         if (!strcmp(tokens[0], "help"))
             Help();
