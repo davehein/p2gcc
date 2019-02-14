@@ -1,3 +1,19 @@
+typedef struct FatDirEntryS {
+    char name[8];
+    char ext[3];
+    unsigned char attrib;
+    unsigned char attrib1;
+    unsigned char attrib2;
+    unsigned short ctime;
+    unsigned short cdate;
+    unsigned short adate;
+    unsigned short hcluster;
+    unsigned short mtime;
+    unsigned short mdate;
+    unsigned short lcluster;
+    unsigned int filesize;
+} FatDirEntryT;
+
 int  pflush(void);
 int  pclose(void);
 int  popen(char *s, char mode);
@@ -10,7 +26,7 @@ int  seek(int pos);
 int  popendir(void);
 int  pchdir(char *path);
 int  pmkdir(char *fname);
-void pstat(int *filestat);
+void pstat(FatDirEntryT *direntry);
 int  mount_explicit(int DO, int CLK, int DI, int CS);
 void unmount(void);
 int  loadhandle(int *handle);

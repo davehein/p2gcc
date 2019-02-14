@@ -39,6 +39,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "fsrw.h"
 
 #define SECTORSIZE  512
 #define SECTORSHIFT   9
@@ -1135,12 +1136,10 @@ int pmkdir(char *fname)
 }
 
 // Additional routines
-void pstat(int *filestat)
+void pstat(FatDirEntryT *direntry)
 {
-    char *ptr;
-    ptr = readbytec(direntry0) + 11;
-    filestat[0] = *ptr;
-    filestat[1] = filesize;
+    char *ptr = readbytec(direntry0);
+    memcpy(direntry, ptr, 32);
 }
 
 void pchmod(int modebits)

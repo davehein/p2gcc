@@ -35,13 +35,6 @@ static struct dirent direntbuf;
 
 void sd_mount(int DO, int CLK, int DI, int CS)
 {
-#if 0
-    int i;
-    __files[0]._flag = 0x100000;
-    __files[1]._flag = 0x100000;
-    __files[2]._flag = 0x100000;
-    for (i = 3; i < 10; i++) __files[i]._flag = 0;
-#endif
     strcpy(currentwd, "/");
     if (!mount_explicit(DO, CLK, DI, CS))
       mounted = 1;
@@ -361,10 +354,6 @@ DIR *opendir(const char *path)
     resolve_path(path, path1);
     if (pchdir(path1))
         return 0;
-#if 0
-    if (path[0] && strcmp(path, ".") && strcmp(path, "/") && strcmp(path,"./"))
-        return 0;
-#endif
     fd = allocfile(44 + 512);
     if (!fd) return 0;
     handle = (int *)fd->_flag;
@@ -419,7 +408,7 @@ long int ftell(FILE *fd)
 int stat(const char *fname, struct stat *buf)
 {
     int retval;
-    int filestat[2];
+    FatDirEntryT direntry;
     char path[100];
     char dirpath[100];
     char *fname1;
@@ -434,15 +423,16 @@ int stat(const char *fname, struct stat *buf)
     loadhandle0();
     retval = popen(fname1, 'r');
     if (retval) return -1;
-    pstat(filestat);
-    buf->st_size = filestat[1];
+    pstat(&direntry);
+    buf->st_size = direntry.filesize;
     buf->st_mode = S_IREAD;
-    if (filestat[0] & 0x10)
+    if (direntry.attrib & 0x10)
         buf->st_mode |= S_IFDIR | S_IEXEC;
-    if (filestat[0] & 0x20)
+    if (direntry.attrib & 0x20)
         buf->st_mode |= S_IEXEC;
-    if (!(filestat[0] & 0x01))
+    if (!(direntry.attrib & 0x01))
         buf->st_mode |= S_IWRITE;
+    buf->st_mtime = (((int)direntry.mdate) << 16) | direntry.mtime;
     pclose();
     return 0;
 }
@@ -452,7 +442,7 @@ int chmod(const char *fname, mode_t mode)
     char path[100];
     char dirpath[100];
     char *fname1;
-    int filestat[2];
+    FatDirEntryT direntry;
 
     if (!mounted)
     {
@@ -464,13 +454,13 @@ int chmod(const char *fname, mode_t mode)
     loadhandle0();
     if (popen(fname1, 'r'))
         return -1;
-    pstat(filestat);
-    filestat[0] &= ~0x21;
+    pstat(&direntry);
+    direntry.attrib &= ~0x21;
     if (mode & S_IEXEC)
-        filestat[0] |= 0x20;
+        direntry.attrib |= 0x20;
     if (!(mode & S_IWRITE))
-        filestat[0] |= 0x01;
-    pchmod(filestat[0]);
+        direntry.attrib |= 0x01;
+    pchmod(direntry.attrib);
     pclose();
     return 0;
 }
