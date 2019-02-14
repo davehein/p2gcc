@@ -26,7 +26,7 @@ void EmitHeader(void)
 {
     char buffer[200];
 #ifdef __P2GCC__
-    FILE *prefile = fopen("/lib/prefix.spin2", "r");
+    FILE *prefile = fopen("/lib/prefix.spi", "r");
 #else
     FILE *prefile = fopen("prefix.spin2", "r");
 #endif
@@ -883,7 +883,7 @@ void EmitFunctionStart(char *funcname)
 #else
     if (globalflag)
         Emit1a("        .global _%s\n", funcname);
-    Emit1a("_%-7s\n", funcname);
+    Emit1a("_%s\n", funcname);
 #endif
     //EmitLabelString(funcname);
 #ifdef USE_CALLD
