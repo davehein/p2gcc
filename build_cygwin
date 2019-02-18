@@ -30,4 +30,6 @@ cp p2dumpobj.exe ../bin
 cp diffit ../bin
 cd ..
 cp p2gcc bin
-
+cd lib
+./buildlibs
+cd ..

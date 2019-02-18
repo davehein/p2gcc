@@ -32,3 +32,6 @@ chmod +x diffit
 cp diffit ../bin
 cd ..
 cp p2gcc bin
+cd lib
+./buildlibs
+cd ..
