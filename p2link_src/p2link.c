@@ -516,6 +516,12 @@ void ReadFile(FILE *infile, int libflag)
 
     while (ReadObject(infile))
     {
+        if (addr & 3)
+        {
+            printf("Object %d is an odd size - %d\n", objnum, addr - prev_addr);
+            printf("Padding address to 4-byte boundary\n");
+            addr = (addr + 3) & ~3;
+        }
         if (objnum > 1)
         {
             vars_resolved = MergeGlobalVariables(prev_numsym);
