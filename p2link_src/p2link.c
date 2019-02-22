@@ -72,7 +72,7 @@ int mem[512*1024];
 
 void usage(void)
 {
-    printf("p2link - a linker for the propeller 2 - version 0.005, 2019-1-28\n");
+    printf("p2link - a linker for the propeller 2 - version 0.006, 2019-02-22\n");
     printf("usage: p2link\n");
     printf("         [ -v ]       enable verbose mode\n");
     printf("         [ -d ]       enable debug mode\n");
@@ -518,8 +518,11 @@ void ReadFile(FILE *infile, int libflag)
     {
         if (addr & 3)
         {
-            printf("Object %d is an odd size - %d\n", objnum, addr - prev_addr);
-            printf("Padding address to 4-byte boundary\n");
+            if (debugflag || verbose)
+            {
+                printf("Object %d is an odd size - %d\n", objnum, addr - prev_addr);
+                printf("Padding address to 4-byte boundary\n");
+            }
             addr = (addr + 3) & ~3;
         }
         if (objnum > 1)
