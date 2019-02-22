@@ -46,6 +46,7 @@ extern int objflag;
 extern int addifmissing;
 extern int datamode;
 static int numsym1 = 0;
+extern int v33mode;
 
 extern SymbolT SymbolTable[MAX_SYMBOLS];
 
@@ -71,6 +72,15 @@ void ReadSymbolTable(void)
     {
         if (!objflag && p2asmsym[i][5] == '.') break;
         sscanf(p2asmsym[i], "%x %d %s", &s->value, &s->type, s->name);
+        if (v33mode)
+        {
+            if (!strcmp(s->name, "rdlut")) // Check for rdlut, and change type if found
+                s->type = TYPE_OP2PX;
+            else if (!strcmp(s->name, "wrlut")) // Check for wrlut, and change type if found
+                s->type = TYPE_OP2CX;
+        }
+        else if (!strcmp(s->name, "setscp") || !strcmp(s->name, "getscp"))
+            continue;
         // Prefix MODCZP symbols with "modczp" if generating an object file
         if (objflag && s->type == TYPE_MODCZP)
         {

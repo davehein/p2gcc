@@ -381,6 +381,8 @@ char *p2asmsym[] = {
 "0d60006e  1 wrz",
 "0d60006f  1 wrnz",
 "0d64006f 47 modcz",
+"0d600070 27 setscp",
+"0d600071  1 getscp",
 "0d64006f 49 modc",
 "0d64006f 50 modz",
 "0cac0000  0 xstop",

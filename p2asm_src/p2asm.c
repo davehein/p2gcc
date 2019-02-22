@@ -83,6 +83,7 @@ int allow_undefined = 0;
 int addifmissing = 0;
 int line_number = 0;
 int object_section = 0;
+int v33mode = 0;
 
 static int finalpass = 0;
 
@@ -220,12 +221,28 @@ int EncodePointerField(int *pindex, char **tokens, int num, int opcode)
 	return -1;
     }
 
-    if (value < -16 || value > 15)
+    if (v33mode)
     {
-        PrintError("Warning: pointer index %d is out of bounds\n", value);
+        if (retval & 0x40)
+        {
+            if (value < -16 || value > 16 || value == 0)
+                PrintError("Error: pointer index %d is invalid\n", value);
+            if (value == 16) value = 0;
+            retval = (retval & ~31) | (value & 31);
+        }
+        else
+        {
+            if (value < -32 || value > 31)
+                PrintError("Error: pointer index %d is invalid\n", value);
+            retval = (retval & ~63) | (value & 63);
+        }
     }
-
-    retval = (retval & ~31) | (value & 31);
+    else
+    {
+        if (value < -16 || value > 15)
+            PrintError("Error: pointer index %d is invalid\n", value);
+        retval = (retval & ~31) | (value & 31);
+    }
 
     if (CheckExpected("]", i, tokens, num))
     {
@@ -2006,12 +2023,13 @@ void Parse(int pass)
 
 void usage(void)
 {
-    printf("p2asm - an assembler for the propeller 2 - version 0.008, 2019-02-03\n");
+    printf("p2asm - an assembler for the propeller 2 - version 0.009, 2019-02-21\n");
     printf("usage: p2asm\n");
     printf("  [ -o ]     generate an object file\n");
     printf("  [ -d ]     enable debug prints\n");
     printf("  [ -c ]     enable case sensitive mode\n");
     printf("  [ -hub ]   write only hub code to object file\n");
+    printf("  [ -v33 ]   assemble code for the v33 P2\n");
     printf("  file       source file\n");
     exit(1);
 }
@@ -2042,6 +2060,8 @@ int main(int argc, char **argv)
                 case_sensative = 1;
             else if(!strcmp(argv[i], "-hub"))
                 hubonly = 1;
+            else if(!strcmp(argv[i], "-v33"))
+                v33mode = 1;
 	    else
 	        usage();
 	}
