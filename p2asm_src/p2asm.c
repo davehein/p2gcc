@@ -84,6 +84,7 @@ int addifmissing = 0;
 int line_number = 0;
 int object_section = 0;
 int v33mode = 0;
+int exitvalue = 0;
 
 static int finalpass = 0;
 
@@ -101,6 +102,7 @@ void PrintError(char *str, ...)
     vfprintf(lstfile, str, ap);
     va_end(ap);
     printf("%s\n", buffer3);
+    exitvalue = 1;
 }
 
 void PrintUnexpected(int num, char *str)
@@ -194,7 +196,7 @@ int EncodePointerField(int *pindex, char **tokens, int num, int opcode)
         }
         if (value < -0x80000 || value > 0x7ffff)
         {
-            PrintError("Warning: pointer index %d is out of bounds\n", value);
+            PrintError("ERROR: pointer index %d is out of bounds\n", value);
         }
 
         retval = ((retval & 0x1e0) << 15) | (value & 0xfffff);
@@ -2023,7 +2025,7 @@ void Parse(int pass)
 
 void usage(void)
 {
-    printf("p2asm - an assembler for the propeller 2 - version 0.009, 2019-02-21\n");
+    printf("p2asm - an assembler for the propeller 2 - version 0.010, 2019-02-23\n");
     printf("usage: p2asm\n");
     printf("  [ -o ]     generate an object file\n");
     printf("  [ -d ]     enable debug prints\n");
@@ -2186,5 +2188,5 @@ int main(int argc, char **argv)
 
     if (debugflag) PrintSymbolTable(0);
 
-    return 0;
+    return exitvalue;
 }

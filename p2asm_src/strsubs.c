@@ -277,7 +277,7 @@ FILE *FileOpen(char *fname, char *mode)
 
     if (file == 0)
     {
-	printf("Could not open %s\n", fname);
+	printf("ERROR: Could not open %s\n", fname);
 	exit(1);
     }
 

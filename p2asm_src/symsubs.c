@@ -186,7 +186,7 @@ void AddSymbol(char *symbol, int objsect, int value, int type, int section)
 {
     if (numsym >= MAX_SYMBOLS)
     {
-	printf("Symbol table is full\n");
+	printf("ERROR: Symbol table is full\n");
 	exit(1);
     }
     if (strlen(symbol) > MAX_SYMBOL_LEN)
@@ -208,7 +208,7 @@ void AddSymbol2(char *symbol, int objsect, int value, int value2, int type, int 
 {
     if (numsym >= MAX_SYMBOLS)
     {
-	printf("Symbol table is full\n");
+	printf("ERROR: Symbol table is full\n");
 	exit(1);
     }
     if (strlen(symbol) > MAX_SYMBOL_LEN)
