@@ -2,12 +2,10 @@
 
 char *strchr(const char *str, int val)
 {
-    while (*str)
-    {
+    do {
         if (*str == val)
             return (char *)str;
-        str++;
-    }
+    } while (*str++);
     return 0;
 }
 
