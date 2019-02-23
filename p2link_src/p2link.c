@@ -412,6 +412,7 @@ int MergeGlobalVariables(int prev_num)
         if (symtype[i] == OTYPE_UNINIT_DATA)
         {
             j = FindSymbol(symname[i], OTYPE_INIT_DATA);
+            if (j < 0) j = FindSymbol(symname[i], OTYPE_GLOBAL_FUNC);
             if (j < 0) j = FindSymbol(symname[i], OTYPE_UNINIT_DATA);
             if (debugflag)
             {
