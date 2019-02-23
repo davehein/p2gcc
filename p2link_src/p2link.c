@@ -72,7 +72,7 @@ int mem[512*1024];
 
 void usage(void)
 {
-    printf("p2link - a linker for the propeller 2 - version 0.006, 2019-02-22\n");
+    printf("p2link - a linker for the propeller 2 - version 0.007, 2019-02-22\n");
     printf("usage: p2link\n");
     printf("         [ -v ]       enable verbose mode\n");
     printf("         [ -d ]       enable debug mode\n");
@@ -442,6 +442,28 @@ int MergeGlobalVariables(int prev_num)
                 {
                     j = FindSymbolLimits(symname[i], OTYPE_INIT_DATA, first, last);
                     if (j >= 0) printf("WARNING: Global variable %s initialized in another object\n", symname[i]);
+                }
+                if (j < 0) continue;
+                if (debugflag) printf("Found global variable %s at entry %d and address %8.8x\n", symname[j], j, symvalue[j]);
+                if (debugflag) printf("Changing %8.8x to %8.8x\n", symvalue[j], symvalue[i]);
+                FixUpRef(symname[i], symvalue[i], first, last);
+                symvalue[j] = symvalue[i];
+                resolved++;
+            }
+        }
+        else if (symtype[i] == OTYPE_GLOBAL_FUNC)
+        {
+            if (debugflag) printf("Found global function %s at entry %d and address %8.8x\n", symname[i], i, symvalue[i]);
+            // Loop over previous objects
+            for (k = 0; k < objnum-1; k++)
+            {
+                first = objstart[k];
+                last = objstart[k+1];
+                j = FindSymbolLimits(symname[i], OTYPE_UNINIT_DATA, first, last);
+                if (j < 0)
+                {
+                    j = FindSymbolLimits(symname[i], OTYPE_INIT_DATA, first, last);
+                    if (j >= 0) printf("WARNING: Found initialized global variable %s in another object\n", symname[i]);
                 }
                 if (j < 0) continue;
                 if (debugflag) printf("Found global variable %s at entry %d and address %8.8x\n", symname[j], j, symvalue[j]);
