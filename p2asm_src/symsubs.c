@@ -312,7 +312,7 @@ int EvaluateExpression(int prevprec, int *pindex, char **tokens, int num, int *p
     }
     else
     {
-        int negate = 0;
+        //int negate = 0;
         int getvalue = 1;
         int hub_addr_flag = 0;
         if (!strcmp(tokens[i], "@@@") || !strcmp(tokens[i], "@"))
@@ -326,12 +326,22 @@ int EvaluateExpression(int prevprec, int *pindex, char **tokens, int num, int *p
         }
         else if (!strcmp(tokens[i], "-"))
         {
+#if 0
             negate = 1;
             if (CheckForEOL(++i, num))
             {
                 *pindex = i;
                 return 1;
             }
+#else
+            i++;
+            if ((errnum = EvaluateExpression(1, &i, tokens, num, &value, is_float))) return errnum;
+            if (*is_float)
+                value ^= 0x80000000;
+            else
+                value = -value;
+            getvalue = 0;
+#endif
         }
         else if (!strcmp(tokens[i], "+"))
         {
@@ -406,6 +416,7 @@ int EvaluateExpression(int prevprec, int *pindex, char **tokens, int num, int *p
                 if (CheckFloat(is_float, is_float1)) { *pindex = i; return 1; }
                 if (hub_addr_flag || s->type == TYPE_HUB_ADDR)
                     value = s->value2;
+#if 0
                 else if (negate)
                 {
                     if (is_float1)
@@ -413,6 +424,7 @@ int EvaluateExpression(int prevprec, int *pindex, char **tokens, int num, int *p
                     else
                         value = -s->value;
                 }
+#endif
                 else
                     value = s->value;
             }
