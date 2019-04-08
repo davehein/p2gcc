@@ -513,7 +513,7 @@ int ProcessBigSrc(int *pi, char **tokens, int num, int *popcode)
     return ProcessWx(pi, tokens, num, popcode);
 }
 
-int GetImmSrcValue(int i, char **tokens, int num, int *retval)
+static int GetImmSrcValue(int i, char **tokens, int num, int *retval, int *prflag)
 {
     int value;
     int rflag = 0;
@@ -527,7 +527,10 @@ int GetImmSrcValue(int i, char **tokens, int num, int *retval)
     else if (EvaluateExpression(12, &i, tokens, num, &value, &is_float)) return 1;
     addifmissing = finalpass;
     target_hubmode = value >= 0x400;
-    if (hubmode == target_hubmode) rflag = 1;
+    // Set relative flag if exec space and target space match, and
+    // if in hubmode the difference must be a multiple of four
+    if (hubmode == target_hubmode)
+        rflag = (!hubmode || !((value - hub_addr) & 3));
     if (rflag)
     {
         if (hubmode)
@@ -535,6 +538,7 @@ int GetImmSrcValue(int i, char **tokens, int num, int *retval)
         else
             value = (value << 2) - cog_addr - 4;
     }
+    *prflag = rflag;
     *retval = value;
     return 0;
 }
@@ -742,11 +746,17 @@ int ProcessRsrc(int *pi, char **tokens, int num, int *popcode)
         if (hubmode)
         {
             value -= hub_addr + 4;
+            if (value & 3)
+                PrintError("ERROR: The difference between the hub addresses must be a multiple of four\n");
             value >>= 2;
         }
         else
             value -= (cog_addr >> 2) + 1;
+        if (value < -256 || value > 255)
+            PrintError("ERROR: Immediate value must be between -256 and 255\n");
     }
+    else if (value < 0 || value > 511)
+        PrintError("ERROR: Immediate value must be between 0 and 511\n");
     *popcode |= (value & 511);
 
     *pi = i;
@@ -1651,13 +1661,13 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
             }
             else
             {
-                int srcval;
+                int srcval, rflag;
                 if (CheckExpected("#", ++i, tokens, num)) break;
                 if (!strcmp(tokens[i+1], "\\"))
-                    srcval = 1;
+                    rflag = 0;
                 else
-                    GetImmSrcValue(i, tokens, num, &srcval);
-                if ((srcval&3) == 0 && srcval < (255 * 4) && srcval > (-256 * 4) && !is_loc)
+                    GetImmSrcValue(i, tokens, num, &srcval, &rflag);
+                if (rflag && srcval < (255 * 4) && srcval > (-256 * 4) && !is_loc)
                 {
                     i--;
                     s = &SymbolTable[opindex+1];
@@ -2025,7 +2035,7 @@ void Parse(int pass)
 
 void usage(void)
 {
-    printf("p2asm - an assembler for the propeller 2 - version 0.011, 2019-04-05\n");
+    printf("p2asm - an assembler for the propeller 2 - version 0.012, 2019-04-07\n");
     printf("usage: p2asm\n");
     printf("  [ -o ]     generate an object file\n");
     printf("  [ -d ]     enable debug prints\n");
