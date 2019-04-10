@@ -85,6 +85,7 @@ int line_number = 0;
 int object_section = 0;
 int v33mode = 0;
 int exitvalue = 0;
+int orgalign = 0;
 
 static int finalpass = 0;
 
@@ -1033,6 +1034,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
             hubmode = 0;
             printflag = PRINT_NOCODE;
             //hub_addr = (hub_addr + 3) & ~3;
+            orgalign = (hub_addr & 3);
             if (i == num)
                 cog_addr = 0;
             else
@@ -1098,7 +1100,10 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
         case TYPE_ALIGNL:
         {
             int value = 0;
+            if (!hubmode && orgalign && pass == 2)
+                PrintError("ERROR: Using alignl in an unaligned ORG section\n");
             hub_incr = (4 - hub_addr) & 3;
+            cog_incr = hub_incr;
             printflag = PRINT_NOCODE;
             if (hub_incr && pass == 2) DumpIt(PRINT_CODE, &value, hub_incr);
             ExpectDone(&i, tokens, num);
@@ -1108,7 +1113,10 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
         case TYPE_ALIGNW:
         {
             int value = 0;
+            if (!hubmode && orgalign && pass == 2)
+                PrintError("ERROR: Using alignw in an unaligned ORG section\n");
             hub_incr = hub_addr & 1;
+            cog_incr = hub_incr;
             printflag = PRINT_NOCODE;
             if (hub_incr && pass == 2) DumpIt(PRINT_CODE, &value, hub_incr);
             ExpectDone(&i, tokens, num);
@@ -1118,11 +1126,14 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
         case TYPE_BALIGN:
         {
             int value = 0;
+            if (!hubmode && orgalign && pass == 2)
+                PrintError("ERROR: Using .balign in an unaligned ORG section\n");
             if (EvaluateExpression(12, &i, tokens, num, &value, &is_float)) break;
             if (value == 2 || value == 4 || value == 8 || value == 16)
                 hub_incr = (value - hub_addr) & (value - 1);
             else
                 PrintError("ERROR: .balign %d is not valid\n", value);
+            cog_incr = hub_incr;
             printflag = PRINT_NOCODE;
             if (hub_incr && pass == 2) DumpIt(PRINT_CODE, &value, hub_incr);
             ExpectDone(&i, tokens, num);
@@ -1280,6 +1291,13 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
         case TYPE_FIT:
         {
             printflag = PRINT_NOCODE;
+            if (i < num)
+            {
+                if (EvaluateExpression(12, &i, tokens, num, &value, &is_float))
+                    break;
+                if (pass == 2 && cog_addr > value << 2)
+                    PrintError("ERROR:  Cog address exceeds FIT limit.\n");
+            }
             cog_incr = 0;
             hub_incr = 0;
             break;
@@ -1978,6 +1996,7 @@ void ParseCon(void)
     int currval = 0;
     int currund = 0;
 
+    orgalign = 0;
     datamode = 0;
     cog_addr = 0;
     hub_addr = 0;
@@ -2002,6 +2021,7 @@ void Parse(int pass)
     int commentflag = 0;
     //int currval = 0;
 
+    orgalign = 0;
     datamode = 0;
     cog_addr = 0;
     hub_addr = 0;
@@ -2035,7 +2055,7 @@ void Parse(int pass)
 
 void usage(void)
 {
-    printf("p2asm - an assembler for the propeller 2 - version 0.012, 2019-04-07\n");
+    printf("p2asm - an assembler for the propeller 2 - version 0.013, 2019-04-10\n");
     printf("usage: p2asm\n");
     printf("  [ -o ]     generate an object file\n");
     printf("  [ -d ]     enable debug prints\n");
