@@ -362,7 +362,12 @@ int ProcessWx(int *pi, char **tokens, int num, int *popcode)
     if (i >= num) { *pi = i; return 0; }
 
     index = FindSymbol(tokens[i]);
-    if (index < 0) { *pi = i; return 1; }
+    if (index < 0)
+    {
+        PrintUnexpected(9, tokens[i]);
+        *pi = i;
+        return 1;
+    }
     s = &SymbolTable[index];
 
     if (s->type != TYPE_WX)
@@ -942,6 +947,8 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
         // Check for an undefined symbol or local label if not object mode
         if (index < 0 || (!objflag && pass == 1 && tokens[i][0] == '.'))
         {
+            if (!hubmode && (cog_addr & 3))
+                PrintError("ERROR: Cog label \"%s\" must be long-aligned\n", tokens[i]);
             AddSymbol2(tokens[i], object_section, cog_addr >> 2, hub_addr, hubmode ? TYPE_HUB_ADDR : TYPE_COG_ADDR, datamode);
             if (num == 1) printflag = PRINT_NOCODE;
             i++;
@@ -2055,7 +2062,7 @@ void Parse(int pass)
 
 void usage(void)
 {
-    printf("p2asm - an assembler for the propeller 2 - version 0.013, 2019-04-10\n");
+    printf("p2asm - an assembler for the propeller 2 - version 0.014, 2019-04-10\n");
     printf("usage: p2asm\n");
     printf("  [ -o ]     generate an object file\n");
     printf("  [ -d ]     enable debug prints\n");
