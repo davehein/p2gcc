@@ -40,4 +40,4 @@
 ./testit USBHost
 ./testit pointers
 ./testit spin2_interpreter
-./testit testjmploc
+#./testit testjmploc
