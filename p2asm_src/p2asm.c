@@ -473,7 +473,7 @@ void WriteObjectEntry(int type, int objsect, int addr, char *str)
 }
 
 // Handle large address fields
-int ProcessBigSrc(int *pi, char **tokens, int num, int *popcode)
+int ProcessBigSrc(int *pi, char **tokens, int num, int *popcode, int is_loc)
 {
     int value;
     int rflag = 0;
@@ -512,6 +512,8 @@ int ProcessBigSrc(int *pi, char **tokens, int num, int *popcode)
         *popcode |= C_BIT;
         if (hubmode)
             value -= hub_addr + 4;
+        else if (is_loc)
+            value = value - (cog_addr >> 2) - 1;
         else
             value = (value << 2) - cog_addr - 4;
     }
@@ -1703,7 +1705,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
                 else
                 {
 	            opcode |= ((value - 0x1f6) & 3) << 21;
-                    ProcessBigSrc(&i, tokens, num, &opcode);
+                    ProcessBigSrc(&i, tokens, num, &opcode, is_loc);
                 }
             }
             break;
@@ -1744,7 +1746,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
         case TYPE_OP1AX:
         {
             if (!strcmp(tokens[i], "#"))
-                ProcessBigSrc(&i, tokens, num, &opcode);
+                ProcessBigSrc(&i, tokens, num, &opcode, 0);
             else
             {
                 opcode = SymbolTable[opindex+1].value | (opcode & 0xf0000000);
@@ -2062,7 +2064,7 @@ void Parse(int pass)
 
 void usage(void)
 {
-    printf("p2asm - an assembler for the propeller 2 - version 0.014, 2019-04-10\n");
+    printf("p2asm - an assembler for the propeller 2 - version 0.015, 2019-04-12\n");
     printf("usage: p2asm\n");
     printf("  [ -o ]     generate an object file\n");
     printf("  [ -d ]     enable debug prints\n");
