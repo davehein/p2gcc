@@ -2064,7 +2064,7 @@ void Parse(int pass)
 
 void usage(void)
 {
-    printf("p2asm - an assembler for the propeller 2 - version 0.015, 2019-04-12\n");
+    printf("p2asm - an assembler for the propeller 2 - version 0.016, 2019-04-14\n");
     printf("usage: p2asm\n");
     printf("  [ -o ]     generate an object file\n");
     printf("  [ -d ]     enable debug prints\n");

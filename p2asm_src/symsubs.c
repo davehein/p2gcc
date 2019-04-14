@@ -384,6 +384,20 @@ int EvaluateExpression(int prevprec, int *pindex, char **tokens, int num, int *p
             getvalue = 0;
             *is_float = 0;
         }
+        else if (!strcmp(tokens[i], ">|"))
+        {
+            int value1;
+            int is_float1 = 0;
+            i++;
+            if ((errnum = EvaluateExpression(1, &i, tokens, num, &value1, &is_float1))) return errnum;
+            for (value = 32; value > 0; value--)
+            {
+                if (value1 & 0x80000000) break;
+                value1 <<= 1;
+            }
+            getvalue = 0;
+            *is_float = 0;
+        }
         if (getvalue)
         {
             index = FindSymbol(tokens[i]);
