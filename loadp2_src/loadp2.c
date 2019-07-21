@@ -158,7 +158,7 @@ loadElfFile(FILE *infile, ElfHdr *hdr)
             printf("Error reading ELF program header %d\n", i);
             return -1;
         }
-        if (program.type != 1) {
+        if (program.type != PT_LOAD) {
             continue;
         }
         printf("load %d bytes at %x\n", program.filesz, program.paddr);
@@ -189,7 +189,7 @@ loadElfFile(FILE *infile, ElfHdr *hdr)
             printf("Error reading ELF program header %d\n", i);
             return -1;
         }
-        if (program.type != 1) {
+        if (program.type != PT_LOAD) {
             continue;
         }
         fseek(infile, program.offset, SEEK_SET);

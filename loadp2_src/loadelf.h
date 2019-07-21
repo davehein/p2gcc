@@ -48,6 +48,9 @@ extern "C" {
 #define SF_ALLOC    2
 #define SF_EXECUTE  4
 
+#define PT_NULL     0    
+#define PT_LOAD     1
+    
 #define ELFNAMEMAX  128
 
 typedef struct {
