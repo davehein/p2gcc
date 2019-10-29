@@ -1613,7 +1613,7 @@ void ParseDat(int pass, char *buffer2, char **tokens, int num)
 	    if (++i >= num) break;
             if (CheckExpected(",", i, tokens, num)) break;
 	    if (++i >= num) break;
-	    value = EncodeAddressField(&i, tokens, num, 2, opcode, 0);
+	    value = EncodeAddressField(&i, tokens, num, 1, opcode, 0);
 	    if (value < 0) break;
 	    if (value & 0x200) opcode |= I_BIT;
 	    opcode |= (value & 0x1ff);
@@ -2064,7 +2064,7 @@ void Parse(int pass)
 
 void usage(void)
 {
-    printf("p2asm - an assembler for the propeller 2 - version 0.016, 2019-04-14\n");
+    printf("p2asm - an assembler for the propeller 2 - version 0.017, 2019-10-29\n");
     printf("usage: p2asm\n");
     printf("  [ -o ]     generate an object file\n");
     printf("  [ -d ]     enable debug prints\n");
