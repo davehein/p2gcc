@@ -72,7 +72,7 @@ int mem[512*1024];
 
 void usage(void)
 {
-    printf("p2link - a linker for the propeller 2 - version 0.007, 2019-02-22\n");
+    printf("p2link - a linker for the propeller 2 - version 0.008, 2020-01-21\n");
     printf("usage: p2link\n");
     printf("         [ -v ]       enable verbose mode\n");
     printf("         [ -d ]       enable debug mode\n");
@@ -409,7 +409,31 @@ int MergeGlobalVariables(int prev_num)
 
     for (i = prev_num; i < numsym; i++)
     {
-        if (symtype[i] == OTYPE_UNINIT_DATA)
+        if (symtype[i] == OTYPE_EXTERN_DATA)
+        {
+            j = FindSymbol(symname[i], OTYPE_INIT_DATA);
+            if (j < 0) j = FindSymbol(symname[i], OTYPE_GLOBAL_FUNC);
+            if (j < 0) j = FindSymbol(symname[i], OTYPE_UNINIT_DATA);
+            if (j < 0) j = FindSymbol(symname[i], OTYPE_EXTERN_DATA);
+            if (debugflag)
+            {
+                printf("Found variable %s at %8.8x\n", symname[i], symvalue[i]);
+                printf("i = %d, j = %d\n", i, j);
+            }
+            // Use address from previous object if found
+            if (j >= 0 && j != i)
+            {
+                if (debugflag)
+                {
+                    printf("Use address from entry %d at address %8.8x\n", j, symvalue[j]);
+                    printf("Changing %8.8x to %8.8x\n", symvalue[i], symvalue[j]);
+                }
+                symvalue[i] = symvalue[j];
+                if (symtype[j] != OTYPE_EXTERN_DATA)
+                    symtype[i] = OTYPE_RESOLVED_DATA;
+            }
+        }
+        else if (symtype[i] == OTYPE_UNINIT_DATA)
         {
             j = FindSymbol(symname[i], OTYPE_INIT_DATA);
             if (j < 0) j = FindSymbol(symname[i], OTYPE_GLOBAL_FUNC);
@@ -429,6 +453,24 @@ int MergeGlobalVariables(int prev_num)
                 }
                 symvalue[i] = symvalue[j];
             }
+            // Else, check for extern data
+            else
+            {
+                // Loop over previous objects
+                for (k = 0; k < objnum-1; k++)
+                {
+                    first = objstart[k];
+                    last = objstart[k+1];
+                    j = FindSymbolLimits(symname[i], OTYPE_EXTERN_DATA, first, last);
+                    if (j < 0) continue;
+                    if (debugflag) printf("Found global variable %s at entry %d and address %8.8x\n", symname[j], j, symvalue[j]);
+                    if (debugflag) printf("Changing %8.8x to %8.8x\n", symvalue[j], symvalue[i]);
+                    FixUpRef(symname[i], symvalue[i], first, last);
+                    symvalue[j] = symvalue[i];
+                    symtype[j] = OTYPE_RESOLVED_DATA;
+                    resolved++;
+                }
+            }
         }
         else if (symtype[i] == OTYPE_INIT_DATA)
         {
@@ -439,6 +481,7 @@ int MergeGlobalVariables(int prev_num)
                 first = objstart[k];
                 last = objstart[k+1];
                 j = FindSymbolLimits(symname[i], OTYPE_UNINIT_DATA, first, last);
+                if (j < 0) j = FindSymbolLimits(symname[i], OTYPE_EXTERN_DATA, first, last);
                 if (j < 0)
                 {
                     j = FindSymbolLimits(symname[i], OTYPE_INIT_DATA, first, last);
@@ -449,6 +492,8 @@ int MergeGlobalVariables(int prev_num)
                 if (debugflag) printf("Changing %8.8x to %8.8x\n", symvalue[j], symvalue[i]);
                 FixUpRef(symname[i], symvalue[i], first, last);
                 symvalue[j] = symvalue[i];
+                if (symtype[j] == OTYPE_EXTERN_DATA)
+                    symtype[j] = OTYPE_RESOLVED_DATA;
                 resolved++;
             }
         }
@@ -461,6 +506,7 @@ int MergeGlobalVariables(int prev_num)
                 first = objstart[k];
                 last = objstart[k+1];
                 j = FindSymbolLimits(symname[i], OTYPE_UNINIT_DATA, first, last);
+                if (j < 0) j = FindSymbolLimits(symname[i], OTYPE_EXTERN_DATA, first, last);
                 if (j < 0)
                 {
                     j = FindSymbolLimits(symname[i], OTYPE_INIT_DATA, first, last);
@@ -471,6 +517,8 @@ int MergeGlobalVariables(int prev_num)
                 if (debugflag) printf("Changing %8.8x to %8.8x\n", symvalue[j], symvalue[i]);
                 FixUpRef(symname[i], symvalue[i], first, last);
                 symvalue[j] = symvalue[i];
+                if (symtype[j] == OTYPE_EXTERN_DATA)
+                    symtype[j] = OTYPE_RESOLVED_DATA;
                 resolved++;
             }
         }

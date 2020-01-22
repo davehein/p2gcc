@@ -13,6 +13,8 @@
 #define OTYPE_LOCAL_LABEL    0x12 // Local Label
 #define OTYPE_INIT_DATA      0x13 // Initialized global data
 #define OTYPE_UNINIT_DATA    0x14 // Uninitialized global data
+#define OTYPE_RESOLVED_DATA  0x15 // Resolved global data
+#define OTYPE_EXTERN_DATA    0x1d // External global data
 #define OTYPE_WEAK_LABEL     0x55 // Weak Label
 #define OTYPE_END_OF_CODE    0x20 // End of code/data
 
