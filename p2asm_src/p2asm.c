@@ -348,7 +348,7 @@ int EncodeAddressField(int *pindex, char **tokens, int num, int type, int opcode
 
 void ExpectDone(int *pindex, char **tokens, int num)
 {
-    if (*pindex < num - 1) PrintUnexpected(8, tokens[*pindex]);
+    if (*pindex < num - 1) PrintUnexpected(8, tokens[*pindex + 1]);
     *pindex = num - 1;
 }
 
@@ -505,6 +505,7 @@ int ProcessBigSrc(int *pi, char **tokens, int num, int *popcode, int is_loc)
             value = SymbolTable[index].value;
     }
     else if (EvaluateExpression(12, pi, tokens, num, &value, &is_float)) return 1;
+    ExpectDone(pi, tokens, num);
     target_hubmode = value >= 0x400;
     if (hubmode == target_hubmode && !forceabs) rflag = 1;
     if (rflag)
@@ -518,7 +519,7 @@ int ProcessBigSrc(int *pi, char **tokens, int num, int *popcode, int is_loc)
             value = (value << 2) - cog_addr - 4;
     }
     *popcode |= (value & 0xfffff);
-    return ProcessWx(pi, tokens, num, popcode);
+    return 0;
 }
 
 static int GetImmSrcValue(int i, char **tokens, int num, int *retval, int *prflag)
@@ -2064,7 +2065,7 @@ void Parse(int pass)
 
 void usage(void)
 {
-    printf("p2asm - an assembler for the propeller 2 - version 0.017, 2019-10-29\n");
+    printf("p2asm - an assembler for the propeller 2 - version 0.018, 2020-01-21\n");
     printf("usage: p2asm\n");
     printf("  [ -o ]     generate an object file\n");
     printf("  [ -d ]     enable debug prints\n");
@@ -2182,7 +2183,7 @@ int main(int argc, char **argv)
                     else if (s->scope == SCOPE_UNDECLARED)
                     {
                         if (debugflag) printf("GLOBAL UNDE %8.8x %s\n", s->value2, s->name);
-                        WriteObjectEntry(OTYPE_UNINIT_DATA, s->objsect, s->value2, s->name);
+                        WriteObjectEntry(OTYPE_EXTERN_DATA, s->objsect, s->value2, s->name);
                     }
                     else if (s->scope == SCOPE_WEAK)
                     {
