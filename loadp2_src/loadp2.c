@@ -86,7 +86,7 @@ promptexit(int r)
 static void Usage(void)
 {
 printf("\
-loadp2 - a loader for the propeller 2 - version 0.013, 2019-02-06\n\
+loadp2 - a loader for the propeller 2 - version 0.014, 2020-01-21\n\
 usage: loadp2\n\
          [ -p port ]               serial port\n\
          [ -b baud ]               user baud rate (default is %d)\n\
@@ -274,7 +274,7 @@ int findp2(char *portprefix, int baudrate)
                 if (verbose) printf("P2 version %c found on serial port %s\n", buffer[11], Port);
                 if (load_mode == -1)
                 {
-                    if (buffer[11] == 'A')
+                    if (buffer[11] == 'A' || buffer[11] == 'G')
                     {
                         load_mode = LOAD_CHIP;
                         if (verbose) printf("Setting load mode to CHIP\n");
