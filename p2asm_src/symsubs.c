@@ -375,6 +375,17 @@ int EvaluateExpression(int prevprec, int *pindex, char **tokens, int num, int *p
             value = (int)floor((double)(fvalue + fvalue1));
             getvalue = 0;
         }
+        else if (!strcmp(tokens[i], "encod"))
+        {
+            int temp;
+            int is_float1 = 0;
+            i++;
+            if ((errnum = EvaluateExpression(1, &i, tokens, num, &value, &is_float1))) return errnum;
+            for (temp = 31; !(value & 0x80000000) && temp > 0; value <<= 1) temp--;
+            value = temp;
+            getvalue = 0;
+            *is_float = 0;
+        }
         else if (!strcmp(tokens[i], "|<"))
         {
             int is_float1 = 0;
