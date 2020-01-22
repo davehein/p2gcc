@@ -43,6 +43,8 @@ ObjectTypeT objtypes[] = {
     {OTYPE_LOCAL_LABEL,  "Local Label   "},
     {OTYPE_INIT_DATA,    "Init data     "},
     {OTYPE_UNINIT_DATA,  "Uninit data   "},
+    {OTYPE_RESOLVED_DATA,"Resolved data "},
+    {OTYPE_EXTERN_DATA,  "External data "},
     {OTYPE_REF_LONG_UND, "Undef long ref"},
     {OTYPE_REF_LONG_REL, "Resol long ref"},
     {OTYPE_WEAK_LABEL,   "Weak Label    "},
@@ -82,7 +84,7 @@ char *GetObjectSection(int objsect)
 
 void usage(void)
 {
-    printf("p2dumpobj - a utility to dump propeller 2 object files - version 0.003, 2019-1-11\n");
+    printf("p2dumpobj - a utility to dump propeller 2 object files - version 0.004, 2020-01-21\n");
     printf("usage: p2dumpobj file\n");
     exit(1);
 }
