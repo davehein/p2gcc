@@ -14,9 +14,9 @@ function errorcheck {
 
 function runpropgcc {
   if [ $verbose -eq 1 ]; then
-    echo $ccstr $modelstr $NAME.c
+    echo $ccstr $optstr $modelstr $NAME.c
   fi
-  $ccstr $modelstr $NAME.c
+  $ccstr $optstr $modelstr $NAME.c
   errorcheck
 }
 
@@ -39,7 +39,7 @@ function runp2asm {
 
 if [ $# -lt 1 ]
 then
-echo "p2gcc - a C compiler for the propeller 2 - version 0.007, 2020-01-21"
+echo "p2gcc - a C compiler for the propeller 2 - version 0.008, 2020-08-27"
 echo "usage: p2gcc [options] file [file...]"
 echo "  options are"
 echo "  -c      - Do not run the linker"
@@ -50,6 +50,7 @@ echo "  -t      - Run terminal emulator"
 echo "  -T      - Run terminal emulator in PST mode"
 echo "  -k      - Keep intermediate files"
 echo "  -s      - Run simulutor"
+echo "  -Ox     - Set optimization. x is 0, 1, 2, 3 or s"
 echo "  -LMM    - Generate LMM assembly"
 echo "  -o file - Set output file name"
 echo "  -p port - Port used for loading"
@@ -67,13 +68,14 @@ runflag=0
 simflag=0
 keepflag=0
 linkflag=0
-ccstr="propeller-elf-gcc -Os -m32bit-doubles -S -D __P2GCC__ "
+ccstr="propeller-elf-gcc -m32bit-doubles -S -D __P2GCC__ "
 s2pasmstr="s2pasm "
 asmstr="p2asm -v33 "
 linkstr="p2link -L $P2GCC_LIBDIR prefix.o p2start.o "
 loadstr="loadp2 -PATCH -SINGLE "
 simstr="spinsim -b -t "
 modelstr="-mcog"
+optstr="-Os"
 s2pmodstr=""
 
 while [ $# -gt 0 ]
@@ -112,6 +114,8 @@ do
   else if [ $1 = "-LMM" ]; then
     modelstr="-mlmm -mno-fcache"
     s2pmodstr="-lmm"
+  else if [ $1 = "-O0" ] || [ $1 = "-O1" ] || [ $1 = "-O2" ] || [ $1 = "-O3" ] || [ $1 = "-Os" ] ; then
+    optstr=$1
   else if [ $1 = "-o" ]; then
     shift
     binfile=$1
@@ -195,6 +199,7 @@ do
     fi
     fi
     fi
+  fi
   fi
   fi
   fi
