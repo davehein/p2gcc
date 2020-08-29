@@ -216,6 +216,7 @@ int CheckCoginit(void)
 
     ptr1 = FindString(buffer1, "coginit");
     if (!*ptr1) return 0;
+    if (ptr1[7]) return 0;
     ptr1 += 8;
     ptr2 = FindWhiteSpace(ptr1);
     *ptr2 = 0;
@@ -272,6 +273,11 @@ int CheckNR(void)
     int len = strlen(buffer1);
 
     if (len < 5) return 0;
+
+    // Kludge for nz,wz
+    if (!strcmp(&buffer1[len-5], "nr,wz"))
+        strcpy(&buffer1[len-5], "wz,nr");
+
     if (strcmp(&buffer1[len-3], ",nr")) return 0;
 
     ptr1 = SkipWhiteSpace(buffer1);
@@ -482,7 +488,7 @@ void CheckLocalName(void)
 
 void usage(void)
 {
-    printf("s2pasm - a utility to convert from P1 to P2 assembly - version 0.006, 2019-2-2\n");
+    printf("s2pasm - a utility to convert from P1 to P2 assembly - version 0.007, 2020-8-28\n");
     printf("usage: s2pasm [options] filename\n");
     printf("  options are\n");
     printf("  -d      - Debug mode\n");
