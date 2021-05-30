@@ -14,6 +14,9 @@
  * pthreads functions may be more useful
  */
 
+#ifdef EXTRA_STACK_BYTES
+#undef EXTRA_STACK_BYTES
+#endif
 #define EXTRA_STACK_BYTES 40
 
 int
@@ -27,7 +30,7 @@ cogstart(void (*func)(void *), void *arg, void *stack, size_t stack_size)
     errno = EINVAL;
     return -1;
   }
-  
+
   /* put the thread local storage structure onto the stack */
   tls = (_thread_state_t *)((char *)stack + stack_size - sizeof(_thread_state_t));
   sp = (unsigned int *)tls;
